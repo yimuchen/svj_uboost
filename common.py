@@ -1,5 +1,9 @@
-import os, os.path as osp, logging, re
+import os, os.path as osp, logging, re, time, json
+from contextlib import contextmanager
 import svj_ntuple_processing
+
+import numpy as np
+
 
 def setup_logger(name='bdt'):
     if name in logging.Logger.manager.loggerDict:
@@ -24,6 +28,38 @@ logger = setup_logger()
 
 # Where training data will be stored
 DATADIR = osp.join(osp.dirname(osp.abspath(__file__)), 'data')
+
+
+@contextmanager
+def time_and_log(begin_msg, end_msg='Done'):
+    try:
+        t1 = time.time()
+        logger.info(begin_msg)
+        yield None
+    finally:
+        t2 = time.time()
+        nsecs = t2-t1
+        nmins = int(nsecs//60)
+        nsecs %= 60
+        logger.info(end_msg + f' (took {nmins:02d}m:{nsecs:.2f}s)')
+
+def imgcat(path):
+    """
+    Only useful if you're using iTerm with imgcat on the $PATH:
+    Display the image in the terminal.
+    """
+    os.system('imgcat ' + path)
+
+
+def set_matplotlib_fontsizes(small=18, medium=22, large=26):
+    import matplotlib.pyplot as plt
+    plt.rc('font', size=small)          # controls default text sizes
+    plt.rc('axes', titlesize=small)     # fontsize of the axes title
+    plt.rc('axes', labelsize=medium)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=small)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=small)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=small)    # legend fontsize
+    plt.rc('figure', titlesize=large)   # fontsize of the figure title
 
 
 #__________________________________________________
@@ -91,6 +127,9 @@ def get_record(key):
     return Record(eval(record_txt))
 
 
+#__________________________________________________
+# Data pipeline
+
 class Columns(svj_ntuple_processing.Columns):
     """
     Data structure that contains all the training data (features)
@@ -128,3 +167,59 @@ class Columns(svj_ntuple_processing.Columns):
     def weight_per_event(self):
         return self.effxs / len(self)
 
+
+def columns_to_numpy(
+    signal_cols, bkg_cols, features,
+    downsample=.4, weight_key='weight',
+    ):
+    """
+    Takes a list of signal and background Column instances, and outputs
+    a numpy array with `features` as the columns.
+    """
+    X = []
+    y = []
+    bkg_weight = []
+    signal_weight = []
+
+    logger.info(f'Downsampling bkg, keeping fraction of {downsample}')
+    # Get the features for the bkg samples
+    for cols in bkg_cols:
+        this_X = cols.to_numpy(features)
+        this_weight = cols.arrays[weight_key]
+        if downsample < 1.:
+            select = np.random.choice(len(cols), int(downsample*len(cols)), replace=False)
+            this_X = this_X[select]
+            this_weight = this_weight[select]
+        X.append(this_X)
+        bkg_weight.append(this_weight)
+        y.append(np.zeros(len(this_X)))
+
+    # Get the features for the signal samples
+    for cols in signal_cols:
+        X.append(cols.to_numpy(features))
+        y.append(np.ones(len(cols)))
+        # All signal model parameter variations should get equal weight,
+        # but some signal samples have more events.
+        # Use 1/n_events as a weight per event.
+        signal_weight.append((1./len(cols))*np.ones(len(cols)))
+    
+    bkg_weight = np.concatenate(bkg_weight)
+    signal_weight = np.concatenate(signal_weight)
+    # Set total signal weight equal to total bkg weight
+    signal_weight *= np.sum(bkg_weight) / np.sum(signal_weight)
+    weight = np.concatenate((bkg_weight, signal_weight))
+
+    X = np.concatenate(X)
+    y = np.concatenate(y)
+    return X, y, weight
+
+
+def add_key_value_to_json(json_file, key, value):
+    with open(json_file, 'r') as f:
+        json_str = f.read()
+    json_str = json_str.rstrip()
+    json_str = json_str[:-1] # Strip off the last }
+    json_str += f',"{key}":{json.dumps(value)}}}'
+    with open(json_file, 'w') as f:
+        f.write(json_str)
+    logger.info(f'Added "{key}":{json.dumps(value)} to {json_file}')
