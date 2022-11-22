@@ -21,7 +21,7 @@ def main():
     if not osp.isdir(DATADIR): os.makedirs(DATADIR)
 
     signal_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/signal_nov02_truthcone'
-    bkg_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/bkg_nov03/HADD'
+    bkg_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/bkg_nov14/HADD'
 
     fn_args = [
         (signal_dir, 'signal'),

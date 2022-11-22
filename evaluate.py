@@ -41,22 +41,28 @@ def main():
     # uboost
     from hep_ml import uboost
 
-    with open('model_uboost_Nov11.pkl', 'rb') as f:
-        uboost_model = pickle.load(f)
+    uboost_models = {
+        'uboost_gradbin' : 'models/uboost_Nov17_gradbin.pkl',
+        'uboost_knn' : 'models/uboost_Nov18_knn.pkl',
+        }
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        with time_and_log('Calculating uboost scores...'):
-            scores['uboost'] = uboost_model.predict_proba(X_df)[:,1]
+    for key, model_file in uboost_models.items():
+        with open(model_file, 'rb') as f:
+            uboost_model = pickle.load(f)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with time_and_log(f'Calculating scores for {key}...'):
+                scores[key] = uboost_model.predict_proba(X_df)[:,1]
 
     # xgboost
     import xgboost as xgb
 
     xgb_models = {
-        'unreweighted' : 'models/svjbdt_Nov10.json',
-        'girth_reweighted' : 'models/svjbdt_Nov11_reweight_girth.json',
-        'mt_reweighted' : 'models/svjbdt_Nov11_reweight_mt.json',
-        'pt_reweighted' : 'models/svjbdt_Nov11_reweight_pt.json',
+        'unreweighted' : 'models/svjbdt_Nov18.json',
+        'girth_reweighted' : 'models/svjbdt_Nov18_reweight_girth.json',
+        'mt_reweighted' : 'models/svjbdt_Nov18_reweight_mt.json',
+        'pt_reweighted' : 'models/svjbdt_Nov18_reweight_pt.json',
         }
     
     for key, model_file in xgb_models.items():
@@ -64,7 +70,6 @@ def main():
         xgb_model.load_model(model_file)
         with time_and_log(f'Calculating xgboost scores for {key}...'):
             scores[key] = xgb_model.predict_proba(X)[:,1]
-            print(scores[key][:5])
 
 
     # _____________________________________________
@@ -99,7 +104,7 @@ def main():
         ax.set_title(key)
 
         bins = np.linspace(0, 1, 40)
-        if key=='uboost':
+        if key.startswith('uboost'):
             bins = np.linspace(min(score), max(score), 40)
 
         ax.hist(score[y==0], bins, density=True, label='Bkg')
@@ -131,7 +136,7 @@ def main():
             bins = np.linspace(0, 800, 80)
 
             cuts = np.linspace(.0, .9, 10)
-            if key=='uboost': cuts = np.linspace(min(score_bkg), max(score_bkg), 11)[:-1]
+            if key.startswith('uboost'): cuts = np.linspace(min(score_bkg), max(score_bkg), 11)[:-1]
 
             for cut in cuts:
                 ax.hist(mt_bkg[score_bkg>cut], bins, histtype='step', label=f'score>{cut:.2f}', density=density)

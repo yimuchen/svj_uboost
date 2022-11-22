@@ -1,4 +1,4 @@
-import os, os.path as osp, glob, pickle, logging, argparse
+import os, os.path as osp, glob, pickle, logging, argparse, sys, re
 from time import strftime
 
 import numpy as np
@@ -150,16 +150,29 @@ def main():
     parser.add_argument('--reweighttestplot', action='store_true')
     parser.add_argument('--downsample', type=float, default=.4)
     parser.add_argument('--dry', action='store_true')
+    parser.add_argument('--gradientboost', action='store_true')
+    parser.add_argument('--node', type=str, help='Run training on a different lpc node.')
     args = parser.parse_args()
 
-    # Add a logger to a file for easier monitoring
+    if args.node:
+        # Just get the first integer from the args.node string, and parse it to a valid lpc address
+        print(args.node)
+        node_nr = re.search(r'\d+', args.node).group()
+        # Delete the --node argument from the command line
+        args = sys.argv[:]
+        i = args.index('--node'); args.pop(i+1); args.pop(i)
+        # Submit the exact same command on a different node
+        cmd = f'ssh cmslpc{node_nr}.fnal.gov "cd /uscms/home/klijnsma/svj/bdt/v3/svj_uboost; conda activate svj-bdt-light; nohup python ' + ' '.join(args) + '"'
+        logger.info(f'Executing: {cmd}')
+        os.system(cmd)
+        return
+
+    # Add a file logger for easier monitoring
     if not args.dry:
         if not osp.isdir('logs'): os.makedirs('logs')
+        fmt = f'[%(name)s:%(levelname)s:%(asctime)s:%(module)s:%(lineno)s {os.uname()[1]}] %(message)s'
         file_handler = logging.FileHandler(strftime('logs/log_train_%b%d.txt'))
-        file_handler.setFormatter(logging.Formatter(
-            fmt = '[%(name)s:%(levelname)s:%(asctime)s:%(module)s:%(lineno)s] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-            ))
+        file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt='%Y-%m-%d %H:%M:%S'))
         logger.addHandler(file_handler)
 
     logger.info(f'Running training script; args={args}')
@@ -183,25 +196,39 @@ def main():
         print_weight_table(bkg_cols, signal_cols, 'weight')
         X, y, weight = columns_to_numpy(signal_cols, bkg_cols, all_features, downsample=.2)
         logger.info(f'Using {len(y)} events ({np.sum(y==1)} signal events, {np.sum(y==0)} bkg events)')
-
         X_df = pd.DataFrame(X, columns=all_features)
-        base_tree = uboost.DecisionTreeClassifier(max_depth=4)
-        model = uboost.uBoostClassifier( # "uBoostBDT" in the uBoost documentation
-            uniform_features=['mt'], uniform_label=0,
-            base_estimator=base_tree,
-            train_features=training_features,
-            n_estimators=100,
-            n_threads=4,
-            n_neighbors=30
-            )
 
+        if args.gradientboost:
+            from hep_ml.gradientboosting import UGradientBoostingClassifier
+            from hep_ml.losses import BinFlatnessLossFunction, KnnFlatnessLossFunction
+            
+            base_tree = uboost.DecisionTreeClassifier(max_depth=4)
+            model = UGradientBoostingClassifier(
+                loss=BinFlatnessLossFunction(uniform_features=['mt'], uniform_label=0, n_bins=50),
+                n_estimators=100,
+                train_features=training_features,
+                max_depth=4
+                )
+            outfile = strftime('models/uboost_%b%d_gradbin.pkl')
+        else:
+            base_tree = uboost.DecisionTreeClassifier(max_depth=4)
+            model = uboost.uBoostClassifier( # "uBoostBDT" in the uBoost documentation
+                uniform_features=['mt'], uniform_label=0,
+                base_estimator=base_tree,
+                train_features=training_features,
+                n_estimators=100,
+                n_threads=4,
+                n_neighbors=30
+                )
+            outfile = strftime('models/uboost_%b%d_knn.pkl')
+        
         if args.dry:
             logger.info('Dry mode: Quitting')
             return
         with time_and_log('Begin training uBoost. This can take >24h hours...'):
             model.fit(X_df, y, weight)
         if not osp.isdir('models'): os.makedirs('models')
-        outfile = strftime('models/model_uboost_%b%d.pkl')
+        
         logger.info('Dumping trained model to %s', outfile)
         with open(outfile, 'wb') as f:
             pickle.dump(model, f)

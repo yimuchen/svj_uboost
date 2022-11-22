@@ -12,7 +12,7 @@ def setup_logger(name='bdt'):
     else:
         fmt = logging.Formatter(
             fmt = (
-                '\033[34m[%(name)s:%(levelname)s:%(asctime)s:%(module)s:%(lineno)s]\033[0m'
+                f'\033[34m[%(name)s:%(levelname)s:%(asctime)s:%(module)s:%(lineno)s {os.uname()[1]}]\033[0m'
                 + ' %(message)s'
                 ),
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -223,3 +223,23 @@ def add_key_value_to_json(json_file, key, value):
     with open(json_file, 'w') as f:
         f.write(json_str)
     logger.info(f'Added "{key}":{json.dumps(value)} to {json_file}')
+
+
+def add_manual_weight_column(signal_cols, bkg_cols):
+    """
+    Adds the manual weight calculation as a column
+    """
+    total_bkg_weight = 0
+    for c in bkg_cols:
+        c.arrays['manualweight'] = np.ones(len(c)) * c.weight_per_event
+        total_bkg_weight += c.arrays['manualweight'].sum()
+
+    # Set signal weights scaled relatively to one another (but not yet w.r.t. bkg)
+    total_signal_weight = 0
+    for c in signal_cols:
+        c.arrays['manualweight'] = np.ones(len(c)) / len(c)
+        total_signal_weight += c.arrays['manualweight'].sum()
+    
+    # Scale signal weights correctly w.r.t. bkg
+    for c in signal_cols:
+        c.arrays['manualweight'] *= total_bkg_weight / total_signal_weight
