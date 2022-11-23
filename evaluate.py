@@ -15,7 +15,7 @@ training_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
     'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi', 'phi'
     ]
-all_features = training_features + ['mt']
+all_features = training_features + ['eta', 'mt']
 
 
 def main():
@@ -31,19 +31,50 @@ def main():
     import pandas as pd
     X_df = pd.DataFrame(X, columns=all_features)
     mt = X[:,-1]
-    X = X[:,:-1]
+    X_eta = X[:,:-1] # Strip off mt
+    X = X_eta[:,:-1] # Also strip off eta
 
     # _____________________________________________
     # Open the trained models and get the scores
 
     scores = OrderedDict()
 
+    # xgboost
+    import xgboost as xgb
+
+    xgb_models = {
+        # 'unreweighted+eta' : 'models/svjbdt_Nov22_eta.json',
+        # 'mt_reweighted+eta' : 'models/svjbdt_Nov22_reweight_mt_eta.json',
+        'unreweighted' : 'models/svjbdt_Nov18.json',
+        # 'girth_reweighted' : 'models/svjbdt_Nov18_reweight_girth.json',
+        # 'mt_reweighted' : 'models/svjbdt_Nov18_reweight_mt.json',
+        # 'pt_reweighted' : 'models/svjbdt_Nov18_reweight_pt.json',
+        # 'mt_reweighted_ref550' : 'models/svjbdt_Nov22_reweight_mt_ref550.json'
+        'ref_mz150_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz150_rinv0p1.json',
+        'ref_mz150_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz150_rinv0p3.json',
+        'ref_mz250_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz250_rinv0p1.json',
+        'ref_mz250_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz250_rinv0p3.json',
+        'ref_mz350_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz350_rinv0p1.json',
+        'ref_mz350_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz350_rinv0p3.json',
+        'ref_mz450_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz450_rinv0p1.json',
+        'ref_mz450_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz450_rinv0p3.json',
+        'ref_mz550_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p1.json',
+        'ref_mz550_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p3.json',
+        }
+    
+    for key, model_file in xgb_models.items():
+        xgb_model = xgb.XGBClassifier()
+        xgb_model.load_model(model_file)
+        with time_and_log(f'Calculating xgboost scores for {key}...'):
+            scores[key] = xgb_model.predict_proba(X_eta if 'eta' in key else X)[:,1]
+
+
     # uboost
     from hep_ml import uboost
 
     uboost_models = {
-        'uboost_gradbin' : 'models/uboost_Nov17_gradbin.pkl',
-        'uboost_knn' : 'models/uboost_Nov18_knn.pkl',
+        # 'uboost_gradbin' : 'models/uboost_Nov17_gradbin.pkl',
+        # 'uboost_knn' : 'models/uboost_Nov18_knn.pkl',
         }
 
     for key, model_file in uboost_models.items():
@@ -54,22 +85,6 @@ def main():
             warnings.simplefilter("ignore")
             with time_and_log(f'Calculating scores for {key}...'):
                 scores[key] = uboost_model.predict_proba(X_df)[:,1]
-
-    # xgboost
-    import xgboost as xgb
-
-    xgb_models = {
-        'unreweighted' : 'models/svjbdt_Nov18.json',
-        'girth_reweighted' : 'models/svjbdt_Nov18_reweight_girth.json',
-        'mt_reweighted' : 'models/svjbdt_Nov18_reweight_mt.json',
-        'pt_reweighted' : 'models/svjbdt_Nov18_reweight_pt.json',
-        }
-    
-    for key, model_file in xgb_models.items():
-        xgb_model = xgb.XGBClassifier()
-        xgb_model.load_model(model_file)
-        with time_and_log(f'Calculating xgboost scores for {key}...'):
-            scores[key] = xgb_model.predict_proba(X)[:,1]
 
 
     # _____________________________________________

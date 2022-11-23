@@ -150,9 +150,17 @@ def main():
     parser.add_argument('--reweighttestplot', action='store_true')
     parser.add_argument('--downsample', type=float, default=.4)
     parser.add_argument('--dry', action='store_true')
-    parser.add_argument('--gradientboost', action='store_true')
     parser.add_argument('--node', type=str, help='Run training on a different lpc node.')
+    parser.add_argument('--tag', type=str, help='Add some output to the output model file')
+    # Some test flags for alternative trainings
+    parser.add_argument('--gradientboost', action='store_true')
+    parser.add_argument('--use_eta', action='store_true')
+    parser.add_argument('--ref', type=str, help='path to the npz file for the reference distribution for reweighting.')
     args = parser.parse_args()
+
+    global training_features
+    if args.use_eta:
+        training_features.append('eta')
 
     if args.node:
         # Just get the first integer from the args.node string, and parse it to a valid lpc address
@@ -229,6 +237,8 @@ def main():
             model.fit(X_df, y, weight)
         if not osp.isdir('models'): os.makedirs('models')
         
+        if args.tag: outfile = outfile.replace('.pkl', f'_{args.tag}.pkl')
+
         logger.info('Dumping trained model to %s', outfile)
         with open(outfile, 'wb') as f:
             pickle.dump(model, f)
@@ -243,9 +253,17 @@ def main():
             )
 
         if args.reweight:
+            logger.info(f'Reweighting to {args.reweight}')
             # Add a 'reweight' column to all samples:
-            reference = [s for s in signal_cols if s.metadata['mz']==350 and s.metadata['rinv']==.3][0]
             cols = bkg_cols + signal_cols
+            if args.ref:
+                reference_col = Columns.load(osp.abspath(args.ref))
+                reference = [col for col in cols if col.metadata == reference_col.metadata][0]
+            else:
+                # Use a default reference of mz=350, rinv=.3
+                reference = [s for s in signal_cols if s.metadata['mz']==350 and s.metadata['rinv']==.3][0]
+            logger.info(f'Using as a reference: {reference.metadata}')
+
             cols.remove(reference)
             reweight(reference, cols, args.reweight, make_test_plot=args.reweighttestplot)
 
@@ -271,6 +289,9 @@ def main():
             outfile = strftime('models/svjbdt_%b%d.json')
 
         logger.info(f'Using {len(y)} events ({np.sum(y==1)} signal events, {np.sum(y==0)} bkg events)')
+
+        if args.use_eta: outfile = outfile.replace('.json', '_eta.json')
+        if args.tag: outfile = outfile.replace('.json', f'_{args.tag}.json')
 
         if args.dry:
             logger.info('Dry mode: Quitting')
