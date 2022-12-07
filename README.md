@@ -127,3 +127,14 @@ preselection  3.77%         9.86%         4.80%         11.91%        5.87%     
 stitch        3.77%         9.86%         4.80%         11.91%        5.87%         13.83%       
 n137          5.89e+05      1.54e+06      6.53e+05      1.62e+06      6.63e+05      1.56e+06     
 ```
+
+
+## Overfitting check: Kolmogorov-Smirnov test
+
+```bash
+python overfitting.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json
+```
+
+![overfit plot](example_plots/overfit.png)
+
+With p-values close to 1.0, there is no reason to assume any overfitting.

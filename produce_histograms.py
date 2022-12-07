@@ -4,13 +4,7 @@ from time import strftime
 import numpy as np
 import xgboost as xgb
 
-from common import logger, DATADIR, filter_pt, filter_ht, Columns, time_and_log, columns_to_numpy
-
-
-def read_training_features(model_file):
-    with open(model_file, 'rb') as f:
-        model = json.load(f)
-        return model['features']
+from common import logger, DATADIR, filter_pt, filter_ht, Columns, time_and_log, columns_to_numpy, read_training_features
 
 
 class Histogram:

@@ -40,21 +40,11 @@ def reweight(reference, samples, reweight_var, make_test_plot=False):
     reference_hist, _ = np.histogram(reference.arrays[reweight_var], bins=reweight_bins)
 
     for sample in samples:
+        if sample is reference or sample.metadata == reference.metadata: continue
         hist, _ = np.histogram(sample.arrays[reweight_var], bins=reweight_bins)
         reweight_hist = np.where(hist>0, reference_hist/hist, 0.)
-
         vals = sample.arrays[reweight_var]
-
-        # Now find the correct bin per value
-        # Start with first reweight bin, add 1 for all events with girth > rbound
-        #   That should keep 0 for bins in the first bin, 1 for all else
-        # Then second reweight bin, add 1 for all events with girth > rbound
-        #   Puts 1 for everything in bin 1, 2 for everything else
-        # etc
-
-        # Start with a copy of the current weight branch
         sample.arrays['reweight'] = np.copy(sample.arrays['weight'])
-
         for i, (left, right) in enumerate(zip(reweight_bins[:-1], reweight_bins[1:])):
             sample.arrays['reweight'][(left < vals) &  (vals <= right)] *= reweight_hist[i]
 

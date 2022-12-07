@@ -5,6 +5,7 @@ import svj_ntuple_processing
 
 import requests
 import numpy as np
+np.random.seed(1001)
 
 
 def setup_logger(name='bdt'):
@@ -306,3 +307,14 @@ def add_manual_weight_column(signal_cols, bkg_cols):
     # Scale signal weights correctly w.r.t. bkg
     for c in signal_cols:
         c.arrays['manualweight'] *= total_bkg_weight / total_signal_weight
+
+
+def read_training_features(model_file):
+    """
+    Reads the features used to train a model from a .json file.
+    Only works for xgboost-trained models.
+    """
+    with open(model_file, 'rb') as f:
+        model = json.load(f)
+        return model['features']
+
