@@ -1,4 +1,4 @@
-import os, os.path as osp, glob, pickle, logging, argparse, sys, re
+import os, os.path as osp, glob, pickle, logging, argparse, sys, re, pprint
 from time import strftime
 
 import numpy as np
@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 np.random.seed(1001)
 
-from common import logger, DATADIR, Columns, time_and_log, columns_to_numpy, set_matplotlib_fontsizes, imgcat, add_key_value_to_json
+from common import logger, DATADIR, Columns, time_and_log, columns_to_numpy, set_matplotlib_fontsizes, imgcat, add_key_value_to_json, filter_pt
 
 
 training_features = [
@@ -156,7 +156,7 @@ def main():
     parser.add_argument('--gradientboost', action='store_true')
     parser.add_argument('--use_eta', action='store_true')
     parser.add_argument('--ref', type=str, help='path to the npz file for the reference distribution for reweighting.')
-    args = parser.parse_args()
+    args, leftover_args = parser.parse_known_args()
 
     global training_features
     if args.use_eta:
@@ -170,7 +170,7 @@ def main():
         args = sys.argv[:]
         i = args.index('--node'); args.pop(i+1); args.pop(i)
         # Submit the exact same command on a different node
-        cmd = f'ssh cmslpc{node_nr}.fnal.gov "cd /uscms/home/klijnsma/svj/bdt/v3/svj_uboost; conda activate svj-bdt-light; nohup python ' + ' '.join(args) + '"'
+        cmd = f'ssh -o StrictHostKeyChecking=no cmslpc{node_nr}.fnal.gov "cd /uscms/home/klijnsma/svj/bdt/v3/svj_uboost; conda activate svj-bdt-light; nohup python ' + ' '.join(args) + '"'
         logger.info(f'Executing: {cmd}')
         os.system(cmd)
         return
@@ -193,7 +193,8 @@ def main():
         ]
     # Throw away the very low QCD bins (very low number of events)
     logger.info('Using QCD bins starting from pt>=300')
-    bkg_cols = list(filter(lambda cols: cols.metadata['bkg_type']!='qcd' or cols.metadata['ptbin'][0]>=300., bkg_cols))
+    # bkg_cols = list(filter(lambda cols: cols.metadata['bkg_type']!='qcd' or cols.metadata['ptbin'][0]>=300., bkg_cols))
+    bkg_cols = filter_pt(bkg_cols, 300.)
 
     logger.info(f'Training features: {training_features}')
 
@@ -244,13 +245,27 @@ def main():
             pickle.dump(model, f)
 
     elif args.model == 'xgboost':
-        import xgboost as xgb
-        model = xgb.XGBClassifier(
+        # Parse the leftover arguments to see if there are any hyper parameters
+
+        hyperpar_parser = argparse.ArgumentParser()
+        hyperpar_parser.add_argument('--lr', dest='eta', type=float)
+        hyperpar_parser.add_argument('--minchildweight', dest='min_child_weight', type=float)
+        hyperpar_parser.add_argument('--maxdepth', dest='max_depth', type=int)
+        hyperpar_parser.add_argument('--subsample', type=float)
+        hyperpar_parser.add_argument('--nest', dest='n_estimators', type=int)
+        hyperpar_args = hyperpar_parser.parse_args(leftover_args)
+
+        parameters = dict( # Base parameters
             eta=.05,
             max_depth=4,
             n_estimators=850,
-            use_label_encoder=False
             )
+        # Update with possible command line options
+        parameters.update({k:v for k, v in hyperpar_args.__dict__.items() if v is not None})
+        logger.warning(f'Using the following hyperparameters:\n{pprint.pformat(parameters)}')
+
+        import xgboost as xgb
+        model = xgb.XGBClassifier(use_label_encoder=False, **parameters)
 
         if args.reweight:
             logger.info(f'Reweighting to {args.reweight}')

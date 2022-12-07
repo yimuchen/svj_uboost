@@ -1,4 +1,4 @@
-import os, os.path as osp, glob, pickle, logging, warnings, json, math
+import os, os.path as osp, glob, pickle, logging, warnings, json, math, re
 from time import strftime
 from collections import OrderedDict
 
@@ -20,13 +20,45 @@ all_features = training_features + ['eta', 'mt']
 
 def main():
     set_matplotlib_fontsizes(18, 22, 26)
-
     qcd_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/test_bkg/Summer20UL18/QCD_*.npz')]
     qcd_cols = list(filter(lambda c: c.metadata['ptbin'][0]>=300., qcd_cols))
     ttjets_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/test_bkg/Summer20UL18/TTJets_*.npz')]
+    bkg_cols = qcd_cols + ttjets_cols
     signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/test_signal/*.npz')]
 
-    X, y, weight = columns_to_numpy(signal_cols, qcd_cols+ttjets_cols, features=all_features, downsample=1.)
+    # models = {
+    #     # 'unreweighted+eta' : 'models/svjbdt_Nov22_eta.json',
+    #     # 'mt_reweighted+eta' : 'models/svjbdt_Nov22_reweight_mt_eta.json',
+    #     'unreweighted' : 'models/svjbdt_Nov18.json',
+    #     # 'girth_reweighted' : 'models/svjbdt_Nov18_reweight_girth.json',
+    #     # 'mt_reweighted' : 'models/svjbdt_Nov18_reweight_mt.json',
+    #     # 'pt_reweighted' : 'models/svjbdt_Nov18_reweight_pt.json',
+    #     # 'mt_reweighted_ref550' : 'models/svjbdt_Nov22_reweight_mt_ref550.json'
+    #     'ref_mz150_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz150_rinv0p1.json',
+    #     'ref_mz150_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz150_rinv0p3.json',
+    #     'ref_mz250_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz250_rinv0p1.json',
+    #     'ref_mz250_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz250_rinv0p3.json',
+    #     'ref_mz350_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz350_rinv0p1.json',
+    #     'ref_mz350_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz350_rinv0p3.json',
+    #     'ref_mz450_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz450_rinv0p1.json',
+    #     'ref_mz450_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz450_rinv0p3.json',
+    #     'ref_mz550_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p1.json',
+    #     'ref_mz550_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p3.json',
+    #     # 'uboost_gradbin' : 'models/uboost_Nov17_gradbin.pkl',
+    #     # 'uboost_knn' : 'models/uboost_Nov18_knn.pkl',
+    #     }
+
+    # hpo_files = glob.glob('models/svjbdt_Nov29_reweight_mt_lr*.json')
+    # key = lambda f: re.search(r'(lr.*)\.json', f).group(1)
+    # models = {key(f) : f for f in hpo_files}
+
+    models = {'bestbdt' : 'models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json'}
+
+    plots(signal_cols, bkg_cols, models)
+
+
+def plots(signal_cols, bkg_cols, models):
+    X, y, weight = columns_to_numpy(signal_cols, bkg_cols, features=all_features, downsample=1.)
 
     import pandas as pd
     X_df = pd.DataFrame(X, columns=all_features)
@@ -37,55 +69,33 @@ def main():
     # _____________________________________________
     # Open the trained models and get the scores
 
-    scores = OrderedDict()
+    scores = {}
+    aucs = {}
 
     # xgboost
     import xgboost as xgb
 
-    xgb_models = {
-        # 'unreweighted+eta' : 'models/svjbdt_Nov22_eta.json',
-        # 'mt_reweighted+eta' : 'models/svjbdt_Nov22_reweight_mt_eta.json',
-        'unreweighted' : 'models/svjbdt_Nov18.json',
-        # 'girth_reweighted' : 'models/svjbdt_Nov18_reweight_girth.json',
-        # 'mt_reweighted' : 'models/svjbdt_Nov18_reweight_mt.json',
-        # 'pt_reweighted' : 'models/svjbdt_Nov18_reweight_pt.json',
-        # 'mt_reweighted_ref550' : 'models/svjbdt_Nov22_reweight_mt_ref550.json'
-        'ref_mz150_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz150_rinv0p1.json',
-        'ref_mz150_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz150_rinv0p3.json',
-        'ref_mz250_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz250_rinv0p1.json',
-        'ref_mz250_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz250_rinv0p3.json',
-        'ref_mz350_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz350_rinv0p1.json',
-        'ref_mz350_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz350_rinv0p3.json',
-        'ref_mz450_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz450_rinv0p1.json',
-        'ref_mz450_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz450_rinv0p3.json',
-        'ref_mz550_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p1.json',
-        'ref_mz550_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p3.json',
-        }
-    
-    for key, model_file in xgb_models.items():
-        xgb_model = xgb.XGBClassifier()
-        xgb_model.load_model(model_file)
-        with time_and_log(f'Calculating xgboost scores for {key}...'):
-            scores[key] = xgb_model.predict_proba(X_eta if 'eta' in key else X)[:,1]
+    for key, model_file in models.items():
+        if model_file.endswith('.json'):
+            xgb_model = xgb.XGBClassifier()
+            xgb_model.load_model(model_file)
+            with time_and_log(f'Calculating xgboost scores for {key}...'):
+                scores[key] = xgb_model.predict_proba(X_eta if 'eta' in key else X)[:,1]
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                # uboost
+                from hep_ml import uboost
+                with open(model_file, 'rb') as f:
+                    uboost_model = pickle.load(f)
+                    with time_and_log(f'Calculating scores for {key}...'):
+                        scores[key] = uboost_model.predict_proba(X_df)[:,1]
 
-
-    # uboost
-    from hep_ml import uboost
-
-    uboost_models = {
-        # 'uboost_gradbin' : 'models/uboost_Nov17_gradbin.pkl',
-        # 'uboost_knn' : 'models/uboost_Nov18_knn.pkl',
-        }
-
-    for key, model_file in uboost_models.items():
-        with open(model_file, 'rb') as f:
-            uboost_model = pickle.load(f)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            with time_and_log(f'Calculating scores for {key}...'):
-                scores[key] = uboost_model.predict_proba(X_df)[:,1]
-
+    # Sort scores by decreasing auc score
+    aucs = {key: roc_auc_score(y, score, sample_weight=weight) for key, score in scores.items()}
+    scores = OrderedDict(sorted(scores.items(), key=lambda p: -aucs[p[0]]))
+    for key in scores: print(f'{key:50} {aucs[key]}')
+    print(aucs)
 
     # _____________________________________________
     # ROC curves
@@ -94,18 +104,21 @@ def main():
 
     for key, score in scores.items():
         eff_bkg, eff_sig, cuts = roc_curve(y, score, sample_weight=weight)
-        auc = roc_auc_score(y, score, sample_weight=weight)
         ax.plot(
             eff_bkg, eff_sig,
-            label=f'{key} (auc={auc:.2f})'
+            label=f'{key} (auc={aucs[key]:.3f})'
             )
 
-    ax.legend()
+    if len(scores) <= 10: ax.legend(loc='lower right')
     ax.set_xlabel('bkg eff')
     ax.set_ylabel('sig eff')
     plt.savefig('plots/roc.png', bbox_inches='tight')
     imgcat('plots/roc.png')
     plt.close()
+
+    if len(scores) > 10:
+        logger.error('More than 10 models: Not doing individual dist/sculpting plots')
+        return
 
     # _____________________________________________
     # Score distributions

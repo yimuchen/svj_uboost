@@ -22,9 +22,11 @@ def main():
 
     signal_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/signal_nov02_truthcone'
     bkg_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/bkg_nov14/HADD'
+    signal_dir_notruthcone = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/signal_nov02'
 
     fn_args = [
         (signal_dir, 'signal'),
+        (signal_dir_notruthcone, 'signal_notruthcone'),
         (bkg_dir, 'bkg'),
         ]
 

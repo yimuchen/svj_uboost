@@ -1,7 +1,9 @@
 import os, os.path as osp, logging, re, time, json
+from collections import OrderedDict
 from contextlib import contextmanager
 import svj_ntuple_processing
 
+import requests
 import numpy as np
 
 
@@ -127,6 +129,35 @@ def get_record(key):
     return Record(eval(record_txt))
 
 
+def filter_pt(cols, min_pt):
+    """
+    Filters for a minimum pt (only valid for QCD).
+    Does not filter out non-QCD backgrounds or signals.
+    """
+    filtered = []
+    for c in cols:
+        if c.metadata.get('ptbin', [1e6])[0] < min_pt:
+            continue
+        filtered.append(c)
+    return filtered
+
+def filter_ht(cols, min_ht, bkg_type=None):
+    """
+    Filters for a minimum pt (only valid for ttjets/wjets/zjets).
+    Does not filter out QCD or signal.
+    If bkg_type is None, it filters ttjets AND wjets AND zjets.
+    """
+    filtered = []
+    for c in cols:
+        if bkg_type and c.metadata.get('bkg_type', None) != bkg_type:
+            filtered.append(c)
+            continue
+        if c.metadata.get('htbin',[1e6, 1e6])[0] < min_ht:
+            continue
+        filtered.append(c)
+    return filtered
+
+
 #__________________________________________________
 # Data pipeline
 
@@ -137,6 +168,26 @@ class Columns(svj_ntuple_processing.Columns):
     
     See: https://github.com/boostedsvj/svj_ntuple_processing/blob/main/svj_ntuple_processing/__init__.py#L357
     """
+    @classmethod
+    def load(cls, *args, **kwargs):
+        inst = super().load(*args, **kwargs)
+        # Transforming bytes keys to str keys
+        old_cf = inst.cutflow
+        inst.cutflow = OrderedDict()
+        for key in old_cf.keys():
+            if isinstance(key, bytes):
+                inst.cutflow[key.decode()] = old_cf[key]
+            else:
+                inst.cutflow[key] = old_cf[key]
+        return inst
+
+    def __repr__(self):
+        return (
+            '<Column '
+            + ' '.join([f'{k}={v}' for k, v in self.metadata.items() if k!='src'])
+            + '>'
+            )
+
     @property
     def key(self):
         return (
@@ -152,16 +203,28 @@ class Columns(svj_ntuple_processing.Columns):
 
     @property
     def presel_eff(self):
-        if self.cutflow[b'raw'] == 0: return 0.
-        return self.cutflow[b'preselection'] / self.cutflow[b'raw']
+        if self.cutflow['raw']==0: return 0.
+        return self.cutflow['preselection'] / self.cutflow['raw']
 
     @property
     def xs(self):
-        return self.record.effxs
+        if hasattr(self, 'manual_xs'):
+            # Only for setting a manual cross section
+            return self.manual_xs
+        elif 'bkg_type' in self.metadata:
+            return self.record.effxs
+        else:
+            if not hasattr(self, '_signal_xs_fit'):
+                self._signal_xs_fit = np.poly1d(
+                    requests
+                    .get('https://raw.githubusercontent.com/boostedsvj/svj_madpt_crosssection/main/fit.txt')
+                    .json()
+                    )
+            return self._signal_xs_fit(self.metadata['mz'])
 
     @property
     def effxs(self):
-        return self.record.effxs * self.presel_eff
+        return self.xs * self.presel_eff
 
     @property
     def weight_per_event(self):
