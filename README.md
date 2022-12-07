@@ -7,15 +7,15 @@ It uses as much training data as it can, by using the precalculated TreeMaker We
 ## Setup
 
 ```
-python3 -m venv env
-source env/bin/activate  # Needed every time
+conda create -n bdtenv python=3.10
+conda activate bdtenv  # Needed every time
 
 pip install pandas
 pip install requests
 pip install numpy
 pip install matplotlib
 
-pip install https://github.com/boostedsvj/svj_ntuple_processing/archive/main.zip
+pip install svj_ntuple_processing
 pip install hep_ml
 ```
 
