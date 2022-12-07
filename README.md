@@ -1,6 +1,6 @@
 # About this repository
 
-This is a lightweight repository that can train a uBoost BDT.
+This is a repository that can train a uBoost or xgboost BDT for the SVJ boosted analysis.
 It uses as much training data as it can, by using the precalculated TreeMaker Weight column.
 
 
