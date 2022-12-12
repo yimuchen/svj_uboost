@@ -52,7 +52,7 @@ def main():
     # key = lambda f: re.search(r'(lr.*)\.json', f).group(1)
     # models = {key(f) : f for f in hpo_files}
 
-    models = {'bestbdt' : 'models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json'}
+    models = {'BDT (HPO)' : 'models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json'}
 
     plots(signal_cols, bkg_cols, models)
 

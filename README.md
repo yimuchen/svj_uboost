@@ -70,7 +70,7 @@ The paths to the model are currently hard-coded! Things are still too fluid for 
 
 ## Produce histograms
 
-To produce the histograms need for the limit setting, use:
+To produce the histograms needed for the limit setting, use:
 
 ```bash
 python produce_histograms.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json
