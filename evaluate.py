@@ -13,9 +13,10 @@ from common import logger, DATADIR, Columns, time_and_log, imgcat, set_matplotli
 
 training_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
-    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi', 'phi'
+    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
+    # 'phi', 'eta'
     ]
-all_features = training_features + ['eta', 'mt']
+all_features = training_features + ['mt']
 
 
 def main():
@@ -52,7 +53,8 @@ def main():
     # key = lambda f: re.search(r'(lr.*)\.json', f).group(1)
     # models = {key(f) : f for f in hpo_files}
 
-    models = {'BDT (HPO)' : 'models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json'}
+    # models = {'BDT (HPO)' : 'models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json'}
+    models = {'BDT (NEW)' : 'models/svjbdt_Feb13_reweight_mt.json'}
 
     plots(signal_cols, bkg_cols, models)
 
@@ -63,8 +65,9 @@ def plots(signal_cols, bkg_cols, models):
     import pandas as pd
     X_df = pd.DataFrame(X, columns=all_features)
     mt = X[:,-1]
-    X_eta = X[:,:-1] # Strip off mt
-    X = X_eta[:,:-1] # Also strip off eta
+    X = X[:,:-1]
+    # X_eta = X[:,:-1] # Strip off mt
+    # X = X_eta[:,:-1] # Also strip off eta
 
     # _____________________________________________
     # Open the trained models and get the scores
