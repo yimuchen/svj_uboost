@@ -48,11 +48,11 @@ Then launch the training script:
 ```bash
 python training.py xgboost \
     --reweight mt --ref data/train_signal/madpt300_mz350_mdark10_rinv0.1.npz \
-    --lr .1 \
+    --lr .05 \
     --minchildweight .1 \
     --maxdepth 6 \
     --subsample 1. \
-    --nest 450
+    --nest 400
 ```
 
 Training with xgboost on the full background should take about 45 min.

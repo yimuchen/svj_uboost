@@ -11,7 +11,8 @@ from common import logger, DATADIR, Columns, time_and_log, columns_to_numpy, set
 
 training_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
-    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi', 'phi'
+    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
+    # 'phi'
     ]
 all_features = training_features + ['mt']
 

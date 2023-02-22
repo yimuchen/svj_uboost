@@ -20,9 +20,10 @@ def copy(tup):
 def main():
     if not osp.isdir(DATADIR): os.makedirs(DATADIR)
 
-    signal_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/signal_nov02_truthcone'
-    bkg_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/bkg_nov14/HADD'
-    signal_dir_notruthcone = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/signal_nov02'
+    base_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/'
+    signal_dir = base_dir + '/signal_feb09_truthcone'
+    bkg_dir = base_dir + '/bkg_feb11/HADD'
+    signal_dir_notruthcone = base_dir + '/signal_feb09_notruthcone'
 
     fn_args = [
         (signal_dir, 'signal'),
