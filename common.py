@@ -218,7 +218,7 @@ class Columns(svj_ntuple_processing.Columns):
             if not hasattr(self, '_signal_xs_fit'):
                 self._signal_xs_fit = np.poly1d(
                     requests
-                    .get('https://raw.githubusercontent.com/boostedsvj/svj_madpt_crosssection/main/fit.txt')
+                    .get('https://raw.githubusercontent.com/boostedsvj/svj_madpt_crosssection/main/fit_madpt300.txt')
                     .json()
                     )
             return self._signal_xs_fit(self.metadata['mz'])

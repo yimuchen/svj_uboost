@@ -3,7 +3,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from common import Columns, columns_to_numpy, DATADIR, filter_pt
+from common import Columns, columns_to_numpy, DATADIR, filter_pt, set_matplotlib_fontsizes, imgcat
 
 
 def format_val(s, ndec=2):
@@ -94,8 +94,10 @@ def make_table(cols, combined=True):
     return transpose_table(table)
 
 
-def main():
+def collect_columns():
     signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/signal_notruthcone/*.npz')]
+    signal_cols.sort(key=lambda s: (s.metadata['mz'], s.metadata['rinv']))
+
     bkg_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/bkg/Summer20UL18/*.npz')]
     bkg_cols = filter_pt(bkg_cols, 170.)
     bkg_cols = [c for c in bkg_cols if not(c.metadata['bkg_type']=='wjets' and 'htbin' not in c.metadata)]
@@ -109,6 +111,12 @@ def main():
 
     for bkg_type in bkg_types:
         bkg_cols_per_type[bkg_type] = [c for c in bkg_cols if c.metadata['bkg_type']==bkg_type]
+
+    return signal_cols, bkg_cols, bkg_cols_per_type
+
+
+def print_cutflow_tables():
+    signal_cols, bkg_cols, bkg_cols_per_type = collect_columns()
 
     for bkg_type, cols in bkg_cols_per_type.items():
         print('-'*80)
@@ -124,16 +132,52 @@ def main():
         combined_bkg_cols[-1].metadata['colname'] = bkg_type
     print(format_table(make_table(combined_bkg_cols)))
 
-
     print('-'*80)
     print('signal')
     print(format_table(make_table(signal_cols, combined=False)))
 
 
+def print_cutflow_tables_rinv0p3_only():
+    signal_cols, bkg_cols, bkg_cols_per_type = collect_columns()
+    signal_cols = [s for s in signal_cols if s.metadata['rinv']==0.3]
+    print('-'*80)
+    print('signal')
+    print(format_table(make_table(signal_cols, combined=False)))
 
 
+def n137_plots():
+    import matplotlib.pyplot as plt
+    set_matplotlib_fontsizes()
+
+    signal_cols, bkg_cols, bkg_cols_per_type = collect_columns()
+
+    # group signals by rinv
+    rinvs = list(sorted(set(s.metadata['rinv'] for s in signal_cols)))
+
+    fig = plt.figure(figsize=(7,7))
+    ax = fig.gca()
+
+    for rinv in rinvs:
+
+        sigs = [s for s in signal_cols if s.metadata['rinv']==rinv]
+        sigs.sort(key=lambda s: s.metadata['mz'])
+        mzs = np.array([s.metadata['mz'] for s in sigs])
+        n137s = np.array([s.xs * s.presel_eff * 137.2*1e3 for s in sigs])
+        ax.plot(mzs, n137s, '-o', label=f'$r_{{inv}}={rinv}$')
+
+    mzs_2022 = np.array([250, 300, 350, 400, 450, 500, 550, 600])
+    n137_2022 = np.array([91000, 82043, 67465, 55833, 48725, 42429, 36235, 38033])
+    ax.plot(mzs_2022, n137_2022, '-o', label='$r_{inv}=0.3 (2022)$')
+
+    ax.legend()
+    ax.set_xlabel('$m_{Z\\prime}$ (GeV)')
+    ax.set_ylabel('$N_{events}$ @ 137.2 $fb^{-1}$')
+    plt.savefig('n137.png', bbox_inches='tight')
+    imgcat('n137.png')
 
 
 
 if __name__ == '__main__':
-    main()
+    # n137_plots()
+    # print_cutflow_tables_rinv0p3_only()
+    print_cutflow_tables()
