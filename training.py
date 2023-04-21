@@ -182,6 +182,7 @@ def main():
         glob.glob(DATADIR+'/train_bkg/Summer20UL18/QCD_*.npz')
         + glob.glob(DATADIR+'/train_bkg/Summer20UL18/TTJets_*.npz')
         ]
+
     # Throw away the very low QCD bins (very low number of events)
     logger.info('Using QCD bins starting from pt>=300')
     # bkg_cols = list(filter(lambda cols: cols.metadata['bkg_type']!='qcd' or cols.metadata['ptbin'][0]>=300., bkg_cols))

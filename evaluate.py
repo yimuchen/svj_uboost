@@ -54,7 +54,8 @@ def main():
     # models = {key(f) : f for f in hpo_files}
 
     # models = {'BDT (HPO)' : 'models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json'}
-    models = {'BDT (NEW)' : 'models/svjbdt_Feb13_reweight_mt.json'}
+    # models = {'BDT (NEW)' : 'models/svjbdt_Feb13_reweight_mt.json'}
+    models = {'BDT' : 'models/svjbdt_Apr21_reweight_mt.json'}
 
     plots(signal_cols, bkg_cols, models)
 
@@ -138,8 +139,8 @@ def plots(signal_cols, bkg_cols, models):
         if key.startswith('uboost'):
             bins = np.linspace(min(score), max(score), 40)
 
-        ax.hist(score[y==0], bins, density=True, label='Bkg')
-        ax.hist(score[y==1], bins, density=True, label='Signal', alpha=.6)
+        ax.hist(score[y==0], bins, density=True, label='Bkg', weights=weight[y==0])
+        ax.hist(score[y==1], bins, density=True, label='Signal', alpha=.6, weights=weight[y==1])
 
         ax.legend()
         ax.set_xlabel('BDT Score')
@@ -170,7 +171,11 @@ def plots(signal_cols, bkg_cols, models):
             if key.startswith('uboost'): cuts = np.linspace(min(score_bkg), max(score_bkg), 11)[:-1]
 
             for cut in cuts:
-                ax.hist(mt_bkg[score_bkg>cut], bins, histtype='step', label=f'score>{cut:.2f}', density=density)
+                ax.hist(
+                    mt_bkg[score_bkg>cut], bins, histtype='step',
+                    label=f'score>{cut:.2f}', density=density,
+                    weights=weight[y==0][score_bkg>cut]
+                    )
 
             ax.legend()
             ax.set_xlabel('mT (GeV)')
