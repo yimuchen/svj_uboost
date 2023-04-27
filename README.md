@@ -10,6 +10,8 @@ It uses as much training data as it can, by using the precalculated TreeMaker We
 conda create -n bdtenv python=3.10
 conda activate bdtenv  # Needed every time
 
+conda install xgboost
+
 pip install pandas
 pip install requests
 pip install numpy
@@ -18,8 +20,6 @@ pip install matplotlib
 pip install svj_ntuple_processing
 pip install hep_ml
 ```
-
-Note: `xgboost` needs a full conda environment; if we decide we still want to run trainings using `xgboost` this setup code will change.
 
 
 ## How to run a training
@@ -47,7 +47,7 @@ Then launch the training script:
 
 ```bash
 python training.py xgboost \
-    --reweight mt --ref data/train_signal/madpt300_mz350_mdark10_rinv0.1.npz \
+    --reweight mt --ref data/train_signal/madpt300_mz350_mdark10_rinv0.3.npz \
     --lr .05 \
     --minchildweight .1 \
     --maxdepth 6 \
