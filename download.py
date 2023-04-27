@@ -21,9 +21,9 @@ def main():
     if not osp.isdir(DATADIR): os.makedirs(DATADIR)
 
     base_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/'
-    signal_dir = base_dir + '/signal_feb09_truthcone'
-    bkg_dir = base_dir + '/bkg_feb11/HADD'
-    signal_dir_notruthcone = base_dir + '/signal_feb09_notruthcone'
+    signal_dir = base_dir + '/signal_apr27_truthcone'
+    bkg_dir = base_dir + '/bkg_apr27/HADD'
+    signal_dir_notruthcone = base_dir + '/signal_apr27_notruthcone'
 
     fn_args = [
         (signal_dir, 'signal'),
@@ -32,7 +32,7 @@ def main():
         ]
 
     import multiprocessing as mp
-    p = mp.Pool(2)
+    p = mp.Pool(3)
     p.map(copy, fn_args)
     p.close()
     p.join()
