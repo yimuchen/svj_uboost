@@ -13,7 +13,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('model', help='.json file to the trained model')
     parser.add_argument('-d', '--debug', action='store_true', help='Uses only small part of data set for testing')
-    parser.add_argument('--ref', type=str, default='data/train_signal/madpt300_mz350_mdark10_rinv0.1.npz', help='path to the npz file for the reference distribution for reweighting.')
+    parser.add_argument('--ref', type=str, default='allrinv_inclmetdphi_mz350rinv0p1ref/data/train_signal/madpt300_mz350_mdark10_rinv0.1.npz', help='path to the npz file for the reference distribution for reweighting.')
     parser.add_argument('--downsample', type=float, default=.4)
     args = parser.parse_args()
 
@@ -23,7 +23,7 @@ def main():
 
     # __________________________________________________________
     # Load data
-
+    DATADIR='allrinv_inclmetdphi_mz350rinv0p1ref/data'
     train_signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/train_signal/*.npz')]
     test_signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/test_signal/*.npz')]
 

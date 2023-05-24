@@ -87,8 +87,9 @@ def main():
     model.load_model(args.model)
 
     training_features = read_training_features(args.model)
-
-    signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/signal_notruthcone/*.npz')]
+    DATADIR = '/home/snabili/hadoop/BKG/Ultra_Legacy/HADD_BKGCutbase'
+    #signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/signal_notruthcone/*.npz')]
+    signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/signal_notruth/*.npz')]
     bkg_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/bkg/Summer20UL18/*.npz')]
     bkg_cols = [c for c in bkg_cols if len(c)] # Filter empty backgrounds
     bkg_cols = filter_pt(bkg_cols, 300.)

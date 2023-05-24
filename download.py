@@ -20,14 +20,19 @@ def copy(tup):
 def main():
     if not osp.isdir(DATADIR): os.makedirs(DATADIR)
 
-    base_dir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/bdt_features/'
-    signal_dir = base_dir + '/signal_apr27_truthcone'
-    bkg_dir = base_dir + '/bkg_apr27/HADD'
-    signal_dir_notruthcone = base_dir + '/signal_apr27_notruthcone'
+    #base_dir = '/home/snabili/data/svj_local_scripts/metdphicuts_forBDT/'
+    #base_dir = '/home/snabili/data/svj_local_scripts/rinv_variation/'
+    #base_dir = '/home/snabili/data/svj_local_scripts/metdphicuts_forBDT/'
+    #base_dir = '/home/snabili/data/svj_local_scripts/rho_bdt_allfiles/'
+    base_dir = '/home/snabili/data/svj_local_scripts/puweight/'
+    #signal_dir = base_dir + 'sig_rinv0.3'
+    signal_dir = base_dir + 'signal'
+    bkg_dir = base_dir + 'bkg'
+    #signal_dir_notruthcone = base_dir + '/signal_apr27_notruthcone'
 
     fn_args = [
         (signal_dir, 'signal'),
-        (signal_dir_notruthcone, 'signal_notruthcone'),
+        #(signal_dir_notruthcone, 'signal_notruthcone'),
         (bkg_dir, 'bkg'),
         ]
 

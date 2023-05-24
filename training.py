@@ -12,20 +12,20 @@ from common import logger, DATADIR, Columns, time_and_log, columns_to_numpy, set
 training_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
     'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
-    # 'phi'
     ]
 all_features = training_features + ['mt']
 
 
 def reweight(reference, samples, reweight_var, make_test_plot=False):
     # For the reference model, the new 'reweight' is equal to the old 'weight'
-    reference.arrays['reweight'] = np.copy(reference.arrays['weight'])
+    reference.arrays['reweight'] = np.copy(reference.arrays['weight']) * np.copy(reference.arrays['puweight'])
 
     # Binning is hand-tuned for now
     reweight_bins = dict(
         girth = np.linspace(0., 1.5, 40),
         pt = np.linspace(0., 1000, 40),
         mt = np.linspace(0., 1000, 40),
+        rho = np.linspace(-4., 0., 40)
         )[reweight_var]
 
     logger.info(
@@ -45,7 +45,7 @@ def reweight(reference, samples, reweight_var, make_test_plot=False):
         hist, _ = np.histogram(sample.arrays[reweight_var], bins=reweight_bins)
         reweight_hist = np.where(hist>0, reference_hist/hist, 0.)
         vals = sample.arrays[reweight_var]
-        sample.arrays['reweight'] = np.copy(sample.arrays['weight'])
+        sample.arrays['reweight'] = np.copy(sample.arrays['weight']) * np.copy(sample.arrays['puweight'])
         for i, (left, right) in enumerate(zip(reweight_bins[:-1], reweight_bins[1:])):
             sample.arrays['reweight'][(left < vals) &  (vals <= right)] *= reweight_hist[i]
 
@@ -205,7 +205,8 @@ def main():
             
             base_tree = uboost.DecisionTreeClassifier(max_depth=4)
             model = UGradientBoostingClassifier(
-                loss=BinFlatnessLossFunction(uniform_features=['mt'], uniform_label=0, n_bins=50),
+                #loss=BinFlatnessLossFunction(uniform_features=['mt'], uniform_label=0, n_bins=50),
+                loss=BinFlatnessLossFunction(uniform_features=['rho'], uniform_label=0, n_bins=50),
                 n_estimators=100,
                 train_features=training_features,
                 max_depth=4
@@ -214,7 +215,8 @@ def main():
         else:
             base_tree = uboost.DecisionTreeClassifier(max_depth=4)
             model = uboost.uBoostClassifier( # "uBoostBDT" in the uBoost documentation
-                uniform_features=['mt'], uniform_label=0,
+                #uniform_features=['mt'], uniform_label=0,
+                uniform_features=['rho'], uniform_label=0,
                 base_estimator=base_tree,
                 train_features=training_features,
                 n_estimators=100,
@@ -286,14 +288,14 @@ def main():
                 weight_key='reweight', downsample=args.downsample
                 )
             weight *= 100. # For training stability
-            outfile = strftime(f'models/svjbdt_%b%d_reweight_{args.reweight}.json')
+            outfile = strftime(f'models/svjbdt_%b%d_reweight_{args.reweight}_allrinv.json')
         else:
             print_weight_table(bkg_cols, signal_cols, 'weight')
             X, y, weight = columns_to_numpy(
                 signal_cols, bkg_cols, training_features,
                 downsample=args.downsample
                 )
-            outfile = strftime('models/svjbdt_%b%d.json')
+            outfile = strftime('models/svjbdt_%b%d_allfiles.json')
 
         logger.info(f'Using {len(y)} events ({np.sum(y==1)} signal events, {np.sum(y==0)} bkg events)')
 

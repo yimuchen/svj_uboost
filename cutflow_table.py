@@ -77,8 +77,12 @@ def make_column(c):
     s = [column_name(c)]
     s.append(f'{c.xs:.2e}')
     raw = c.cutflow['raw']
-    for val in c.cutflow.values():
-        s.append(f'{100*val/raw:.2f}%')
+    #for val in c.cutflow.values():
+    #    s.append(f'{100*val/raw:.2f}%')
+    for i in range(1,len(c.cutflow)):
+        
+        s.append(100*c.cutflow.values()[i]/c.cutflow.values[i-1])
+
     n137 = c.xs * c.presel_eff * 137.2*1e3
     s.append(f'{n137:.2e}')
     return s
@@ -93,12 +97,14 @@ def make_table(cols, combined=True):
     if combined: table.append(make_column(combined_column(cols)))
     return transpose_table(table)
 
-
+sig_DATADIR = '/home/snabili/data/svj_local_scripts/rho_bdt_allfiles'
+bkg_DATADIR = '/home/snabili/hadoop/BKG/Ultra_Legacy/HADD_BKGBDT/Summer20UL18'
 def collect_columns():
-    signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/signal_notruthcone/*.npz')]
+    #signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/signal_notruthcone/*.npz')]
+    signal_cols = [Columns.load(f) for f in glob.glob(sig_DATADIR+'/signal_notruth/*mdark10_rinv0.3.npz')]
     signal_cols.sort(key=lambda s: (s.metadata['mz'], s.metadata['rinv']))
 
-    bkg_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/bkg/Summer20UL18/*.npz')]
+    bkg_cols = [Columns.load(f) for f in glob.glob(bkg_DATADIR+'/*.npz')]
     bkg_cols = filter_pt(bkg_cols, 170.)
     bkg_cols = [c for c in bkg_cols if not(c.metadata['bkg_type']=='wjets' and 'htbin' not in c.metadata)]
 
@@ -178,6 +184,6 @@ def n137_plots():
 
 
 if __name__ == '__main__':
-    # n137_plots()
+    n137_plots()
     # print_cutflow_tables_rinv0p3_only()
     print_cutflow_tables()

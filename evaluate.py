@@ -28,15 +28,6 @@ def main():
     signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/test_signal/*.npz')]
 
     # models = {
-    #     # 'unreweighted+eta' : 'models/svjbdt_Nov22_eta.json',
-    #     # 'mt_reweighted+eta' : 'models/svjbdt_Nov22_reweight_mt_eta.json',
-    #     'unreweighted' : 'models/svjbdt_Nov18.json',
-    #     # 'girth_reweighted' : 'models/svjbdt_Nov18_reweight_girth.json',
-    #     # 'mt_reweighted' : 'models/svjbdt_Nov18_reweight_mt.json',
-    #     # 'pt_reweighted' : 'models/svjbdt_Nov18_reweight_pt.json',
-    #     # 'mt_reweighted_ref550' : 'models/svjbdt_Nov22_reweight_mt_ref550.json'
-    #     'ref_mz150_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz150_rinv0p1.json',
-    #     'ref_mz150_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz150_rinv0p3.json',
     #     'ref_mz250_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz250_rinv0p1.json',
     #     'ref_mz250_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz250_rinv0p3.json',
     #     'ref_mz350_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz350_rinv0p1.json',
@@ -45,17 +36,9 @@ def main():
     #     'ref_mz450_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz450_rinv0p3.json',
     #     'ref_mz550_rinv0p1' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p1.json',
     #     'ref_mz550_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p3.json',
-    #     # 'uboost_gradbin' : 'models/uboost_Nov17_gradbin.pkl',
-    #     # 'uboost_knn' : 'models/uboost_Nov18_knn.pkl',
     #     }
 
-    # hpo_files = glob.glob('models/svjbdt_Nov29_reweight_mt_lr*.json')
-    # key = lambda f: re.search(r'(lr.*)\.json', f).group(1)
-    # models = {key(f) : f for f in hpo_files}
-
-    # models = {'BDT (HPO)' : 'models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json'}
-    # models = {'BDT (NEW)' : 'models/svjbdt_Feb13_reweight_mt.json'}
-    models = {'BDT' : 'models/svjbdt_Apr21_reweight_mt.json'}
+    models = {'BDT' : 'models/svjbdt_May11_allfiles.json'}
 
     plots(signal_cols, bkg_cols, models)
 
@@ -160,6 +143,7 @@ def plots(signal_cols, bkg_cols, models):
     mt_bkg = mt[y==0]
 
     for i, (key, score) in enumerate(scores.items()):
+        print(key)
         score_bkg = score[y==0]
 
         for density in [True, False]:
@@ -167,8 +151,10 @@ def plots(signal_cols, bkg_cols, models):
             ax.set_title(key + (' (normed)' if density else ''), fontsize=28)
             bins = np.linspace(0, 800, 80)
 
-            cuts = np.linspace(.0, .9, 10)
-            if key.startswith('uboost'): cuts = np.linspace(min(score_bkg), max(score_bkg), 11)[:-1]
+            #cuts = np.linspace(.0, .9, 10)
+            cuts = np.linspace(.0, .5, 6)
+            #if key.startswith('uboost'): cuts = np.linspace(min(score_bkg), max(score_bkg), 11)[:-1]
+            if key.startswith('uboost'): cuts = np.linspace(min(score_bkg), max(score_bkg), 7)[:-1]
 
             for cut in cuts:
                 ax.hist(

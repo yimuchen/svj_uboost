@@ -2,7 +2,7 @@ import os, os.path as osp, logging, re, time, json
 from collections import OrderedDict
 from contextlib import contextmanager
 import svj_ntuple_processing
-
+from scipy.ndimage import gaussian_filter
 import requests
 import numpy as np
 np.random.seed(1001)
@@ -318,3 +318,44 @@ def read_training_features(model_file):
         model = json.load(f)
         return model['features']
 
+def rhoddt_windowcuts(mt, pt, rho):
+    cuts = (mt>200) & (mt<1000) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
+    return cuts
+
+def varmap(mt, pt, rho, var, weight):
+    cuts = rhoddt_windowcuts(mt, pt, rho)
+    C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
+    w, h = 50, 50
+    VAR_map      = [[0 for x in range(w)] for y in range(h)]
+    VAR = var[cuts]
+    for i in range(len(RHO_edges)-1):
+       for j in range(len(PT_edges)-1):
+          CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
+          if len(VAR[CUT])==0: continue
+          if len(VAR[CUT])>0:
+             #VAR_map[i][j]=np.percentile(VAR[CUT],18.2) # bdt>0.6
+             VAR_map[i][j]=np.percentile(VAR[CUT],36.2) # bdt>0.4
+
+    VAR_map_smooth = gaussian_filter(VAR_map,1)
+    return VAR_map_smooth, RHO_edges, PT_edges
+
+
+
+
+def ddt(mt, pt, rho, var, weight):
+    cuts = rhoddt_windowcuts(mt, pt, rho)
+    var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight)
+    nbins = 49
+    Pt_min, Pt_max = min(PT_edges), max(PT_edges)
+    Rho_min, Rho_max = min(RHO_edges), max(RHO_edges)
+
+    ptbin_float  = nbins*(pt-Pt_min)/(Pt_max-Pt_min) 
+    rhobin_float = nbins*(rho-Rho_min)/(Rho_max-Rho_min)
+
+    #ptbin         = np.clip(1 + ptbin_float.astype(int),   0, nbins)
+    #rhobin        = np.clip(1 + rhobin_float.astype(int),  0, nbins)
+    ptbin  = np.clip(1 + np.round(ptbin_float).astype(int), 0, nbins)
+    rhobin = np.clip(1 + np.round(rhobin_float).astype(int), 0, nbins)
+
+    varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
+    return varDDT
