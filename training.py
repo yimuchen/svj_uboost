@@ -288,14 +288,14 @@ def main():
                 weight_key='reweight', downsample=args.downsample
                 )
             weight *= 100. # For training stability
-            outfile = strftime(f'models/svjbdt_%b%d_reweight_{args.reweight}_allrinv.json')
+            outfile = strftime(f'models/svjbdt_%b%d_reweight_{args.reweight}_allsignals_ttjets_refmz250.json')
         else:
             print_weight_table(bkg_cols, signal_cols, 'weight')
             X, y, weight = columns_to_numpy(
                 signal_cols, bkg_cols, training_features,
                 downsample=args.downsample
                 )
-            outfile = strftime('models/svjbdt_%b%d_allfiles.json')
+            outfile = strftime('models/svjbdt_%b%d_allsignals_qcdttjets.json')
 
         logger.info(f'Using {len(y)} events ({np.sum(y==1)} signal events, {np.sum(y==0)} bkg events)')
 
