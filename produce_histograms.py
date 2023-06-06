@@ -27,9 +27,6 @@ class Histogram:
     def json(self):
         return dict(
             type = 'Histogram',
-            '''binning = list(self.binning.astype(float)),
-            vals = list(self.vals.astype(float)),
-            errs = list(self.errs.astype(float)),'''
             binning = list(self.binning),
             vals = list(self.vals),
             errs = list(self.errs),
