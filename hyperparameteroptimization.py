@@ -14,15 +14,16 @@ def worker(tup):
             f'_subs{subsample:1.1f}_nest{n_estimators}'
             )
 
-        outfile = strftime(f'models/svjbdt_%b%d_reweight_mt_{tag}.json')
+        outfile = strftime(f'models/svjbdt_%b%d_reweight_rho_{tag}.json')
         if osp.isfile(outfile):
             logger.info(f'File {outfile} exists, skipping')
             continue
 
         cmd = (
             f'python training.py xgboost'
-            f' --reweight mt --ref data/train_signal/madpt300_mz350_mdark10_rinv0.1.npz'
+            f' --reweight rho --ref data/train_signal/madpt300_mz250_mdark10_rinv0.3.npz'
             f' --node {lpc_node_nr} --tag {tag}'
+            #f' --tag {tag}'
             f' --lr {learning_rate}'
             f' --minchildweight {min_child_weight}'
             f' --maxdepth {max_depth}'
@@ -57,10 +58,6 @@ def main():
     pool = mp.Pool(n_threads)
     pool.map(worker, mp_args)
     pool.join()
-
-
-
-
 
 
 if __name__ == '__main__':

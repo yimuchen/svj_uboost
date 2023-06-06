@@ -13,7 +13,7 @@ training_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
     'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
     ]
-all_features = training_features + ['mt']
+all_features = training_features + ['rho']
 
 
 def reweight(reference, samples, reweight_var, make_test_plot=False):
@@ -25,7 +25,7 @@ def reweight(reference, samples, reweight_var, make_test_plot=False):
         girth = np.linspace(0., 1.5, 40),
         pt = np.linspace(0., 1000, 40),
         mt = np.linspace(0., 1000, 40),
-        rho = np.linspace(-4., 0., 40)
+        rho = np.linspace(-10., 0.5, 40)
         )[reweight_var]
 
     logger.info(
@@ -162,6 +162,7 @@ def main():
         i = args.index('--node'); args.pop(i+1); args.pop(i)
         # Submit the exact same command on a different node
         cmd = f'ssh -o StrictHostKeyChecking=no cmslpc{node_nr}.fnal.gov "cd /uscms/home/klijnsma/svj/bdt/v3/svj_uboost; conda activate svj-bdt-light; nohup python ' + ' '.join(args) + '"'
+        #cmd = f'ssh -o StrictHostKeyChecking=no hepcms{node_nr}.umd.edu "cd /uscms/home/klijnsma/svj/bdt/v3/svj_uboost; conda activate svj-bdt-light; nohup python ' + ' '.join(args) + '"'
         logger.info(f'Executing: {cmd}')
         os.system(cmd)
         return
