@@ -147,6 +147,9 @@ def main():
     parser.add_argument('--gradientboost', action='store_true')
     parser.add_argument('--use_eta', action='store_true')
     parser.add_argument('--ref', type=str, help='path to the npz file for the reference distribution for reweighting.')
+    # adding signal models
+    parser.add_argument('--mdark', type=str, default='10.')
+    parser.add_argument('--rinv', type=str, default='0.3')
     args, leftover_args = parser.parse_known_args()
 
     global training_features
@@ -183,6 +186,11 @@ def main():
         glob.glob(DATADIR+'/train_bkg/Summer20UL18/QCD_*.npz')
         + glob.glob(DATADIR+'/train_bkg/Summer20UL18/TTJets_*.npz')
         ]
+
+    if args.mdark:
+        signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/train_signal/*mdark'+args.mdark+'*.npz')]
+    if args.rinv:
+        signal_cols = [Columns.load(f) for f in glob.glob(DATADIR+'/train_signal/*rinv'+args.rinv+'*.npz')]
 
     # Throw away the very low QCD bins (very low number of events)
     logger.info('Using QCD bins starting from pt>=300')

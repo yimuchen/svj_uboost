@@ -20,11 +20,17 @@ def worker(tup):
 
         cmd = (
             f'python training.py xgboost'
+            #f' --reweight rho --ref data/train_signal/madpt300_mz250_mdark10_rinv0.3.npz'
+            f' --mdark {mdark} --rinv {rinv}'
             f' --node {lpc_node_nr} --tag {tag}'
             f' --tag {tag}'
-            f' --mdark {mdark}'
-            f' --rinv {rinv}'
+            f' --lr {learning_rate}'
+            f' --minchildweight {min_child_weight}'
+            f' --maxdepth {max_depth}'
+            f' --subsample {subsample}'
+            f' --nest {n_estimators}'
             )
+
         logger.info(f'Submitting command: {cmd}')
         os.system(cmd)
 
