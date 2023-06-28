@@ -138,3 +138,14 @@ python overfitting.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.
 ![overfit plot](example_plots/overfit.png)
 
 With p-values close to 1.0, there is no reason to assume any overfitting.
+
+
+## Scale uncertainties
+
+```
+mkdir data/scaleunc
+xrdcp root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/signal_madpt300_2023_scaleunc/BDTCOLS/madpt300_mz350_mdark10_rinv0.3_scaleunc.npz data/scaleunc/
+python study_scaleunc.py plot data/scaleunc/madpt300_mz350_mdark10_rinv0.3_scaleunc.npz models/svjbdt_Apr21_reweight_mt.json
+```
+
+![scale uncertainty plot](example_plots/scaleunc.png)
