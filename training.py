@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 np.random.seed(1001)
 
-from common import logger, DATADIR, Columns, time_and_log, columns_to_numpy, set_matplotlib_fontsizes, imgcat, add_key_value_to_json, filter_pt
+from common import logger, DATADIR, Columns, time_and_log, columns_to_numpy, set_matplotlib_fontsizes, imgcat, add_key_value_to_json, filter_pt, mt_wind
 
 
 training_features = [
@@ -196,6 +196,8 @@ def main():
     logger.info('Using QCD bins starting from pt>=300')
     # bkg_cols = list(filter(lambda cols: cols.metadata['bkg_type']!='qcd' or cols.metadata['ptbin'][0]>=300., bkg_cols))
     bkg_cols = filter_pt(bkg_cols, 300.)
+    #bkg_cols = mt_wind(bkg_cols, 180, 650)
+    #signal_cols = mt_wind(signal_cols, 180, 650)
 
     logger.info(f'Training features: {training_features}')
 
