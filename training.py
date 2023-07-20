@@ -12,6 +12,7 @@ from common import logger, DATADIR, Columns, time_and_log, columns_to_numpy, set
 training_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
     'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
+    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef', 
     ]
 all_features = training_features + ['rho']
 
@@ -164,7 +165,8 @@ def main():
         args = sys.argv[:]
         i = args.index('--node'); args.pop(i+1); args.pop(i)
         # Submit the exact same command on a different node
-        cmd = f'ssh -o StrictHostKeyChecking=no cmslpc{node_nr}.fnal.gov "cd /uscms/home/klijnsma/svj/bdt/v3/svj_uboost; conda activate svj-bdt-light; nohup python ' + ' '.join(args) + '"'
+        cmd = f'ssh -o StrictHostKeyChecking=no cmslpc{node_nr}.fnal.gov "source /uscms/home/bregnery/nobackup/miniconda3/etc/profile.d/conda.sh; cd /uscms/home/bregnery/nobackup/svj_uboost; conda activate bdtenv; nohup python ' + ' '.join(args) + '"'
+        #cmd = f'ssh -o StrictHostKeyChecking=no cmslpc{node_nr}.fnal.gov "cd /uscms/home/klijnsma/svj/bdt/v3/svj_uboost; conda activate svj-bdt-light; nohup python ' + ' '.join(args) + '"'
         #cmd = f'ssh -o StrictHostKeyChecking=no hepcms{node_nr}.umd.edu "cd /uscms/home/klijnsma/svj/bdt/v3/svj_uboost; conda activate svj-bdt-light; nohup python ' + ' '.join(args) + '"'
         logger.info(f'Executing: {cmd}')
         os.system(cmd)

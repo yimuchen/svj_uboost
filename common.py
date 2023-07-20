@@ -388,7 +388,7 @@ class Columns(svj_ntuple_processing.Columns):
 def columns_to_numpy(
     signal_cols, bkg_cols, features,
     downsample=.4, weight_key='weight',
-    mt_high=180, mt_low=650
+    mt_high=650, mt_low=180
     ):
     """
     Takes a list of signal and background Column instances, and outputs
@@ -416,12 +416,12 @@ def columns_to_numpy(
 
     # Get the features for the signal samples
     for cols in signal_cols:
-        sigmtwind = mt_wind(cols, 650, 180)
+        sigmtwind = mt_wind(cols, mt_high, mt_low)
         X.append(cols.to_numpy(features)[sigmtwind])
         #print(features)
         len_sig_cols=len(cols.arrays[features[0]][sigmtwind])
-        print(cols.to_numpy(features)[sigmtwind])
-        print(len(cols.to_numpy(features)[sigmtwind]))
+        #print(cols.to_numpy(features)[sigmtwind])
+        #print(len(cols.to_numpy(features)[sigmtwind]))
         #length_of_signalCol=len(cols.arrays(features)[mtwind])
         #print(length_of_signalCol, len(cols))
         y.append(np.ones(len_sig_cols))
