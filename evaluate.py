@@ -14,6 +14,7 @@ from common import logger, DATADIR, Columns, time_and_log, imgcat, set_matplotli
 training_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
     'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
+    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef', 
     # 'phi', 'eta'
     ]
 all_features = training_features + ['mt']
