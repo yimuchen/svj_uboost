@@ -14,6 +14,7 @@ from common import logger, DATADIR, Columns, time_and_log, imgcat, set_matplotli
 training_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
     'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
+    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef', 
     # 'phi', 'eta'
     ]
 all_features = training_features + ['mt']
@@ -38,7 +39,8 @@ def main():
     #     'ref_mz550_rinv0p3' : 'models/svjbdt_Nov22_reweight_mt_ref_mz550_rinv0p3.json',
     #     }
 
-    models = {'BDT' : 'models/svjbdt_May25_allsignals_qcdttjets.json'}
+    models = {'with MT window'    : 'models/svjbdt_Jul20_allsignals_qcdttjets.json',
+              'without MT window' : 'models/svjbdt_Jun27_allsignals_qcdttjets_lr0.30_mcw0.1_maxd8_subs1.0_nest850.json'}
 
     plots(signal_cols, bkg_cols, models)
 

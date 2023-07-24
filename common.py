@@ -279,6 +279,10 @@ def get_record(key):
     return Record(eval(record_txt))
 
 
+def mt_wind(cols, mt_high, mt_low):
+    mt_cut = (cols.arrays['mt']>mt_low) & (cols.arrays['mt']<mt_high)
+    return mt_cut
+
 def filter_pt(cols, min_pt):
     """
     Filters for a minimum pt (only valid for QCD).
@@ -384,6 +388,7 @@ class Columns(svj_ntuple_processing.Columns):
 def columns_to_numpy(
     signal_cols, bkg_cols, features,
     downsample=.4, weight_key='weight',
+    mt_high=650, mt_low=180
     ):
     """
     Takes a list of signal and background Column instances, and outputs
@@ -397,10 +402,12 @@ def columns_to_numpy(
     logger.info(f'Downsampling bkg, keeping fraction of {downsample}')
     # Get the features for the bkg samples
     for cols in bkg_cols:
-        this_X = cols.to_numpy(features)
-        this_weight = cols.arrays[weight_key]
+        mtwind = mt_wind(cols, mt_high, mt_low)
+        this_X = cols.to_numpy(features)[mtwind]
+        this_weight = cols.arrays[weight_key][mtwind]
         if downsample < 1.:
-            select = np.random.choice(len(cols), int(downsample*len(cols)), replace=False)
+            #select = np.random.choice(len(cols), int(downsample*len(cols)), replace=False)
+            select = np.random.choice(len(this_weight), int(downsample*len(this_weight)), replace=False)
             this_X = this_X[select]
             this_weight = this_weight[select]
         X.append(this_X)
@@ -409,12 +416,19 @@ def columns_to_numpy(
 
     # Get the features for the signal samples
     for cols in signal_cols:
-        X.append(cols.to_numpy(features))
-        y.append(np.ones(len(cols)))
+        sigmtwind = mt_wind(cols, mt_high, mt_low)
+        X.append(cols.to_numpy(features)[sigmtwind])
+        #print(features)
+        len_sig_cols=len(cols.arrays[features[0]][sigmtwind])
+        #print(cols.to_numpy(features)[sigmtwind])
+        #print(len(cols.to_numpy(features)[sigmtwind]))
+        #length_of_signalCol=len(cols.arrays(features)[mtwind])
+        #print(length_of_signalCol, len(cols))
+        y.append(np.ones(len_sig_cols))
         # All signal model parameter variations should get equal weight,
         # but some signal samples have more events.
         # Use 1/n_events as a weight per event.
-        signal_weight.append((1./len(cols))*np.ones(len(cols)))
+        signal_weight.append((1./len_sig_cols)*np.ones(len_sig_cols))
     
     bkg_weight = np.concatenate(bkg_weight)
     signal_weight = np.concatenate(signal_weight)
