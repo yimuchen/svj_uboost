@@ -14,7 +14,7 @@ np.random.seed(1001)
 DATADIR = osp.join(osp.dirname(osp.abspath(__file__)), 'data')
 
 
-def setup_logger(name: str = "hadd") -> logging.Logger:
+def setup_logger(name: str = "bdt") -> logging.Logger:
     """Sets up a Logger instance.
 
     If a logger with `name` already exists, returns the existing logger.
