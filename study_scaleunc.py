@@ -102,6 +102,17 @@ def plot():
     print(f'{1-err_down=:.5f}')
     print(f'avg err={.5*(err_up-1) + .5*(1-err_down)}')
 
+    central_yield = central.sum()
+    up_yield = up.sum()
+    down_yield = down.sum()
+
+    print(f'Total yield central: {central_yield}')
+    print(f'Total yield up: {up_yield}; {100.*up_yield/central.sum():.2f}%')
+    print(f'Total yield down: {down_yield}; {100.*down_yield/central.sum():.2f}%')
+
+    total_yield_effect = (.5 * (up_yield - central_yield) + (central_yield - down_yield)) / central_yield
+    print(f'Total yield effect: {100.*total_yield_effect:.2f}%')
+
 
 
 

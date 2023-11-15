@@ -57,6 +57,8 @@ def plot():
 
         fig, (top, bot) = plt.subplots(2,1, height_ratios=[3,1], figsize=(10,13))
 
+        mean_yield_eff = 0.
+
         for cols in collection:
             systvar = cols.metadata['systvar']
             common.logger.info(f'Processing {systvar}')
@@ -72,10 +74,15 @@ def plot():
             if systvar == 'central':
                 central_hist = hist
 
-            common.logger.info(f'{systvar}: {hist}')
+            # common.logger.info(f'{systvar}: {hist}')
+            yield_eff = abs(hist.sum() / central_hist.sum() - 1.)
+            common.logger.info(f'{systvar}: Effect on yield is {100.*yield_eff:.4f}%')
+            if systvar != 'central': mean_yield_eff += yield_eff
 
             l = top.step(bins[:-1], hist, where='post', label=systvar)[0]
             bot.step(bins[:-1], hist/central_hist, where='post', label=systvar, color=l.get_color())
+
+        common.logger.info(f'Mean yield eff is {100.*mean_yield_eff/2.:.4f}%')
 
         # top.set_title(osp.basename(infile).replace('.npz',''))
         bot.set_xlabel('MT (GeV)')
