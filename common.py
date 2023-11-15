@@ -136,6 +136,20 @@ def imgcat(path) -> None:
         pass
 
 
+def expand_wildcards(pats):
+    import seutils
+    expanded = []
+    for pat in pats:
+        if '*' in pat:
+            if seutils.path.has_protocol(pat):
+                expanded.extend(seutils.ls_wildcard(pat))
+            else:
+                expanded.extend(glob.glob(pat))
+        else:
+            expanded.append(pat)
+    return expanded
+
+
 class Scripter:
     """
     Command line utility.
@@ -206,6 +220,25 @@ def quick_fig(figsize=(10, 10), outfile="tmp.png"):
     try:
         fig = plt.figure(figsize=figsize)
         yield fig
+    finally:
+        plt.savefig(outfile, bbox_inches="tight")
+        try:
+            os.system(f"imgcat {outfile}")
+        except Exception:
+            pass
+
+@contextmanager
+def quick_subplots(*args, **kwargs):
+    """
+    Context manager to open a matplotlib Figure.
+    Upon closing, saves it to a file and calls
+    imgcat (an iTerm2 command line util) on it
+    to display the plot in the terminal.
+    """
+    outfile = kwargs.pop('outfile', 'tmp.png')
+    try:
+        fig, axes = plt.subplots(*args, **kwargs)
+        yield fig, axes
     finally:
         plt.savefig(outfile, bbox_inches="tight")
         try:
