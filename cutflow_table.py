@@ -29,8 +29,8 @@ def transpose_table(table):
     return [list(x) for x in zip(*table)]
 
 
-def format_table(table, col_sep=' ', row_sep='\n', transpose=False):
-    table = [ [format_val(c) for c in row ] for row in table ]
+def format_table(table, col_sep=' ', row_sep='\n', transpose=False, ndec=2):
+    table = [ [format_val(c, ndec=ndec) for c in row ] for row in table ]
     if transpose: table = transpose_table(table)
     col_widths = [ max(map(len, column)) for column in zip(*table) ]
     return row_sep.join(

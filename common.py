@@ -9,6 +9,8 @@ import numpy as np
 np.random.seed(1001)
 
 
+# Is this a good binning?
+MT_BINS = np.linspace(100., 1000., 100)
 
 # Where training data will be stored
 DATADIR = osp.join(osp.dirname(osp.abspath(__file__)), 'data')
@@ -555,3 +557,7 @@ def ddt(mt, pt, rho, var, weight):
 
     varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
     return varDDT
+
+
+def mask_cutbased(col):
+    return ((col.arrays['rt'] > 1.18) & (col.arrays['ecfm2b1'] > 0.09))

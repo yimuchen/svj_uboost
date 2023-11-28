@@ -4,7 +4,10 @@ from time import strftime
 import numpy as np
 import xgboost as xgb
 
-from common import logger, DATADIR, filter_pt, filter_ht, Columns, time_and_log, columns_to_numpy, read_training_features
+import common
+from common import logger, DATADIR, filter_pt, filter_ht, Columns, time_and_log, columns_to_numpy, read_training_features, Scripter, mask_cutbased
+
+scripter = Scripter()
 
 
 class Histogram:
@@ -14,6 +17,15 @@ class Histogram:
     Keeps track of binning, values, errors, and metadata.
     Designed to be easily JSON-serializable.
     """
+    @classmethod
+    def from_dict(cls, dict):
+        inst = cls.__new__(cls)
+        inst.binning = np.array(dict['binning'])
+        inst.vals = np.array(dict['vals'])
+        inst.errs = np.array(dict['errs'])
+        inst.metadata = dict['metadata'].copy()
+        return inst
+
     def __init__(self, binning, vals=None, errs=None):
         self.binning = binning
         self.vals = np.zeros(self.nbins) if vals is None else vals
@@ -25,12 +37,18 @@ class Histogram:
         return len(self.binning)-1
 
     def json(self):
+        # Convert anything that remotely looks like a float to python float.
+        for k, v in self.metadata.items():
+            try:
+                self.metadata[k] = float(v)
+            except ValueError:
+                pass
         return dict(
             type = 'Histogram',
             binning = list(self.binning),
             vals = list(self.vals),
             errs = list(self.errs),
-            metadata = self.metadata
+            metadata = self.metadata.copy()
             )
 
     def __repr__(self):
@@ -43,7 +61,9 @@ class Histogram:
             )
 
     def copy(self):
-        return Histogram(self.binning.copy(), self.vals.copy(), self.errs.copy())
+        the_copy = Histogram(self.binning.copy(), self.vals.copy(), self.errs.copy())
+        the_copy.metadata = self.metadata.copy()
+        return the_copy
 
     def __add__(self, other):
         """Add another Histogram or a numpy array to this histogram. Returns new object."""
@@ -62,6 +82,10 @@ class Histogram:
             return self.copy()
         raise NotImplemented
 
+    @property
+    def norm(self):
+        return self.vals.sum()
+
 
 def repr_dict(d, depth=0):
     s = []
@@ -70,11 +94,101 @@ def repr_dict(d, depth=0):
             print(f'WARNING: {key} is type ndarray! {val=}')
         s.append(depth*'  ' + repr(key))
         if hasattr(val, 'items') and len(val):
-            s.append(repr_dict(val, depth+1))
+            if val.get('type', '') == 'Histogram':
+                s[-1] += ' (histogram)'
+            else:
+                s.append(repr_dict(val, depth+1))
     return '\n'.join(s)
 
 
-def main():
+def filter_bad_bkgs(bkgs):
+    # Filter empty backgrounds
+    bkgs = [c for c in bkgs if len(c)]
+    # Filter out QCD with pT<300
+    # Only singular events pass the preselection, which creates spikes in the final bkg dist
+    bkgs = filter_pt(bkgs, 300.)
+    # Same story for wjets with HT<400
+    bkgs = filter_ht(bkgs, 400., 'wjets')
+    # Filter out wjets inclusive bin - it's practically the HT<100 bin,
+    # and it's giving problems
+    bkgs = [c for c in bkgs if not(c.metadata['bkg_type']=='wjets' and 'htbin' not in c.metadata)]
+    return bkgs
+
+
+@scripter
+def cutbased():
+    mt_axis = common.MT_BINS
+    lumi = common.pull_arg('--lumi', type=float, default=137.2).lumi
+    systfile = common.pull_arg('-s', '--systfile', type=str).systfile
+    outfile = common.pull_arg('-o', '--outfile', type=str, default=strftime('histograms_cutbased_%Y%m%d.json')).outfile
+    lumi *= 1e3 # Convert to nb-1 for easier multiplication with xs (which is in nb)
+    npzfiles = common.pull_arg('npzfiles', nargs='+', type=str).npzfiles
+
+    signals = [] ; bkgs = []
+    for c in (Columns.load(f) for f in npzfiles):
+        c.mask = mask_cutbased(c)
+        if 'mz' in c.metadata:
+            signals.append(c)
+        else:
+            bkgs.append(c)
+
+    bkgs = filter_bad_bkgs(bkgs)
+
+    out = {}
+    out['version'] = 3
+    out['mt'] = list(mt_axis)
+
+    out['histograms'] = {}
+    out['histograms']['0.000'] = {
+        'qcd' : Histogram(mt_axis),
+        'ttjets' : Histogram(mt_axis),
+        'wjets' : Histogram(mt_axis),
+        'zjets' : Histogram(mt_axis)
+        }
+
+    # Backgrounds
+    for c in bkgs:
+        mt = c.arrays['mt']
+        mt_dist = np.histogram(mt[c.mask], mt_axis)[0] / len(mt)
+        mt_dist *= c.xs * c.presel_eff * lumi
+        out['histograms']['0.000'][c.metadata['bkg_type']] += mt_dist
+    out['histograms']['0.000']['bkg'] = sum(out['histograms']['0.000'].values())
+    # Convert to json
+    out['histograms']['0.000'] = {k: h.json() for k, h in out['histograms']['0.000'].items()}
+
+    if systfile:
+        common.logger.info(f'Loading systematics from {systfile}')
+        with open(systfile, 'r') as f:
+            systs = json.load(f)
+
+    # Signals
+    for c in signals:
+        mt = c.arrays['mt']
+        mt_dist = np.histogram(mt[c.mask], mt_axis)[0] / len(mt) * c.effxs * lumi
+        histogram = Histogram(mt_axis, mt_dist)
+        histogram.metadata.update(c.metadata)
+        key = f"mz{c.metadata['mz']}_mdark{c.metadata['mdark']}_rinv{c.metadata['rinv']:.1f}"
+        out['histograms']['0.000'][key] = histogram.json()
+
+        if systfile:
+            # Histograms don't have the correct normalization yet
+            # Normalize them to the current signal
+            central_norm = np.array(systs['central']['vals']).sum()
+            for name, hist in systs.items():
+                if name in ['central', 'selection']: continue
+                hist = Histogram.from_dict(hist)
+                hist.vals *= histogram.norm / central_norm
+                hist.metadata.update(histogram.metadata)
+                hist.metadata['systname'] = name
+                out['histograms']['0.000'][f'SYST_{key}_{name}'] = hist.json()                
+
+    logger.info(f'Dumping the following dict tree to {outfile}:\n{repr_dict(out)}')
+    with open(outfile, 'w') as f:
+        json.dump(out, f, indent=4)
+
+
+@scripter
+def bdt():
     parser = argparse.ArgumentParser()
     parser.add_argument('model', help='.json file to the trained model')
     parser.add_argument('-d', '--debug', action='store_true', help='Uses only small part of data set for testing')
@@ -161,4 +275,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    scripter.run()
