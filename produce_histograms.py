@@ -274,5 +274,15 @@ def bdt():
         json.dump(out, f)
 
 
+@scripter
+def ls():
+    jsonfile = common.pull_arg('jsonfile', type=str).jsonfile
+    with open(jsonfile, 'r') as f:
+        out = json.load(f)
+    print(repr_dict(out))
+
+    print(out['histograms']['0.0']['bsvj_200_10_0.1'])
+
+
 if __name__ == '__main__':
     scripter.run()

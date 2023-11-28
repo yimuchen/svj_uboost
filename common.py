@@ -10,7 +10,7 @@ np.random.seed(1001)
 
 
 # Is this a good binning?
-MT_BINS = np.linspace(100., 1000., 100)
+MT_BINS = np.linspace(100., 1000., 101)
 
 # Where training data will be stored
 DATADIR = osp.join(osp.dirname(osp.abspath(__file__)), 'data')
