@@ -21,8 +21,13 @@ scripter = common.Scripter()
 DST = osp.join(THIS_DIR, 'skims')
 
 
-# BINS = np.linspace(180, 600, 40)
-BINS = common.MT_BINS
+# Better for studying the systs
+BINS = np.linspace(180, 600, 40)
+NORMALIZE = False
+
+# Better for datacards
+# BINS = common.MT_BINS
+# NORMALIZE = True
 
 
 class MTHistogram(Histogram):
@@ -152,95 +157,6 @@ def skim_jec_jer():
         cols.save(f'{DST}/{basename(array.metadata)}_{var_name}.npz')
 
 
-def apply_jes(arrays, var, match_type='both'):
-    from jes_numba import calc_x_jes
-
-    if not var in ['up', 'down', 'central']:
-        raise Exception('var should be up, down, or central')
-    if var == 'central': return
-
-    try:
-        match_type = dict(both=3, partial=1, full=2)[match_type]
-    except KeyError:
-        common.logger.error('Possible choices for match_type are both, partial, or full')
-
-    a = arrays.array
-
-    for conesize in [.4, .8, 1.5]:
-        conesizestr = '' if conesize == .4 else f'AK{10*conesize:.0f}'
-        x_jes = calc_x_jes(
-            a[f'Jets{conesizestr}.fCoordinates.fPt'],
-            a[f'Jets{conesizestr}.fCoordinates.fEta'],
-            a[f'Jets{conesizestr}.fCoordinates.fPhi'],
-            a[f'GenJets{conesizestr}.fCoordinates.fPt'],
-            a[f'GenJets{conesizestr}.fCoordinates.fEta'],
-            a[f'GenJets{conesizestr}.fCoordinates.fPhi'],
-            a['GenParticles.fCoordinates.fEta'],
-            a['GenParticles.fCoordinates.fPhi'],
-            a['GenParticles_PdgId'],
-            a['GenParticles_Status'],
-            do_match_type = match_type,
-            drsq_comp= conesize**2
-            )
-        
-        a[f'x_jes_{10*conesize:.0f}'] = x_jes
-        if var == 'up':
-            a[f'Jets{conesizestr}.fCoordinates.fPt'] = a[f'Jets{conesizestr}.fCoordinates.fPt'] * (1+x_jes)
-        elif var == 'down':
-            jes_down = 1-x_jes
-            jes_down = ak.where(jes_down<0., 0., jes_down)
-            a[f'Jets{conesizestr}.fCoordinates.fPt'] = a[f'Jets{conesizestr}.fCoordinates.fPt'] * jes_down
-
-    # Correct MET
-    a['MET_precorr'] = a['MET']
-    a['METPhi_precorr'] = a['METPhi']
-    pt = a[f'Jets.fCoordinates.fPt']
-    phi = a[f'Jets.fCoordinates.fPhi']
-    px = ak.sum(np.cos(phi) * pt, axis=-1)
-    py = ak.sum(np.sin(phi) * pt, axis=-1)
-    a['MET'] = np.sqrt(px**2 + py**2)
-    a['METPhi'] = -np.arctan2(py, px) # Should be between -pi .. pi
-
-
-@scripter
-def skim_jes():
-    rootfile = common.pull_arg('rootfile', type=str).rootfile
-    common.logger.info(f'Preprocessing JES info for {rootfile}')
-    svj.BRANCHES_GENONLY.extend([
-        'PDFweights', 'PSweights',
-        'GenJets.fCoordinates.fPt',
-        'GenJets.fCoordinates.fEta',
-        'GenJets.fCoordinates.fPhi',
-        'GenJets.fCoordinates.fE',
-        'GenJetsAK8.fCoordinates.fPt',
-        'GenJetsAK8.fCoordinates.fEta',
-        'GenJetsAK8.fCoordinates.fPhi',
-        'GenJetsAK8.fCoordinates.fE',
-        'GenJetsAK15.fCoordinates.fPt',
-        'GenJetsAK15.fCoordinates.fEta',
-        'GenJetsAK15.fCoordinates.fPhi',
-        'GenJetsAK15.fCoordinates.fE',
-        ])
-
-    for var in ['up', 'down']:
-        for match_type in ['both', 'full', 'partial']:
-            common.logger.info(f'{var=}, {match_type=}')
-            arrays = svj.open_root(rootfile)
-            common.logger.info(f'Loaded, applying jes')
-            apply_jes(arrays, var, match_type)
-            common.logger.info(f'Done, applying presel')
-            arrays = svj.filter_preselection(arrays)
-            common.logger.info(f'Done, to columns')
-            cols = svj.bdt_feature_columns(arrays)
-            cols.arrays['x_jes_1'] = arrays.array['x_jes_15'][:,0].to_numpy()
-            cols.arrays['x_jes_2'] = arrays.array['x_jes_15'][:,1].to_numpy()
-            cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(arrays.array['x_jes_15'][:,2:]), -100.).to_numpy()
-            cols.arrays['MET_precorr'] = arrays.array['MET_precorr'].to_numpy()
-            cols.arrays['METPhi_precorr'] = arrays.array['MET_precorr'].to_numpy()
-            common.logger.info(f'Saving')
-            cols.save(f'{DST}/{basename(arrays.metadata)}_jes{var}_{match_type}.npz')
-
-
 @scripter
 def skim_scale():
     """
@@ -332,8 +248,8 @@ def produce_scale_hist(selection=None, skimfile=None):
     dump = False
     if selection is None:
         dump = True
-        skimfile = common.pull_arg('skim', type=str).skim
         selection = common.pull_arg('selection', type=str, choices=['cutbased', 'bdt']).selection
+        skimfile = common.pull_arg('skim', type=str).skim
 
     mur_muf = [
         (1., 1.), # 0
@@ -493,10 +409,20 @@ def produce_all():
     out['jec_up'] = jerjec['jec_up']
     out['jec_down'] = jerjec['jec_down']
 
+    if NORMALIZE:
+        common.logger.info("Normalizing all histograms to central!")
+        central_norm = sum(out['central']['vals'])
+        for k, v in out.items():
+            if k in ['selection']: continue
+            this_norm = sum(v['vals'])
+            v['vals'] = [i/central_norm for i in v['vals']]
+            print(f'{k:20s}: norm={sum(v["vals"]):9.4f}')
+
     outfile = strftime('syst_%b%d.json')
+    if NORMALIZE: outfile = outfile.replace('.json', '_normalized.json')
     common.logger.info(f'Dumping the following to {outfile}:\n{repr_dict(out)}')
     with open(outfile, 'w') as f:
-        json.dump(out, f)
+        json.dump(out, f, indent=4)
 
 
 class Plot:
@@ -570,7 +496,7 @@ def plot_scale(histfile=None):
     plot.plot_hist(central, label='Central')
     plot.plot_hist(up, central, 'Up')
     plot.plot_hist(down, central, 'Down')
-    plot.save()
+    plot.save('plots/scale.png')
 
 
 @scripter
