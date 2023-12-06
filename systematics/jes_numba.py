@@ -130,10 +130,10 @@ try:
 
             if do_match_type==3:
                 # Select both partial and full matches
-                selected_matches = match_type_reco.astype(np.bool8)
+                selected_matches = (gen_index != -1) & (match_type_reco.astype(np.bool8))
             else:
                 # Select only the matches we're interested in
-                selected_matches = match_type_reco == do_match_type
+                selected_matches = (gen_index != -1) & (match_type_reco == do_match_type)
 
             # Calculate x_jes for the selected matches
             for i in range(n_reco):
