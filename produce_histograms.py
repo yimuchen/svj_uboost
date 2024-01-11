@@ -95,7 +95,7 @@ def repr_dict(d, depth=0):
         s.append(depth*'  ' + repr(key))
         if hasattr(val, 'items') and len(val):
             if val.get('type', '') == 'Histogram':
-                s[-1] += ' (histogram)'
+                s[-1] += f' (histogram; norm={sum(val["vals"]):.4f})'
             else:
                 s.append(repr_dict(val, depth+1))
     return '\n'.join(s)

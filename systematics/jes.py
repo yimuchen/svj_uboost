@@ -17,7 +17,15 @@ import matplotlib.pyplot as plt
 import awkward as ak
 
 
-from syst import BINS, NORMALIZE, DST, MTHistogram, basename, Plot
+from syst import BINS, NORMALIZE, DST, MTHistogram, basename, Plot, use_dc_binning
+
+if __name__ == '__main__' and common.pull_arg('--dc', action='store_true').dc:
+    use_dc_binning()
+    NORMALIZE = True
+    common.logger.info(f'Using binning for DC: {BINS}')
+else:
+    common.logger.info(f'Using binning for plots: {BINS}')
+
 
 scripter = common.Scripter()
 
@@ -127,6 +135,8 @@ def skim_jes():
 @scripter
 def skim_for_truth_stats():
     rootfile = common.pull_arg('rootfile', type=str).rootfile
+    do_presel = common.pull_arg('-p', '--presel', action='store_true').presel
+
     common.logger.info(f'Preprocessing JES info for {rootfile}')
     svj.BRANCHES_GENONLY.extend([
         'GenJets.fCoordinates.fPt',
@@ -146,6 +156,10 @@ def skim_for_truth_stats():
     for truth_match_type in ['partial', 'full', 'both']:
         common.logger.info(f'Loading {rootfile}')
         arrays = svj.open_root(rootfile)
+
+        if do_presel:
+            common.logger.info('Applying preselection...')
+            arrays = svj.filter_preselection(arrays)
 
         common.logger.info(f'Applying JES for truth match type {truth_match_type}')
         apply_jes(arrays, 'up', truth_match_type)
@@ -182,6 +196,10 @@ def skim_for_truth_stats():
             'phi_z' : genparticles_phi[select_z],
             })
         outfile = 'truth_match_' + truth_match_type + '.parquet'
+        if do_presel:
+            outfile = outfile.replace('.parquet', '_presel.parquet')
+        else:
+            outfile = outfile.replace('.parquet', '_nopresel.parquet')
         common.logger.info(f'Dumping to {outfile}')
         ak.to_parquet(out, outfile)
 
@@ -189,6 +207,7 @@ def skim_for_truth_stats():
 @scripter
 def study_truth_match():
     pqfiles = common.pull_arg('pqfiles', type=str, nargs='+').pqfiles
+    pt_cut = common.pull_arg('--ptcut', type=float).ptcut
     full = ak.from_parquet([f for f in pqfiles if 'full' in f][0])
     partial = ak.from_parquet([f for f in pqfiles if 'partial' in f][0])
     both = ak.from_parquet([f for f in pqfiles if 'both' in f][0])
@@ -201,10 +220,23 @@ def study_truth_match():
             print(f'  # of matching jets=={match_count}: {count:>8} occurences ({100.*count/len(c["match_count"]):.2f}%)')    
 
         xjes = c['xjes']
-        match_1 = ak.sum(ak.fill_none(ak.firsts(xjes), 0.) != 0.)
-        match_2 = ak.sum(ak.fill_none(ak.firsts(xjes[:,1:]), 0.) != 0.)
-        match_3 = ak.sum(ak.fill_none(ak.firsts(xjes[:,2:]), 0.) != 0.)
-        match_4plus = ak.sum(ak.sum(xjes[3:], axis=-1) != 0.)
+        if pt_cut:
+            is_matched = (xjes != 0.) & (c['pt'] > pt_cut)
+        else:
+            is_matched = (xjes != 0.)
+
+        match_1 = ak.sum(ak.fill_none(ak.firsts(is_matched), False))
+        match_2 = ak.sum(ak.fill_none(ak.firsts(is_matched[:,1:]), False))
+        match_3 = ak.sum(ak.fill_none(ak.firsts(is_matched[:,2:]), False))
+        match_4plus = ak.sum(ak.sum(is_matched[:,3:], axis=-1))
+
+        # match_2 = ak.sum(ak.fill_none(ak.firsts(xjes[:,1:]), 0.) != 0.)
+        # match_3 = ak.sum(ak.fill_none(ak.firsts(xjes[:,2:]), 0.) != 0.)
+
+        # if pt_cut:
+        #     match_4plus = ak.sum((ak.sum(xjes[:,3:], axis=-1) != 0.) & (ak.sum(c['pt'][:,3:] > pt_cut, axis=-1)>0))
+        # else:
+        #     match_4plus = ak.sum(ak.sum(xjes[:,3:], axis=-1) != 0.)
 
         print('')
         print(f'  freq of J1 matching:  {match_1:>7}  ({100.*match_1/N:.2f}%)')
@@ -274,7 +306,7 @@ def load_columns(skimfiles):
     for skim in skimfiles:
         if 'central' in skim:
             out['central'] = svj.Columns.load(skim)
-            out['central'].metadata['name'] = 'Central'
+            out['central'].metadata['name'] = 'central'
             continue
 
         for truth_match_type in ['both', 'full', 'partial']:
@@ -291,7 +323,7 @@ def load_columns(skimfiles):
         col = svj.Columns.load(skim)
         col.metadata['truth_match_type'] = truth_match_type
         col.metadata['direction'] = direction
-        col.metadata['name'] = f'{truth_match_type} {direction}'
+        col.metadata['name'] = f'jes_{truth_match_type}_{direction}'
 
         out.setdefault(truth_match_type, {})        
         out[truth_match_type][direction] = col
@@ -312,17 +344,33 @@ def load_columns(skimfiles):
 def produce_histograms():
     selection = common.pull_arg('selection', type=str, choices=['cutbased', 'bdt']).selection
     skimfiles = common.pull_arg('skimfiles', nargs='+', type=str).skimfiles
+    merge_into = common.pull_arg('-m', '--merge', type=str).merge
     central, both_up, full_up, partial_up, both_down, full_down, partial_down = load_columns(skimfiles)
     all = [central, both_up, full_up, partial_up, both_down, full_down, partial_down]
 
-    out = {}
+    if merge_into:
+        common.logger.info(f'Merging JES hists into {merge_into}')
+        with open(merge_into, 'r') as f:
+            out = json.load(f)
+    else:
+        out = {}
+
+    sel = mask_cutbased(central) if selection=='cutbased' else None
+    central = MTHistogram(central.arrays['mt'][sel])
+
     for c in all:
+        if merge_into and 'both' not in c.metadata['name']: continue
         sel = mask_cutbased(c) if selection=='cutbased' else None
         h = MTHistogram(c.arrays['mt'][sel])
+        if NORMALIZE: h.vals /= central.norm
         h.metadata.update(c.metadata)
         out[c.metadata['name']] = h.json()
     
-    outfile = f'{selection}_{basename(central.metadata)}_jes_hists.json'
+    if merge_into:
+        outfile = merge_into
+    else:
+        outfile = f'{selection}_{basename(central.metadata)}_jes_hists.json'
+
     common.logger.info(f'Dumping the following to {outfile}:\n{repr_dict(out)}')
     with open(outfile, 'w') as f:
         json.dump(out, f, indent=4)

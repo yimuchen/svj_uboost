@@ -20,14 +20,23 @@ scripter = common.Scripter()
 
 DST = osp.join(THIS_DIR, 'skims')
 
-
 # Better for studying the systs
 BINS = np.linspace(180, 600, 40)
 NORMALIZE = False
 
-# Better for datacards
-# BINS = common.MT_BINS
-# NORMALIZE = True
+def use_dc_binning():
+    # Better for datacards
+    global BINS
+    global NORMALIZE
+    BINS = common.MT_BINS
+    NORMALIZE = True
+
+if __name__ == '__main__':
+    if common.pull_arg('--dc', action='store_true').dc:
+        use_dc_binning()
+        common.logger.info(f'Using binning for DC: {BINS}')
+    else:
+        common.logger.info(f'Using binning for plots: {BINS}')
 
 
 class MTHistogram(Histogram):
@@ -282,11 +291,20 @@ def produce_scale_hist(selection=None, skimfile=None):
     weight_up = np.max(scale_weight, axis=-1)
     weight_down = np.min(scale_weight, axis=-1)
 
+    central = MTHistogram(mt)
+    up = MTHistogram(mt, weight_up)
+    down = MTHistogram(mt, weight_down)
+
+    if NORMALIZE:
+        up.vals /= central.norm
+        down.vals /= central.norm
+        central.vals /= central.norm
+
     out = {
         'selection' : selection,
-        'central' : MTHistogram(mt).json(),
-        'up' : MTHistogram(mt, weight_up).json(),
-        'down' : MTHistogram(mt, weight_down).json(),
+        'central' : central.json(),
+        'up' : up.json(),
+        'down' : down.json(),
         }
     if dump:
         outfile = f'scale_{osp.basename(skimfile).replace(".npz", "")}.json'
@@ -314,7 +332,12 @@ def produce_jecjer_hist(selection=None, skimfiles=None):
         col = svj.Columns.load(file)
         sel = mask_cutbased(col) if selection=='cutbased' else None
         mt = col.to_numpy(['mt']).flatten()[sel]
-        out[var] = MTHistogram(mt).json()
+        out[var] = MTHistogram(mt)
+
+    for key in out:
+        if key == 'selection': continue
+        if NORMALIZE: out[key].vals /= out['central'].norm
+        out[key] = out[key].json()
 
     if dump:
         outfile = f'jerjec_{osp.basename(files["central"]).replace(".npz", "")}.json'
@@ -348,7 +371,7 @@ def produce_hists(selection=None, skimfile=None):
     mt = col.to_numpy(['mt']).flatten()[sel]
     central = MTHistogram(mt)
     central.metadata.update(col.metadata)
-    out = {'selection' : selection, 'central' : central.json()}
+    out = {'selection' : selection, 'central' : central}
 
     # PS
     ps_isr_up = col.to_numpy(['ps_isr_up'])[sel,0]
@@ -356,10 +379,10 @@ def produce_hists(selection=None, skimfile=None):
     ps_fsr_up = col.to_numpy(['ps_fsr_up'])[sel,0]
     ps_fsr_down = col.to_numpy(['ps_fsr_down'])[sel,0]
     out.update({
-        'isr_up' : MTHistogram(mt, ps_isr_up).json(),
-        'isr_down' : MTHistogram(mt, ps_isr_down).json(),
-        'fsr_up' : MTHistogram(mt, ps_fsr_up).json(),
-        'fsr_down' : MTHistogram(mt, ps_fsr_down).json(),
+        'isr_up' : MTHistogram(mt, ps_isr_up),
+        'isr_down' : MTHistogram(mt, ps_isr_down),
+        'fsr_up' : MTHistogram(mt, ps_fsr_up),
+        'fsr_down' : MTHistogram(mt, ps_fsr_down),
         })
 
     # PU
@@ -367,8 +390,8 @@ def produce_hists(selection=None, skimfile=None):
     pu_sys_up = col.to_numpy(['pu_sys_up'])[sel,0]
     pu_sys_down = col.to_numpy(['pu_sys_down'])[sel,0]
     out.update({
-        'pu_up' : MTHistogram(mt, pu_sys_up/pu_central).json(),
-        'pu_down' : MTHistogram(mt, pu_sys_down/pu_central).json()
+        'pu_up' : MTHistogram(mt, pu_sys_up/pu_central),
+        'pu_down' : MTHistogram(mt, pu_sys_down/pu_central)
         })
     
     # PDF
@@ -379,12 +402,19 @@ def produce_hists(selection=None, skimfile=None):
     pdfw_up = (mu_pdf+sigma_pdf) / col.metadata['pdfw_norm_up']
     pdfw_down = (mu_pdf-sigma_pdf) / col.metadata['pdfw_norm_down']
     out.update({
-        'pdf_up' : MTHistogram(mt, pdfw_up).json(),
-        'pdf_down' : MTHistogram(mt, pdfw_down).json()
+        'pdf_up' : MTHistogram(mt, pdfw_up),
+        'pdf_down' : MTHistogram(mt, pdfw_down)
         })
 
+
+    central_norm = out['central'].norm
+    for key in out:
+        if key == 'selection': continue
+        if NORMALIZE: out[key].vals /= central_norm
+        out[key] = out[key].json()
+
     if dump:
-        outfile = f'systs_{osp.basename(skimfile).replace(".npz", "")}.json'
+        outfile = f'systs_{selection}_{osp.basename(skimfile).replace(".npz", "")}{"_normalized" if NORMALIZE else ""}.json'
         with open(outfile, 'w') as f:
             json.dump(out, f)
     return out
@@ -409,16 +439,7 @@ def produce_all():
     out['jec_up'] = jerjec['jec_up']
     out['jec_down'] = jerjec['jec_down']
 
-    if NORMALIZE:
-        common.logger.info("Normalizing all histograms to central!")
-        central_norm = sum(out['central']['vals'])
-        for k, v in out.items():
-            if k in ['selection']: continue
-            this_norm = sum(v['vals'])
-            v['vals'] = [i/central_norm for i in v['vals']]
-            print(f'{k:20s}: norm={sum(v["vals"]):9.4f}')
-
-    outfile = strftime('syst_%b%d.json')
+    outfile = strftime(f'syst_{basename(out["central"]["metadata"])}_{selection}_%b%d.json')
     if NORMALIZE: outfile = outfile.replace('.json', '_normalized.json')
     common.logger.info(f'Dumping the following to {outfile}:\n{repr_dict(out)}')
     with open(outfile, 'w') as f:
@@ -569,5 +590,39 @@ def total_yield():
     print(hists['selection'])
     print(format_table(table, ndec=4))
 
+
+@scripter
+def total_yield_2():
+    histfile = common.pull_arg('histfile', type=str).histfile
+    with open(histfile, 'r') as f:
+        hists = json.load(f)
+
+    central = MTHistogram.from_dict(hists['central'])
+
+    systs = set()
+    for k in hists.keys():
+        if k.endswith('_up') or k.endswith('_down'):
+            systs.add(k.replace('_up','').replace('_down',''))
+    
+    table = []
+    for syst in systs:
+        up = MTHistogram.from_dict(hists[f'{syst}_up'])
+        down = MTHistogram.from_dict(hists[f'{syst}_down'])
+        table.append((syst, up.norm-1, down.norm-1))
+
+    table.sort()
+
+    print(hists['selection'])
+    print(format_table(table, ndec=4))
+    
+
+
+@scripter
+def ls():
+    jsonfile = common.pull_arg('jsonfile', type=str).jsonfile
+    with open(jsonfile, 'r') as f:
+        d = json.load(f)
+    print(repr_dict(d))
+    
 
 if __name__ == '__main__': scripter.run()
