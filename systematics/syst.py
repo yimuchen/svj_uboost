@@ -10,6 +10,7 @@ from common import mask_cutbased
 from produce_histograms import Histogram, repr_dict
 from cutflow_table import format_table
 
+import tqdm
 import svj_ntuple_processing as svj
 import xgboost
 import numpy as np
@@ -151,6 +152,143 @@ def basename(meta):
 
 
 @scripter
+def skim():
+    pbar = tqdm.tqdm(total=12)
+
+    svj.BRANCHES_GENONLY.extend([
+        'PDFweights', 'PSweights',
+        'puSysUp', 'puSysDown',
+        'GenJets.fCoordinates.fPt',
+        'GenJets.fCoordinates.fEta',
+        'GenJets.fCoordinates.fPhi',
+        'GenJets.fCoordinates.fE',
+        'GenJetsAK8.fCoordinates.fPt',
+        'GenJetsAK8.fCoordinates.fEta',
+        'GenJetsAK8.fCoordinates.fPhi',
+        'GenJetsAK8.fCoordinates.fE',
+        'GenJetsAK15.fCoordinates.fPt',
+        'GenJetsAK15.fCoordinates.fEta',
+        'GenJetsAK15.fCoordinates.fPhi',
+        'GenJetsAK15.fCoordinates.fE',
+        ])
+    rootfile = common.pull_arg('rootfile', type=str).rootfile
+    array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
+    print(array.metadata)
+    pbar.update()
+
+    # ______________________________
+    # Work before applying preselection
+
+    # PDF weights
+    common.logger.info('Calculating PDFweight norm factors')
+    pdf_weights = array.array['PDFweights'].to_numpy()
+    pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
+    # mu and sigma _per event_
+    mu = np.mean(pdf_weights, axis=1)
+    sigma = np.std(pdf_weights, axis=1)
+    # Normalization factors for the weights
+    pdfw_norm_up   = np.mean(mu+sigma)
+    pdfw_norm_down = np.mean(mu-sigma)
+
+    # Scale uncertainty
+    # Compute normalizations before applying cuts
+    scale_weigth = array.array['ScaleWeights'].to_numpy()
+    scale_weigth = scale_weigth[:,np.array([0,1,2,3,4,6,8])] # Throw away the mur/muf .5/2 and 2/.5 variations
+    scale_norm_central = scale_weigth[:,0].sum()
+    scale_norm_up = np.max(scale_weigth, axis=-1).sum()
+    scale_norm_down = np.min(scale_weigth, axis=-1).sum()
+    scale_factor_up = scale_norm_central / scale_norm_up
+    scale_factor_down = scale_norm_central / scale_norm_down
+    svj.logger.info(
+        'Scale unc:'
+        f'\n    norm_central = {scale_norm_central:.5f}'
+        f'\n    norm_up      = {scale_norm_up:.5f}'
+        f'\n    norm_down    = {scale_norm_down:.5f}'
+        f'\n    factor_up    = {scale_factor_up:.5f}'
+        f'\n    factor_down  = {scale_factor_down:.5f}'
+        )
+
+    # ______________________________
+    # Apply preselection and save needed vars
+
+    common.logger.info('Running preselection now')
+    array = svj.filter_preselection(array)
+    cols = svj.bdt_feature_columns(array)
+
+    # Save scale weights
+    cols.arrays['scaleweights'] = array.array['ScaleWeights'].to_numpy()
+
+    # Save PDF normalization and weights
+    cols.metadata['pdfw_norm_up'] = pdfw_norm_up
+    cols.metadata['pdfw_norm_down'] = pdfw_norm_down
+    cols.arrays['pdf_weights'] = array.array['PDFweights'].to_numpy()
+
+    # Save PS weights
+    ps_weights = array.array['PSweights'].to_numpy()
+    cols.arrays['ps_isr_up'] = ps_weights[:,6]
+    cols.arrays['ps_isr_down'] = ps_weights[:,8]
+    cols.arrays['ps_fsr_up'] = ps_weights[:,7]
+    cols.arrays['ps_fsr_down'] = ps_weights[:,9]
+
+    # Save PU weights
+    cols.arrays['pu_central'] = array.array['puWeight'].to_numpy()
+    cols.arrays['pu_sys_up'] = array.array['puSysUp'].to_numpy()
+    cols.arrays['pu_sys_down'] = array.array['puSysDown'].to_numpy()
+
+    cols.save(f'{DST}/{basename(array.metadata)}_central.npz')    
+    pbar.update()
+
+    # ______________________________
+    # JEC/JER
+
+    # Reload to undo preselection
+    array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
+
+    for var_name, appl in [
+        ('jer_up',   svj.apply_jer_up),
+        ('jer_down', svj.apply_jer_down),
+        ('jec_up',   svj.apply_jec_up),
+        ('jec_down', svj.apply_jec_down),
+        ]:
+        variation = appl(array)
+        variation = svj.filter_preselection(variation)
+        cols = svj.bdt_feature_columns(variation)
+        cols.save(f'{DST}/{basename(array.metadata)}_{var_name}.npz')
+        pbar.update()
+
+    # ______________________________
+    # JES
+
+    from jes import apply_jes
+
+    for var in ['up', 'down']:
+        for match_type in ['both', 'full', 'partial']:
+            common.logger.info(f'{var=}, {match_type=}')
+            arrays = svj.open_root(rootfile)
+            common.logger.info(f'Loaded, applying jes')
+            apply_jes(arrays, var, match_type)
+            common.logger.info(f'Done, applying presel')
+            arrays = svj.filter_preselection(arrays)
+            common.logger.info(f'Done, to columns')
+            cols = svj.bdt_feature_columns(arrays)
+            cols.arrays['x_jes_1'] = arrays.array['x_jes_15'][:,0].to_numpy()
+            cols.arrays['x_jes_2'] = arrays.array['x_jes_15'][:,1].to_numpy()
+            cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(arrays.array['x_jes_15'][:,2:]), -100.).to_numpy()
+            cols.arrays['MET_precorr'] = arrays.array['MET_precorr'].to_numpy()
+            cols.arrays['METPhi_precorr'] = arrays.array['METPhi_precorr'].to_numpy()
+            common.logger.info(f'Saving')
+            cols.save(f'{DST}/{basename(arrays.metadata)}_jes{var}_{match_type}.npz')
+            pbar.update()
+
+    pbar.close()
+    
+
+
+
+
+
+
+@scripter
 def skim_jec_jer():
     rootfile = common.pull_arg('rootfile', type=str).rootfile
     array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
@@ -196,6 +334,24 @@ def skim_scale():
     array = svj.filter_preselection(array)
     cols = svj.bdt_feature_columns(array, save_scale_weights=True)
     cols.save(f'{DST}/{basename(array.metadata)}_scaleunc.npz')
+
+
+
+@scripter
+def plot_pu_weight_dist():
+    rootfile = common.pull_arg('rootfile', type=str).rootfile
+    svj.BRANCHES_GENONLY.extend(['puWeight'])
+    array = svj.open_root(rootfile)
+
+    w = array.array['puWeight'].to_numpy()
+    with common.quick_ax(outfile='puweight.png') as ax:
+        ax.hist(w)
+        ax.set_xlabel('puWeight')
+
+    with common.quick_ax(outfile='puweight.png') as ax:
+        ax.hist(array.array['Weight'].to_numpy())
+        ax.set_xlabel('Weight')
+
 
 
 @scripter
@@ -250,6 +406,94 @@ def skim_central():
     cols.arrays['pu_sys_down'] = array.array['puSysDown'].to_numpy()
 
     cols.save(f'{DST}/{basename(array.metadata)}_central.npz')
+
+
+
+@scripter
+def produce():
+    selection = common.pull_arg('selection', type=str, choices=['cutbased', 'bdt']).selection
+    skims = common.pull_arg('skims', type=str, nargs='+').skims
+    def get_by_tag(tag):
+        return [s for s in skims if 'central' in s][0]
+        
+    common.logger.warning('Using full Run2 lumi for 2018 now! Correct this when running on all years!')
+    lumi = 137.2*1e3 # Use full Run2 lumi for now
+
+    central_skim = get_by_tag('central')
+
+    central = svj.Columns.load(central_skim)
+    sel = mask_cutbased(central) if selection=='cutbased' else None
+    mt = central.to_numpy(['mt']).ravel()[sel]
+    w = central.to_numpy(['puweight']).ravel()[sel]
+    w *= lumi * central.xs / central.cutflow['raw']
+
+    # Scale
+    scale_weight = central.to_numpy(['scaleweights'])[sel][:, np.array([0,1,2,3,4,6,8])]
+    weight_up = w * np.max(scale_weight, axis=-1)
+    weight_down = w * np.min(scale_weight, axis=-1)
+    mth_scale_up = MTHistogram(mt, weight_up)
+    mth_scale_down = MTHistogram(mt, weight_down)
+
+    # JEC/JER/JES
+    def mth_jerjecjes(tag):
+        col = svj.Columns.load(get_by_tag(tag))
+        sel = mask_cutbased(col) if selection=='cutbased' else None
+        mt = col.to_numpy(['mt']).flatten()[sel]
+        w = col.to_numpy(['puweight']).flatten()[sel]
+        w *= lumi * col.xs / col.cutflow['raw']
+        return MTHistogram(mt, w)
+    jer_up = mth_jerjecjes('jer_up')
+    jer_down = mth_jerjecjes('jer_down')
+    jec_up = mth_jerjecjes('jec_up')
+    jec_down = mth_jerjecjes('jec_down')
+    jes_up = mth_jerjecjes('jesup_both')
+    jes_down = mth_jerjecjes('jesdown_both')
+
+    # PS
+    ps_weights = w[:,None] * central.to_numpy(['ps_isr_up', 'ps_isr_down',
+                                       'ps_fsr_up', 'ps_fsr_down'])[sel]
+    mth_isr_up   = MTHistogram(mt, ps_weights[:,0])
+    mth_isr_down = MTHistogram(mt, ps_weights[:,1])
+    mth_fsr_up   = MTHistogram(mt, ps_weights[:,2])
+    mth_fsr_down = MTHistogram(mt, ps_weights[:,3])
+
+    # PU
+    pu_weights = central.to_numpy(['pu_sys_up', 'pu_sys_down'])[sel]
+    mth_pu_up = MTHistogram(mt, pu_weights[:,0])
+    mth_pu_down = MTHistogram(mt, pu_weights[:,1])
+
+    # PDF
+    pdf_weights = central.to_numpy(['pdf_weights'])[sel]
+    pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
+    mu_pdf = np.mean(pdf_weights, axis=1)
+    sigma_pdf = np.std(pdf_weights, axis=1)
+    pdfw_up = (mu_pdf+sigma_pdf) / central.metadata['pdfw_norm_up']
+    pdfw_down = (mu_pdf-sigma_pdf) / central.metadata['pdfw_norm_down']
+    mth_pdf_up = MTHistogram(mt, w*pdfw_up)
+    mth_pdf_down = MTHistogram(mt, w*pdfw_down)
+
+    # MC stats
+    mth_central = MTHistogram(mt, w)
+    mc_stat_err = np.sqrt(np.histogram(mt, bins=mth_central.binning, weights=w**2)[0])
+
+    mc_stat_up = []
+    mc_stat_down = []
+    for i in range(mth_central.nbins):
+        mth = mth_central.copy()
+        mth.vals[i] += mc_stat_err[i]
+        mc_stat_up.append(mth)
+        mth = mth_central.copy()
+        mth.vals[i] -= mc_stat_err[i]
+        mc_stat_down.append(mth)
+
+    
+
+
+        
+
+
+
+
 
 
 @scripter
