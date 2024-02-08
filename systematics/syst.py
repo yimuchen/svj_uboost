@@ -6,8 +6,8 @@ MAIN_DIR = osp.dirname(THIS_DIR)
 sys.path.append(MAIN_DIR)
 
 import common
-from common import mask_cutbased
-from produce_histograms import Histogram, repr_dict
+from common import mask_cutbased, MTHistogram, Histogram
+from produce_histograms import repr_dict
 from cutflow_table import format_table
 
 import tqdm
@@ -38,15 +38,6 @@ if __name__ == '__main__':
         common.logger.info(f'Using binning for DC: {BINS}')
     else:
         common.logger.info(f'Using binning for plots: {BINS}')
-
-
-class MTHistogram(Histogram):
-    """
-    Small wrapper around Histogram that initializes from mt values and weights.
-    """
-    def __init__(self, mt, weights=None):
-        vals = np.histogram(mt, BINS, weights=weights)[0].astype(float)
-        super().__init__(BINS, vals)
 
 
 cms_style = {
@@ -149,143 +140,6 @@ def basename(meta):
     return (
         f'mz{meta["mz"]:.0f}_rinv{meta["rinv"]:.1f}_mdark{meta["mdark"]:.0f}'
         )
-
-
-@scripter
-def skim():
-    pbar = tqdm.tqdm(total=12)
-
-    svj.BRANCHES_GENONLY.extend([
-        'PDFweights', 'PSweights',
-        'puSysUp', 'puSysDown',
-        'GenJets.fCoordinates.fPt',
-        'GenJets.fCoordinates.fEta',
-        'GenJets.fCoordinates.fPhi',
-        'GenJets.fCoordinates.fE',
-        'GenJetsAK8.fCoordinates.fPt',
-        'GenJetsAK8.fCoordinates.fEta',
-        'GenJetsAK8.fCoordinates.fPhi',
-        'GenJetsAK8.fCoordinates.fE',
-        'GenJetsAK15.fCoordinates.fPt',
-        'GenJetsAK15.fCoordinates.fEta',
-        'GenJetsAK15.fCoordinates.fPhi',
-        'GenJetsAK15.fCoordinates.fE',
-        ])
-    rootfile = common.pull_arg('rootfile', type=str).rootfile
-    array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
-    print(array.metadata)
-    pbar.update()
-
-    # ______________________________
-    # Work before applying preselection
-
-    # PDF weights
-    common.logger.info('Calculating PDFweight norm factors')
-    pdf_weights = array.array['PDFweights'].to_numpy()
-    pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
-    # mu and sigma _per event_
-    mu = np.mean(pdf_weights, axis=1)
-    sigma = np.std(pdf_weights, axis=1)
-    # Normalization factors for the weights
-    pdfw_norm_up   = np.mean(mu+sigma)
-    pdfw_norm_down = np.mean(mu-sigma)
-
-    # Scale uncertainty
-    # Compute normalizations before applying cuts
-    scale_weigth = array.array['ScaleWeights'].to_numpy()
-    scale_weigth = scale_weigth[:,np.array([0,1,2,3,4,6,8])] # Throw away the mur/muf .5/2 and 2/.5 variations
-    scale_norm_central = scale_weigth[:,0].sum()
-    scale_norm_up = np.max(scale_weigth, axis=-1).sum()
-    scale_norm_down = np.min(scale_weigth, axis=-1).sum()
-    scale_factor_up = scale_norm_central / scale_norm_up
-    scale_factor_down = scale_norm_central / scale_norm_down
-    svj.logger.info(
-        'Scale unc:'
-        f'\n    norm_central = {scale_norm_central:.5f}'
-        f'\n    norm_up      = {scale_norm_up:.5f}'
-        f'\n    norm_down    = {scale_norm_down:.5f}'
-        f'\n    factor_up    = {scale_factor_up:.5f}'
-        f'\n    factor_down  = {scale_factor_down:.5f}'
-        )
-
-    # ______________________________
-    # Apply preselection and save needed vars
-
-    common.logger.info('Running preselection now')
-    array = svj.filter_preselection(array)
-    cols = svj.bdt_feature_columns(array)
-
-    # Save scale weights
-    cols.arrays['scaleweights'] = array.array['ScaleWeights'].to_numpy()
-
-    # Save PDF normalization and weights
-    cols.metadata['pdfw_norm_up'] = pdfw_norm_up
-    cols.metadata['pdfw_norm_down'] = pdfw_norm_down
-    cols.arrays['pdf_weights'] = array.array['PDFweights'].to_numpy()
-
-    # Save PS weights
-    ps_weights = array.array['PSweights'].to_numpy()
-    cols.arrays['ps_isr_up'] = ps_weights[:,6]
-    cols.arrays['ps_isr_down'] = ps_weights[:,8]
-    cols.arrays['ps_fsr_up'] = ps_weights[:,7]
-    cols.arrays['ps_fsr_down'] = ps_weights[:,9]
-
-    # Save PU weights
-    cols.arrays['pu_central'] = array.array['puWeight'].to_numpy()
-    cols.arrays['pu_sys_up'] = array.array['puSysUp'].to_numpy()
-    cols.arrays['pu_sys_down'] = array.array['puSysDown'].to_numpy()
-
-    cols.save(f'{DST}/{basename(array.metadata)}_central.npz')    
-    pbar.update()
-
-    # ______________________________
-    # JEC/JER
-
-    # Reload to undo preselection
-    array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
-
-    for var_name, appl in [
-        ('jer_up',   svj.apply_jer_up),
-        ('jer_down', svj.apply_jer_down),
-        ('jec_up',   svj.apply_jec_up),
-        ('jec_down', svj.apply_jec_down),
-        ]:
-        variation = appl(array)
-        variation = svj.filter_preselection(variation)
-        cols = svj.bdt_feature_columns(variation)
-        cols.save(f'{DST}/{basename(array.metadata)}_{var_name}.npz')
-        pbar.update()
-
-    # ______________________________
-    # JES
-
-    from jes import apply_jes
-
-    for var in ['up', 'down']:
-        for match_type in ['both', 'full', 'partial']:
-            common.logger.info(f'{var=}, {match_type=}')
-            arrays = svj.open_root(rootfile)
-            common.logger.info(f'Loaded, applying jes')
-            apply_jes(arrays, var, match_type)
-            common.logger.info(f'Done, applying presel')
-            arrays = svj.filter_preselection(arrays)
-            common.logger.info(f'Done, to columns')
-            cols = svj.bdt_feature_columns(arrays)
-            cols.arrays['x_jes_1'] = arrays.array['x_jes_15'][:,0].to_numpy()
-            cols.arrays['x_jes_2'] = arrays.array['x_jes_15'][:,1].to_numpy()
-            cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(arrays.array['x_jes_15'][:,2:]), -100.).to_numpy()
-            cols.arrays['MET_precorr'] = arrays.array['MET_precorr'].to_numpy()
-            cols.arrays['METPhi_precorr'] = arrays.array['METPhi_precorr'].to_numpy()
-            common.logger.info(f'Saving')
-            cols.save(f'{DST}/{basename(arrays.metadata)}_jes{var}_{match_type}.npz')
-            pbar.update()
-
-    pbar.close()
-    
-
-
-
-
 
 
 @scripter

@@ -3,7 +3,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from common import Columns, columns_to_numpy, DATADIR, filter_pt, set_matplotlib_fontsizes, imgcat
+from common import Columns, columns_to_numpy, DATADIR, filter_pt, set_mpl_fontsize, imgcat
 
 
 def format_val(s, ndec=2):
@@ -154,7 +154,7 @@ def print_cutflow_tables_rinv0p3_only():
 
 def n137_plots():
     import matplotlib.pyplot as plt
-    set_matplotlib_fontsizes()
+    set_mpl_fontsize()
 
     signal_cols, bkg_cols, bkg_cols_per_type = collect_columns()
 

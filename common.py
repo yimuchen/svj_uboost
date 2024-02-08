@@ -1,4 +1,4 @@
-import os, os.path as osp, logging, re, time, json, argparse, sys
+import os, os.path as osp, logging, re, time, json, argparse, sys, math
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -62,9 +62,57 @@ def debug(flag: bool = True) -> None:
         logger.setLevel(logging.INFO)
 
 
-def set_matplotlib_fontsizes(
-    small: int = 18, medium: int = 22, large: int = 26
-) -> None:
+cms_style = {
+    "font.sans-serif": ["TeX Gyre Heros", "Helvetica", "Arial"],
+    "font.family": "sans-serif",
+    # 
+    "mathtext.fontset": "custom",
+    "mathtext.rm": "helvetica",
+    "mathtext.bf": "helvetica:bold",
+    "mathtext.sf": "helvetica",
+    "mathtext.it": "helvetica:italic",
+    "mathtext.tt": "helvetica",
+    "mathtext.cal": "helvetica",
+    # 
+    "figure.figsize": (10.0, 10.0),
+    "font.size": 26,
+    "axes.labelsize": "medium",
+    "axes.unicode_minus": False,
+    "xtick.labelsize": "small",
+    "ytick.labelsize": "small",
+    "legend.fontsize": "small",
+    "legend.handlelength": 1.5,
+    "legend.borderpad": 0.5,
+    "legend.frameon": False,
+    "xtick.direction": "in",
+    "xtick.major.size": 12,
+    "xtick.minor.size": 6,
+    "xtick.major.pad": 6,
+    "xtick.top": True,
+    "xtick.major.top": True,
+    "xtick.major.bottom": True,
+    "xtick.minor.top": True,
+    "xtick.minor.bottom": True,
+    "xtick.minor.visible": True,
+    "ytick.direction": "in",
+    "ytick.major.size": 12,
+    "ytick.minor.size": 6.0,
+    "ytick.right": True,
+    "ytick.major.left": True,
+    "ytick.major.right": True,
+    "ytick.minor.left": True,
+    "ytick.minor.right": True,
+    "ytick.minor.visible": True,
+    "grid.alpha": 0.8,
+    "grid.linestyle": ":",
+    "axes.linewidth": 2,
+    "savefig.transparent": False,
+    "xaxis.labellocation": "right",
+    "yaxis.labellocation": "top",
+    'text.usetex' : True,    
+    }
+
+def set_mpl_fontsize(small=16, medium=22, large=26):
     """Sets matplotlib font sizes to sensible defaults.
 
     Args:
@@ -73,18 +121,49 @@ def set_matplotlib_fontsizes(
         medium (int, optional): Font size for axis labels. Defaults to 22.
         large (int, optional): Font size for figure title. Defaults to 26.
     """
-    import matplotlib.pyplot as plt
+    plt.rc('font', size=small)          # controls default text sizes
+    plt.rc('axes', titlesize=small)     # fontsize of the axes title
+    plt.rc('axes', labelsize=medium)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=small)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=small)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=medium)    # legend fontsize
+    plt.rc('figure', titlesize=large)  # fontsize of the figure title
+    from matplotlib.pyplot import style as plt_style
+    plt_style.use(cms_style)
+    plt.rc('text', usetex=True)
+    plt.rc(
+        'text.latex',
+        preamble=(
+            r'\usepackage{helvet} '
+            r'\usepackage{sansmath} '
+            r'\sansmath '
+            )
+        )
 
-    plt.rc("font", size=small)  # controls default text sizes
-    plt.rc("axes", titlesize=small)  # fontsize of the axes title
-    plt.rc("axes", labelsize=medium)  # fontsize of the x and y labels
-    plt.rc("xtick", labelsize=small)  # fontsize of the tick labels
-    plt.rc("ytick", labelsize=small)  # fontsize of the tick labels
-    plt.rc("legend", fontsize=small)  # legend fontsize
-    plt.rc("figure", titlesize=large)  # fontsize of the figure title
+def put_on_cmslabel(ax, text='Simulation Preliminary', year=2018):
+    fontsize = 27
+    ax.text(
+        .0, 1.005,
+        r'\textbf{CMS}\,\fontsize{21pt}{3em}\selectfont{}{\textit{'+text+'}}',
+        horizontalalignment='left',
+        verticalalignment='bottom',
+        transform=ax.transAxes,
+        usetex=True,
+        fontsize=fontsize
+        )
+    ax.text(
+        1.0, 1.005,
+        '{} (13 TeV)'.format(year),
+        horizontalalignment='right',
+        verticalalignment='bottom',
+        transform=ax.transAxes,
+        usetex=True,
+        fontsize=int(19./23. * fontsize)
+        )
 
+import matplotlib.pyplot as plt
+set_mpl_fontsize()
 
-set_matplotlib_fontsizes()
 
 
 def pull_arg(*args, **kwargs) -> argparse.Namespace:
@@ -348,6 +427,168 @@ def filter_ht(cols, min_ht, bkg_type=None):
 
 
 #__________________________________________________
+# Histogram classes
+
+class Histogram:
+    """
+    Histogram container class.
+
+    Keeps track of binning, values, errors, and metadata.
+    Designed to be easily JSON-serializable.
+    """
+    @classmethod
+    def from_dict(cls, dict):
+        inst = cls.__new__(cls)
+        inst.binning = np.array(dict['binning'])
+        inst.vals = np.array(dict['vals'])
+        inst.errs = np.array(dict['errs'])
+        inst.metadata = dict['metadata'].copy()
+        return inst
+
+    def __init__(self, binning, vals=None, errs=None):
+        self.binning = binning
+        self.vals = np.zeros(self.nbins) if vals is None else vals
+        self.errs = np.sqrt(self.vals) if errs is None else errs
+        self.metadata = {}
+
+    @property
+    def nbins(self):
+        return len(self.binning)-1
+
+    def json(self):
+        # Convert anything that remotely looks like a float to python float.
+        for k, v in self.metadata.items():
+            try:
+                self.metadata[k] = float(v)
+            except ValueError:
+                pass
+        return dict(
+            type = 'Histogram',
+            binning = list(self.binning),
+            vals = list(self.vals),
+            errs = list(self.errs),
+            metadata = self.metadata.copy()
+            )
+
+    def __repr__(self):
+        d = np.column_stack((self.vals, self.errs))
+        return (
+            f'<H n={self.nbins} int={self.vals.sum():.3f}'
+            f' binning={self.binning[0]:.1f}-{self.binning[-1]:.1f}'
+            f' vals/errs=\n{d}'
+            '>'
+            )
+
+    def copy(self):
+        the_copy = Histogram(self.binning.copy(), self.vals.copy(), self.errs.copy())
+        the_copy.metadata = self.metadata.copy()
+        return the_copy
+
+    def __add__(self, other):
+        """Add another Histogram or a numpy array to this histogram. Returns new object."""
+        ans = self.copy()
+        if isinstance(other, Histogram):
+            ans.vals = self.vals + other.vals
+            ans.errs = np.sqrt(self.errs**2 + other.errs**2)
+        elif hasattr(other, 'shape') and self.vals.shape == other.shape:
+            # Add a simple np histogram on top of it
+            ans.vals += other
+            ans.errs = np.sqrt(self.errs**2 + other)
+        return ans
+
+    def __radd__(self, other):
+        if other == 0:
+            return self.copy()
+        raise NotImplemented
+
+    @property
+    def norm(self):
+        return self.vals.sum()
+    
+    def rebin(self, n=2):
+        """
+        Merge n bins together to make a coarser histogram.
+        Mostly useful for plotting.
+        """
+        if n==1: return self.copy()
+        n_bins_new = math.ceil(self.nbins / float(n))
+
+        binning_new = self.binning[::n]
+        if binning_new[-1] != self.binning[-1]:
+            binning_new = np.append(binning_new, self.binning[-1])
+
+        # Build a map from old binning to new binning
+        map = np.repeat(np.arange(n_bins_new), n)[:self.nbins]
+
+        values_new = np.zeros(n_bins_new)
+        np.add.at(values_new, map, self.vals)
+
+        errs_new = np.zeros(n_bins_new)
+        np.add.at(errs_new, map, self.errs**2)
+        errs_new = np.sqrt(errs_new)
+
+        h = Histogram(binning_new, values_new, errs_new)
+        h.metadata = self.metadata.copy()
+        return h
+
+    def cut(self, x_max):
+        """
+        Throws away all bins for which the right bin boundary > x_max.
+        Mostly useful for plotting purposes.
+        Returns a copy.
+        """
+        h = self.copy()
+        i_bin = np.argmax(self.binning > x_max)
+        h.binning = h.binning[:i_bin]
+        h.vals = h.vals[:i_bin-1]
+        h.errs = h.errs[:i_bin-1]
+        return h
+
+
+class MTHistogram(Histogram):
+    """
+    Small wrapper around Histogram that initializes from mt values and weights.
+    """
+
+    bins = MT_BINS.copy()
+
+    @classmethod
+    def empty(cls):
+        return Histogram(cls.bins)
+
+    def __init__(self, mt, weights=None):
+        vals = np.histogram(mt, self.bins, weights=weights)[0].astype(float)
+        errs = np.sqrt(np.histogram(mt, self.bins, weights=weights**2)[0].astype(float))
+        super().__init__(self.bins, vals, errs)
+
+
+class Encoder(json.JSONEncoder):
+    """
+    Standard JSON encoder, but support for the Histogram class
+    """
+    def default(self, obj):
+        if isinstance(obj, Histogram):
+            return obj.json()
+        return super().default(obj)
+
+
+class Decoder(json.JSONDecoder):
+    """
+    Standard JSON decoder, but support for the Histogram class
+    """
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+
+    def object_hook(self, d):
+        try:
+            is_histogram = d['type'] == 'Histogram'
+        except (AttributeError, KeyError):
+            is_histogram = False
+        if is_histogram:
+            return Histogram.from_dict(d)
+        return d
+
+#__________________________________________________
 # Data pipeline
 
 class Columns(svj_ntuple_processing.Columns):
@@ -561,3 +802,7 @@ def ddt(mt, pt, rho, var, weight):
 
 def mask_cutbased(col):
     return ((col.arrays['rt'] > 1.18) & (col.arrays['ecfm2b1'] > 0.09))
+
+class InvaledSelectionException(Exception):
+    def __init__(self, msg='selection argument should be "cutbased" or "bdt=X.XXX".', *args, **kwargs):
+        super().__init__(msg, *args, **kwargs)

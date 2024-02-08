@@ -5,86 +5,13 @@ import numpy as np
 import xgboost as xgb
 
 import common
-from common import logger, DATADIR, filter_pt, filter_ht, Columns, time_and_log, columns_to_numpy, read_training_features, Scripter, mask_cutbased
+from common import (
+    logger, DATADIR, filter_pt, filter_ht, Columns, time_and_log,
+    columns_to_numpy, read_training_features, Scripter, mask_cutbased,
+    Histogram, MTHistogram
+    )
 
 scripter = Scripter()
-
-
-class Histogram:
-    """
-    Histogram container class.
-
-    Keeps track of binning, values, errors, and metadata.
-    Designed to be easily JSON-serializable.
-    """
-    @classmethod
-    def from_dict(cls, dict):
-        inst = cls.__new__(cls)
-        inst.binning = np.array(dict['binning'])
-        inst.vals = np.array(dict['vals'])
-        inst.errs = np.array(dict['errs'])
-        inst.metadata = dict['metadata'].copy()
-        return inst
-
-    def __init__(self, binning, vals=None, errs=None):
-        self.binning = binning
-        self.vals = np.zeros(self.nbins) if vals is None else vals
-        self.errs = np.sqrt(self.vals) if errs is None else errs
-        self.metadata = {}
-
-    @property
-    def nbins(self):
-        return len(self.binning)-1
-
-    def json(self):
-        # Convert anything that remotely looks like a float to python float.
-        for k, v in self.metadata.items():
-            try:
-                self.metadata[k] = float(v)
-            except ValueError:
-                pass
-        return dict(
-            type = 'Histogram',
-            binning = list(self.binning),
-            vals = list(self.vals),
-            errs = list(self.errs),
-            metadata = self.metadata.copy()
-            )
-
-    def __repr__(self):
-        d = np.column_stack((self.vals, self.errs))
-        return (
-            f'<H n={self.nbins} int={self.vals.sum():.3f}'
-            f' binning={self.binning[0]:.1f}-{self.binning[-1]:.1f}'
-            f' vals/errs=\n{d}'
-            '>'
-            )
-
-    def copy(self):
-        the_copy = Histogram(self.binning.copy(), self.vals.copy(), self.errs.copy())
-        the_copy.metadata = self.metadata.copy()
-        return the_copy
-
-    def __add__(self, other):
-        """Add another Histogram or a numpy array to this histogram. Returns new object."""
-        ans = self.copy()
-        if isinstance(other, Histogram):
-            ans.vals = self.vals + other.vals
-            ans.errs = np.sqrt(self.errs**2 + other.errs**2)
-        elif hasattr(other, 'shape') and self.vals.shape == other.shape:
-            # Add a simple np histogram on top of it
-            ans.vals += other
-            ans.errs = np.sqrt(self.errs**2 + other)
-        return ans
-
-    def __radd__(self, other):
-        if other == 0:
-            return self.copy()
-        raise NotImplemented
-
-    @property
-    def norm(self):
-        return self.vals.sum()
 
 
 def repr_dict(d, depth=0):
