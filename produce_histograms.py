@@ -15,6 +15,9 @@ scripter = Scripter()
 
 
 def repr_dict(d, depth=0):
+    """
+    Prints out a dictionary recursively, with special treatment for histograms
+    """
     s = []
     for key, val in d.items():
         if isinstance(val, np.ndarray):

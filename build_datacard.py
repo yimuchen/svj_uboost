@@ -16,6 +16,8 @@ sys.path.append(osp.join(THIS_DIR, 'systematics'))
 scripter = common.Scripter()
 DST = osp.join(THIS_DIR, 'skims')
 
+# common.MTHistogram.bins = 155. + 25. * np.arange(24)
+# common.logger.warning(f'MT binning: {common.MTHistogram.bins}')
 
 def basename(meta):
     """
@@ -48,10 +50,13 @@ def skim():
         'GenJetsAK15.fCoordinates.fPhi',
         'GenJetsAK15.fCoordinates.fE',
         ])
+    outdir = common.pull_arg('-o', '--outdir', type=str, default=strftime('skims_%Y%m%d')).outdir
+    common.logger.info(f'Will save skims in outdir {outdir}')
     selection = common.pull_arg('selection', type=str).selection
     common.logger.info(f'Selection: {selection}')
     rootfile = common.pull_arg('rootfile', type=str).rootfile
     array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
+    common.logger.info(f'Found {len(array)} events in {rootfile}')
     common.logger.info(f'Metadata for {rootfile}: {array.metadata}')
     pbar.update()
 
@@ -86,7 +91,6 @@ def skim():
         f'\n    factor_up    = {scale_factor_up:.5f}'
         f'\n    factor_down  = {scale_factor_down:.5f}'
         )
-    
 
     # ______________________________
     # Apply preselection and save needed vars
@@ -137,7 +141,7 @@ def skim():
     cols = apply_selection(cols)
     cols.metadata['selection'] = selection
     cols.metadata['basename'] = basename(array.metadata)
-    cols.save(f'{DST}/{basename(array.metadata)}_{selection}_central.npz')    
+    cols.save(f'{outdir}/{basename(array.metadata)}_{selection}_central.npz')    
     pbar.update()
 
     # ______________________________
@@ -156,7 +160,7 @@ def skim():
         variation = svj.filter_preselection(variation)
         cols = svj.bdt_feature_columns(variation)
         cols = apply_selection(cols)
-        cols.save(f'{DST}/{basename(array.metadata)}_{selection}_{var_name}.npz')
+        cols.save(f'{outdir}/{basename(array.metadata)}_{selection}_{var_name}.npz')
         pbar.update()
 
     # ______________________________
@@ -181,7 +185,7 @@ def skim():
             cols.arrays['METPhi_precorr'] = arrays.array['METPhi_precorr'].to_numpy()
             cols = apply_selection(cols)
             common.logger.info(f'Saving')
-            cols.save(f'{DST}/{basename(arrays.metadata)}_{selection}_jes{var}_{match_type}.npz')
+            cols.save(f'{outdir}/{basename(arrays.metadata)}_{selection}_jes{var}_{match_type}.npz')
             pbar.update()
 
     pbar.close()
@@ -280,7 +284,6 @@ def build_bkg_histograms():
     common.logger.info(f'Selection: {selection}')
     skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
 
-
     mths = {
         'qcd_individual' : [],
         'ttjets_individual' : [],
@@ -292,6 +295,8 @@ def build_bkg_histograms():
         'zjets' : common.MTHistogram.empty(),
         'bkg' : common.MTHistogram.empty(),
         }
+    mths['bkg'].metadata['selection'] = selection
+    mths['bkg'].metadata['lumi'] = lumi
 
     for skim_file in tqdm.tqdm(skim_files):
         process = osp.basename(skim_file)
@@ -304,7 +309,7 @@ def build_bkg_histograms():
         elif 'WJetsToLNu_HT' in process:
             # Low HT WJets events have very few events, which get absurd weights
             left_ht_bound = int(re.match(r'WJetsToLNu_HT-(\d+)', process).group(1))
-            if left_pt_bound < 400.: continue
+            if left_ht_bound < 400.: continue
         elif 'WJetsToLNu_TuneCP5' in process:
             # Inclusive WJets bin after the stitch filter is basically HT (0,70)
             # Also too few events, too crazy weights
@@ -388,8 +393,12 @@ def plot_systematics():
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)    
 
-    rebin_factor = 2
+    rebin_factor = 1
     x_max = 650.
+
+    n = mths['central'].vals.sum()
+    common.logger.info(f'central integral: {n}')
+    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
 
     central = mths['central'].rebin(rebin_factor).cut(x_max)
     meta = central.metadata
@@ -405,6 +414,23 @@ def plot_systematics():
         plot.plot_hist(mths[f'{syst}_down'].rebin(rebin_factor).cut(x_max), central, f'{syst} down')
         plot.save(f'{outdir}/{syst}.png')
 
+    stat_up = mths['central'].copy()
+    stat_down = mths['central'].copy()
+    i = 0
+    while f'mcstat{i}_up' in mths.keys():
+        stat_up.vals[i] = mths[f'mcstat{i}_up'].vals[i]
+        stat_down.vals[i] = mths[f'mcstat{i}_down'].vals[i]
+        i += 1
+
+    stat_up = stat_up.rebin(rebin_factor).cut(x_max)
+    stat_down = stat_down.rebin(rebin_factor).cut(x_max)
+
+    plot = Plot(meta['selection'])
+    plot.plot_hist(central, label='Central')
+    plot.plot_hist(stat_up, central, 'mcstat up')
+    plot.plot_hist(stat_down, central, 'mcstat down')
+    plot.save(f'{outdir}/mcstat.png')
+
 
 @scripter
 def plot_bkg():
@@ -415,7 +441,7 @@ def plot_bkg():
     sig_json_file = common.pull_arg('sigjsonfile', type=str, nargs='*').sigjsonfile
     do_signal = len(sig_json_file) > 0
 
-    rebin_factor = 2
+    rebin_factor = 1
     x_max = 750.
 
     h = mths['bkg'].rebin(rebin_factor).cut(750.)
@@ -424,7 +450,8 @@ def plot_bkg():
     zero = np.zeros(nbins)
 
     with common.quick_ax() as ax:
-        for bkg in ['zjets', 'wjets', 'ttjets', 'qcd']:
+        # for bkg in ['zjets', 'wjets', 'ttjets', 'qcd']:
+        for bkg in ['qcd', 'ttjets', 'wjets', 'zjets']:
             ax.fill_between(h.binning[:-1], zero, h.vals, step='post', label=bkg)
             h.vals -= mths[bkg].rebin(rebin_factor).cut(750.).vals
 
@@ -432,13 +459,25 @@ def plot_bkg():
             with open(sig_json_file[0]) as f:
                 sig = json.load(f, cls=common.Decoder)['central']
                 sig = sig.rebin(rebin_factor).cut(750.)
-                ax.step(sig.binning[:-1], sig.vals, where='post', label=sig.metadata['basename'])
+                ax.step(
+                    sig.binning[:-1], sig.vals, '--k',
+                    where='post', label=sig.metadata['basename']
+                    )
 
         ax.set_yscale('log')
         ax.legend()
         ax.set_ylabel('Event count')
         ax.set_xlabel(r'$m_{T}$ (GeV)')
         common.put_on_cmslabel(ax)
+        ax.text(
+            0.02, 0.02,
+            'Cut-based' if h.metadata['selection']=='cutbased' else 'BDT',
+            horizontalalignment='left',
+            verticalalignment='bottom',
+            transform=ax.transAxes,
+            usetex=True,
+            fontsize=25
+            )
 
 
 @scripter
@@ -457,6 +496,21 @@ def merge():
     with open(outfile, 'w') as f:
         json.dump(d, f, indent=4, cls=common.Encoder)
 
+
+@scripter
+def ls():
+    infile = common.pull_arg('infile', type=str).infile
+    if infile.endswith('.json'):
+        with open(infile, 'r') as f:
+            d = json.load(f, cls=common.Decoder)    
+        from pprint import pprint
+        pprint(d)
+    elif infile.endswith('.root'):
+        array = svj.open_root(infile, load_gen=True, load_jerjec=True)
+        print(f'Found {len(array)} in {infile}')
+        print(f'Metdata:\n{array.metadata}')
+    else:
+        print(f'Unknown file format: {infile}')
 
 
 if __name__ == '__main__':
