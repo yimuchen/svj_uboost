@@ -1,4 +1,4 @@
-import os, os.path as osp, sys, json, re
+import os, os.path as osp, sys, json, re, math
 from time import strftime
 
 import tqdm
@@ -16,8 +16,20 @@ sys.path.append(osp.join(THIS_DIR, 'systematics'))
 scripter = common.Scripter()
 DST = osp.join(THIS_DIR, 'skims')
 
-# common.MTHistogram.bins = 155. + 25. * np.arange(24)
-# common.logger.warning(f'MT binning: {common.MTHistogram.bins}')
+
+def change_bin_width():
+    """
+    Changes MT binning based on command line options
+    """
+    binw = common.pull_arg('--binw', type=float).binw
+    if binw is not None:
+        # Testing different bin widths
+        left = 180.
+        right = 720.
+        common.MTHistogram.bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
+        common.MTHistogram.non_standard_binning = True
+        common.logger.warning(f'Changing bin width to {binw}; MT binning: {common.MTHistogram.bins}')
+
 
 def basename(meta):
     """
@@ -51,11 +63,21 @@ def skim():
         'GenJetsAK15.fCoordinates.fE',
         ])
     outdir = common.pull_arg('-o', '--outdir', type=str, default=strftime('skims_%Y%m%d')).outdir
-    common.logger.info(f'Will save skims in outdir {outdir}')
     selection = common.pull_arg('selection', type=str).selection
     common.logger.info(f'Selection: {selection}')
+    keep = common.pull_arg('-k', '--keep', type=float, default=None).keep
     rootfile = common.pull_arg('rootfile', type=str).rootfile
     array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
+
+    if keep is not None:
+        common.logger.info(f'Keeping only fraction {keep} of total number of events for signal MC')
+        n_before = len(array)
+        sel = np.random.choice(len(array), int(keep * len(array)), replace=False)
+        common.logger.info(f'Downsampling from {n_before} -> {len(sel)}')
+        array.array = array.array[sel]
+        outdir += f'_keep{keep:.2f}'
+
+    common.logger.info(f'Will save skims in outdir {outdir}')
     common.logger.info(f'Found {len(array)} events in {rootfile}')
     common.logger.info(f'Metadata for {rootfile}: {array.metadata}')
     pbar.update()
@@ -192,18 +214,25 @@ def skim():
 
 
 @scripter
-def build_sig_histograms():
-    selection = common.pull_arg('selection', type=str).selection
-    lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
-    lumi *= 1e3 # Convert to nb-1, same unit as xs
-    common.logger.info(f'Selection: {selection}')
-    skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
+def build_sig_histograms(args=None):
+    if args is None:
+        change_bin_width()
+        # Read from sys.argv
+        selection = common.pull_arg('selection', type=str).selection
+        lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
+        lumi *= 1e3 # Convert to nb-1, same unit as xs
+        common.logger.info(f'Selection: {selection}')
+        skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
+    else:
+        # Use passed input
+        selection, lumi, skim_files = args
 
     def get_by_tag(tag):
         return [s for s in skim_files if tag in s][0]
 
     mths = {}
     central = svj.Columns.load(get_by_tag('central'))
+
     mt = central.to_numpy(['mt']).ravel()
     w = central.to_numpy(['puweight']).ravel()
     w *= lumi * central.xs / central.cutflow['raw']
@@ -274,15 +303,22 @@ def build_sig_histograms():
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
         json.dump(mths, f, cls=common.Encoder, indent=4)
+    return outfile
 
 
 @scripter
-def build_bkg_histograms():
-    selection = common.pull_arg('selection', type=str).selection
-    lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
-    lumi *= 1e3 # Convert to nb-1, same unit as xs
-    common.logger.info(f'Selection: {selection}')
-    skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
+def build_bkg_histograms(args=None):
+    if args is None:
+        change_bin_width()
+        # Read from sys.argv
+        selection = common.pull_arg('selection', type=str).selection
+        lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
+        lumi *= 1e3 # Convert to nb-1, same unit as xs
+        common.logger.info(f'Selection: {selection}')
+        skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
+    else:
+        # Use passed input
+        selection, lumi, skim_files = args
 
     mths = {
         'qcd_individual' : [],
@@ -344,6 +380,54 @@ def build_bkg_histograms():
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
         json.dump(mths, f, cls=common.Encoder, indent=4)
+    return outfile
+
+
+@scripter
+def build_histograms():
+    """
+    Runs both build_sig_histograms and build_bkg_histograms.
+    """
+    change_bin_width()
+    selection = common.pull_arg('selection', type=str).selection
+    lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
+    lumi *= 1e3 # Convert to nb-1, same unit as xs
+    common.logger.info(f'Selection: {selection}')
+    skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
+
+    # Divide passed skim_files into signal or background
+    sig_skim_files = []
+    bkg_skim_files = []
+    for skim_file in skim_files:
+        for bkg_type in ['QCD', 'TTJets', 'WJets', 'ZJets']:
+            if bkg_type in skim_file:
+                bkg_skim_files.append(skim_file)
+                break
+        else:
+            sig_skim_files.append(skim_file)
+
+    common.logger.info(
+        'Using the following skim files for signal:\n'
+        + "\n".join(sig_skim_files)
+        )
+    common.logger.info(
+        'Using the following skim files for background:\n'
+        + "\n".join(bkg_skim_files)
+        )
+
+    sig_outfile = build_sig_histograms((selection, lumi, sig_skim_files))
+    bkg_outfile = build_bkg_histograms((selection, lumi, bkg_skim_files))
+    merged_outfile = sig_outfile.replace('.json', '_with_bkg.json')
+
+    if common.MTHistogram.non_standard_binning:
+        binw = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
+        left = common.MTHistogram.bins[0]
+        right = common.MTHistogram.bins[-1]
+        merged_outfile = merged_outfile.replace(
+            '.json',
+            f'_binw{binw:02d}_range{left:.0f}-{right:.0f}.json'
+            )
+    merge((merged_outfile, [sig_outfile, bkg_outfile]))
 
 
 # __________________________________________
@@ -404,7 +488,7 @@ def plot_systematics():
     meta = central.metadata
 
     model_str = osp.basename(json_file).replace(".json","")
-    outdir = f'plots_{model_str}_{strftime("%b%d")}'
+    outdir = f'plots_{strftime("%Y%m%d")}_{model_str}'
     os.makedirs(outdir, exist_ok=True)
 
     for syst in ['scale', 'jer', 'jec', 'jes', 'isr', 'fsr', 'pu', 'pdf']:
@@ -481,9 +565,12 @@ def plot_bkg():
 
 
 @scripter
-def merge():
-    outfile = common.pull_arg('-o', '--outfile', type=str).outfile
-    json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
+def merge(args=None):
+    if args is None:
+        outfile = common.pull_arg('-o', '--outfile', type=str).outfile
+        json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
+    else:
+        outfile, json_files = args
 
     d = {}
     for json_file in json_files:
@@ -492,6 +579,15 @@ def merge():
             mths = json.load(f, cls=common.Decoder)
             d.update(mths)
     
+    if not outfile:
+        for f in json_files:
+            f = osp.abspath(f)
+            if 'mz' not in f: continue
+            outfile = osp.basename(osp.abspath(f)) + '_withbkg.json'
+            break
+        else:
+            outfile = 'out.npz'
+
     common.logger.info(f'Dumping to {outfile}')
     with open(outfile, 'w') as f:
         json.dump(d, f, indent=4, cls=common.Encoder)

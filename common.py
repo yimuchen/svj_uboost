@@ -551,6 +551,7 @@ class MTHistogram(Histogram):
     """
 
     bins = MT_BINS.copy()
+    non_standard_binning = False
 
     @classmethod
     def empty(cls):
