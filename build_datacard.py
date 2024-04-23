@@ -183,8 +183,7 @@ def skim():
                     print("Invalid number following 'bdt='.")
             else:
                 # Handle the case where the number following 'bdt=' is not valid
-                print("Invalid number following 'bdt='.")
-                return
+                raise ValueError("Invalid number {} following 'bdt='.".format(parts[1]))
 
             # Grab the input features and weights
             X = []
@@ -195,7 +194,6 @@ def skim():
             #weight = array.array['puWeight'].to_numpy().ravel()*array.array['weight'].to_numpy().ravel()
             #weight = array.array['puWeight'].to_numpy().ravel()
             #weight = cols.to_numpy(['pu_central']).ravel() 
-
             # Load the model and get the predictions
             xgb_model = xgb.XGBClassifier()
             xgb_model.load_model(bdt_model_file)
