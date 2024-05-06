@@ -133,8 +133,9 @@ def skim():
 
     common.logger.info('Running preselection now')
     array = svj.filter_preselection(array)
-    cols = svj.bdt_feature_columns(array)
-    bdt_cols = svj.bdt_feature_columns(array)
+    # Adjust the load_mc value as needed... don't understand if the skims are alway on mc for example
+    cols = svj.bdt_feature_columns(array, load_mc=True)
+    bdt_cols = svj.bdt_feature_columns(array, load_mc=True)
 
     # Save scale weights
     cols.arrays['scaleweights'] = array.array['ScaleWeights'].to_numpy()
@@ -199,7 +200,9 @@ def skim():
             xgb_model.load_model(bdt_model_file)
             with common.time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
                 score = xgb_model.predict_proba(X)[:,1]
-            weight = np.ones(len(score)) # setting weights to one because I can't figure out what's happening
+            weight = cols.arrays['puweight']*cols.arrays['weight']
+            print('weight length: ', len(weight), ' weight: ', weight)
+            #weight = np.ones(len(score)) # setting weights to one because I can't figure out what's happening
 
             # Obtain the efficiencies for the desired BDT working point
             # bdt_cut is the user input bdt_cut
@@ -241,7 +244,7 @@ def skim():
         ]:
         variation = appl(array)
         variation = svj.filter_preselection(variation)
-        cols = svj.bdt_feature_columns(variation)
+        cols = svj.bdt_feature_columns(variation, load_mc=True)
         cols = apply_selection(cols)
         cols.save(f'{outdir}/{basename(array.metadata)}_{selection}_{var_name}.npz')
         pbar.update()
@@ -260,7 +263,7 @@ def skim():
             common.logger.info(f'Done, applying presel')
             arrays = svj.filter_preselection(arrays)
             common.logger.info(f'Done, to columns')
-            cols = svj.bdt_feature_columns(arrays)
+            cols = svj.bdt_feature_columns(arrays, load_mc=True)
             cols.arrays['x_jes_1'] = arrays.array['x_jes_15'][:,0].to_numpy()
             cols.arrays['x_jes_2'] = arrays.array['x_jes_15'][:,1].to_numpy()
             cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(arrays.array['x_jes_15'][:,2:]), -100.).to_numpy()
