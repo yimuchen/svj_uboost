@@ -759,10 +759,10 @@ def read_training_features(model_file):
         return model['features']
 
 def rhoddt_windowcuts(mt, pt, rho):
-    cuts = (mt>200) & (mt<1000) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
+    cuts = (mt>180) & (mt<650) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
     return cuts
 
-def varmap(mt, pt, rho, var, weight):
+def varmap(mt, pt, rho, var, weight, percent):
     cuts = rhoddt_windowcuts(mt, pt, rho)
     C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
     w, h = 50, 50
@@ -773,18 +773,14 @@ def varmap(mt, pt, rho, var, weight):
           CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
           if len(VAR[CUT])==0: continue
           if len(VAR[CUT])>0:
-             #VAR_map[i][j]=np.percentile(VAR[CUT],18.2) # bdt>0.6
-             VAR_map[i][j]=np.percentile(VAR[CUT],36.2) # bdt>0.4
+             VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
 
     VAR_map_smooth = gaussian_filter(VAR_map,1)
     return VAR_map_smooth, RHO_edges, PT_edges
 
-
-
-
-def ddt(mt, pt, rho, var, weight):
+def ddt(mt, pt, rho, var, weight, percent):
     cuts = rhoddt_windowcuts(mt, pt, rho)
-    var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight)
+    var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent)
     nbins = 49
     Pt_min, Pt_max = min(PT_edges), max(PT_edges)
     Rho_min, Rho_max = min(RHO_edges), max(RHO_edges)

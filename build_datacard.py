@@ -9,12 +9,26 @@ import matplotlib.pyplot as plt
 import svj_ntuple_processing as svj
 import common
 
+import xgboost as xgb
+from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score, auc
+
+
 THIS_DIR = osp.dirname(osp.abspath(__file__))
 # MAIN_DIR = osp.dirname(THIS_DIR)
 sys.path.append(osp.join(THIS_DIR, 'systematics'))
 
 scripter = common.Scripter()
 DST = osp.join(THIS_DIR, 'skims')
+
+# Relative path to the BDT
+# This specific BDT was choosen to be used during the L3 review 
+bdt_model_file = '/uscms/home/bregnery/nobackup/SVJ_mass_bdt_studies/svj_uboost/models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
+# make sure bdt features match the choosen file
+bdt_features = [
+    'girth', 'ptd', 'axismajor', 'axisminor',
+    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
+    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef', 
+    ]
 
 
 def change_bin_width():
@@ -119,7 +133,9 @@ def skim():
 
     common.logger.info('Running preselection now')
     array = svj.filter_preselection(array)
-    cols = svj.bdt_feature_columns(array)
+    # Adjust the load_mc value as needed... don't understand if the skims are alway on mc for example
+    cols = svj.bdt_feature_columns(array, load_mc=True)
+    bdt_cols = svj.bdt_feature_columns(array, load_mc=True)
 
     # Save scale weights
     cols.arrays['scaleweights'] = array.array['ScaleWeights'].to_numpy()
@@ -152,10 +168,54 @@ def skim():
             common.logger.info('Applying cutbased selection')
             cols = cols.select(common.mask_cutbased(cols))
             cols.cutflow['cutbased'] = len(cols)
+        # Apply the BDT
         elif selection.startswith('bdt='):
             common.logger.info('Applying bdt selection')
-            common.logger.warning('BDT: TODO!')
-            pass
+
+            # Split the selection string by '=' to extract the number following 'bdt='
+            parts = selection.split('=')
+            
+            # Check if the second part of the split is a valid number
+            if len(parts) == 2:
+                try:
+                    bdt_cut = float(parts[1])
+                except ValueError:
+                    # Handle the case where the number following 'bdt=' is not valid
+                    print("Invalid number following 'bdt='.")
+            else:
+                # Handle the case where the number following 'bdt=' is not valid
+                raise ValueError("Invalid number {} following 'bdt='.".format(parts[1]))
+
+            # Grab the input features and weights
+            X = []
+            weight = []
+  
+            # Get the features for the bkg samples
+            X = cols.to_numpy(bdt_features)
+            # Load the model and get the predictions
+            xgb_model = xgb.XGBClassifier()
+            xgb_model.load_model(bdt_model_file)
+            with common.time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
+                score = xgb_model.predict_proba(X)[:,1]
+            weight = cols.arrays['puweight']*cols.arrays['weight']
+            print('weight length: ', len(weight), ' weight: ', weight)
+
+            # Obtain the efficiencies for the desired BDT working point
+            # bdt_cut is the user input bdt_cut
+            bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score)) 
+            bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
+            eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0]) 
+
+            # Apply the DDT
+            mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
+            pT = cols.to_numpy(['pt']).ravel()
+            rho = cols.to_numpy(['rho']).ravel()
+            bdt_ddt_score = common.ddt(mT, pT, rho, score, weight, eff*100)
+
+            # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
+            cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
+            cols.cutflow['ddt(bdt)'] = len(cols)
+
         else:
             raise common.InvaledSelectionException()
         return cols
@@ -180,7 +240,7 @@ def skim():
         ]:
         variation = appl(array)
         variation = svj.filter_preselection(variation)
-        cols = svj.bdt_feature_columns(variation)
+        cols = svj.bdt_feature_columns(variation, load_mc=True)
         cols = apply_selection(cols)
         cols.save(f'{outdir}/{basename(array.metadata)}_{selection}_{var_name}.npz')
         pbar.update()
@@ -199,7 +259,7 @@ def skim():
             common.logger.info(f'Done, applying presel')
             arrays = svj.filter_preselection(arrays)
             common.logger.info(f'Done, to columns')
-            cols = svj.bdt_feature_columns(arrays)
+            cols = svj.bdt_feature_columns(arrays, load_mc=True)
             cols.arrays['x_jes_1'] = arrays.array['x_jes_15'][:,0].to_numpy()
             cols.arrays['x_jes_2'] = arrays.array['x_jes_15'][:,1].to_numpy()
             cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(arrays.array['x_jes_15'][:,2:]), -100.).to_numpy()
@@ -357,8 +417,52 @@ def build_bkg_histograms(args=None):
         if len(col) > 0:
             if selection == 'cutbased':
                 col = col.select(common.mask_cutbased(col))
+
+            # Apply the BDT
             elif selection.startswith('bdt='):
-                common.logger.error('bdt mask to be implemented!!')
+                common.logger.info('Applying bdt selection')
+     
+                # Split the selection string by '=' to extract the number following 'bdt='
+                parts = selection.split('=')
+                
+                # Check if the second part of the split is a valid number
+                if len(parts) == 2:
+                    try:
+                        bdt_cut = float(parts[1])
+                    except ValueError:
+                        # Handle the case where the number following 'bdt=' is not valid
+                        print("Invalid number following 'bdt='.")
+                else:
+                    # Handle the case where the number following 'bdt=' is not valid
+                    raise ValueError("Invalid number {} following 'bdt='.".format(parts[1]))
+     
+                # Grab the input features and weights
+                X = []
+                weight = []
+     
+                # Get the features for the bkg samples
+                X = col.to_numpy(bdt_features)
+                xgb_model = xgb.XGBClassifier()
+                xgb_model.load_model(bdt_model_file)
+                with common.time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
+                    score = xgb_model.predict_proba(X)[:,1]
+                weight = col.arrays['puweight']*col.arrays['weight']
+                print('weight length: ', len(weight), ' weight: ', weight)
+     
+                # Obtain the efficiencies for the desired BDT working point
+                # bdt_cut is the user input bdt_cut
+                bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score)) 
+                bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
+                eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0]) 
+     
+                # Apply the DDT
+                mT = col.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
+                pT = col.to_numpy(['pt']).ravel()
+                rho = col.to_numpy(['rho']).ravel()
+                bdt_ddt_score = common.ddt(mT, pT, rho, score, weight, eff*100)
+     
+                # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
+                col = col.select(bdt_ddt_score > 0.0) # mask for the selection
             else:
                 raise Exception(f'selection must be cutbased or bdt=X.XXX, found {selection}')
         
