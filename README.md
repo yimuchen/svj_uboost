@@ -16,6 +16,7 @@ pip install pandas
 pip install requests
 pip install numpy
 pip install matplotlib
+pip install tqdm
 
 pip install svj_ntuple_processing
 pip install hep_ml
