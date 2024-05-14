@@ -696,12 +696,13 @@ def smooth_shapes():
     # todo: normalize shape to unit area, then scale prediction by original yield
 
     x, y, errs = get_xye(hist)
-    ferrs = np.reciprocal(np.square(errs))
+    #ferrs = np.reciprocal(np.square(errs))
+    ferrs = np.reciprocal(errs)
 
-    smoother = loess(x,y,weights=ferrs)
+    smoother = loess(x,y,weights=ferrs,span=0.25)
     smoother.fit()
     pred = smoother.predict(x, stderror=True)
-    conf = pred.confidence()
+    conf = pred.confidence(alpha=1-0.683) # 1sigma interval
 
     hsmooth = hist.copy()
     hsmooth.vals = pred.values
