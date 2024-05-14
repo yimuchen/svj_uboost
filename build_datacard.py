@@ -713,6 +713,12 @@ def smooth_shapes():
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
 
+    # manual check for histograms where only a fraction was kept
+    if '_keep' in json_file:
+        factor = float(json_file.split('_keep')[-1].replace('.json',''))
+        # persistent change
+        mths['central'] *= 1.0/factor
+
     rebin_factor = 1
     x_max = 650.
 
@@ -759,6 +765,7 @@ def plot_smooth():
     plot = Plot("")
 
     legend_order = []
+    y_denom = None
     for i,json_file in enumerate(json_files):
         with open(json_file) as f:
             mths = json.load(f, cls=common.Decoder)
@@ -769,6 +776,7 @@ def plot_smooth():
         hsmooth = mths['central_smoothed']
 
         x, y, e = get_xye(href)
+        if y_denom is None: y_denom = y
         legend_order.append("central" if i==0 else "alt. {}".format(i))
         plot.top.errorbar(x,y,yerr=e,label=legend_order[-1])
         xs, ys, es = get_xye(hsmooth)
@@ -779,7 +787,7 @@ def plot_smooth():
         plot.top.fill_between([],[],[])
         plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33)
         plot.bot.plot([],[])
-        plot.bot.plot(xs,ys/y)
+        plot.bot.plot(xs,ys/y_denom)
 
     outfile = osp.basename(json_file).replace(".json","_comp.png")
     plot.save(outfile,legend_order=legend_order)

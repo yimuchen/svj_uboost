@@ -501,6 +501,16 @@ class Histogram:
             return self.copy()
         raise NotImplemented
 
+    def __mul__(self, factor):
+        """Multiply by a constant"""
+        ans = self.copy()
+        if isinstance(factor, (int, float)):
+            ans.vals = factor*ans.vals
+            ans.errs = factor*ans.errs
+        else:
+            raise NotImplemented
+        return ans
+
     @property
     def norm(self):
         return self.vals.sum()
