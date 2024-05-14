@@ -667,6 +667,78 @@ def plot_bkg():
             fontsize=25
             )
 
+def get_xye(hist):
+    x = hist.binning
+    x = (x[:-1]+x[1:])/2 # bin centers
+    y = hist.vals
+    errs = hist.errs
+    return x,y,errs
+
+@scripter
+def smooth_shapes():
+    from skmisc.loess import loess
+    json_file = common.pull_arg('jsonfile', type=str).jsonfile
+    with open(json_file) as f:
+        mths = json.load(f, cls=common.Decoder)
+
+    rebin_factor = 1
+    x_max = 650.
+
+    n = mths['central'].vals.sum()
+    common.logger.info(f'central integral: {n}')
+
+    # todo: loop over all signal systematics
+
+    hist = mths['central'].rebin(rebin_factor).cut(x_max)
+    meta = hist.metadata
+    common.logger.info(f'central metadata:\n{meta}')
+
+    # todo: normalize shape to unit area, then scale prediction by original yield
+
+    x, y, errs = get_xye(hist)
+    ferrs = np.reciprocal(np.square(errs))
+
+    smoother = loess(x,y,weights=ferrs)
+    smoother.fit()
+    pred = smoother.predict(x, stderror=True)
+    conf = pred.confidence()
+
+    hsmooth = hist.copy()
+    hsmooth.vals = pred.values
+    hsmooth.errs = conf.upper - pred.values
+    #print(pred.values,conf.upper,conf.lower)
+    # to confirm errors are symmetrical
+    #print(hsmooth.errs - (pred.values - conf.lower))
+    # todo: store both conf.upper and conf.lower separately for stat unc
+    mths['central_smoothed'] = hsmooth
+
+    outfile = osp.basename(json_file).replace(".json","_smooth.json")
+    with open(outfile, 'w') as f:
+        json.dump(mths, f, indent=4, cls=common.Encoder)
+
+@scripter
+def plot_smooth():
+    json_file = common.pull_arg('jsonfile', type=str).jsonfile
+    with open(json_file) as f:
+        mths = json.load(f, cls=common.Decoder)
+
+    x_max = 650.
+    href = mths['central'].cut(x_max)
+    meta = href.metadata
+    hsmooth = mths['central_smoothed']
+
+    plot = Plot(meta['selection'])
+    x, y, e = get_xye(href)
+    plot.top.errorbar(x,y,yerr=e,label="central")
+    xs, ys, es = get_xye(hsmooth)
+    ys_up = ys+es
+    ys_dn = ys-es
+    plot.top.plot(xs,ys,label="smoothed")
+    plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33)
+    plot.bot.plot(xs,ys/y)
+
+    outfile = osp.basename(json_file).replace(".json","_comp.png")
+    plot.save(outfile)
 
 @scripter
 def merge(args=None):
