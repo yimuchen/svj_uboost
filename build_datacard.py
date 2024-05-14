@@ -667,6 +667,15 @@ def plot_bkg():
             fontsize=25
             )
 
+# scipy's chisquare function doesn't accept weights
+def chisquare(f_obs, f_exp, f_wts, ddof=0):
+    terms = ((f_obs - f_exp)/f_wts)**2
+    stat = terms.sum()
+    from scipy.stats import chi2
+    ndof = len(terms)
+    p = chi2.sf(stat, ndof - 1 - ddof)
+    return stat, p
+
 def get_xye(hist):
     x = hist.binning
     x = (x[:-1]+x[1:])/2 # bin centers
@@ -674,9 +683,22 @@ def get_xye(hist):
     errs = hist.errs
     return x,y,errs
 
+def do_loess(hist,span,chi2=False):
+    from skmisc.loess import loess
+    x, y, errs = get_xye(hist)
+    ferrs = 1.0/errs
+    smoother = loess(x,y,weights=ferrs,span=span)
+    smoother.fit()
+    pred = smoother.predict(x, stderror=True)
+    if chi2:
+        return chisquare(y,pred.values,ferrs)
+    else:
+        return pred
+
 @scripter
 def smooth_shapes():
-    from skmisc.loess import loess
+    span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
+    do_opt = common.pull_arg('--optimize', default=False, action="store_true", help="optimize span value").optimize
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
@@ -695,13 +717,15 @@ def smooth_shapes():
 
     # todo: normalize shape to unit area, then scale prediction by original yield
 
-    x, y, errs = get_xye(hist)
-    #ferrs = np.reciprocal(np.square(errs))
-    ferrs = np.reciprocal(errs)
+    if do_opt:
+        from scipy.optimize import minimize
+        def loss(span, *args):
+            return do_loess(hist, span[0], chi2=True)[0]
+        res = minimize(loss, np.array([span_val]), method="Nelder-Mead", bounds=((0,1),))
+        span_val = res.x[0]
+        print("Optimal span: {}".format(span_val))
 
-    smoother = loess(x,y,weights=ferrs,span=0.25)
-    smoother.fit()
-    pred = smoother.predict(x, stderror=True)
+    pred = do_loess(hist,span=span_val)
     conf = pred.confidence(alpha=1-0.683) # 1sigma interval
 
     hsmooth = hist.copy()
