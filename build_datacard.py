@@ -537,6 +537,13 @@ def build_histograms():
 # __________________________________________
 # Plotting
 
+def reorderLegend(ax,order,title):
+    handles, labels = ax.get_legend_handles_labels()
+    lhzip = list(zip(labels,handles))
+    mapping = reversed([order.index(l) for l,h in lhzip])
+    labels, handles = zip(*[lhzip[i] for i in mapping])
+    ax.legend(handles, labels, title=title)
+
 class Plot:
     def __init__(self, selection):
         self.selection = selection
@@ -557,7 +564,7 @@ class Plot:
         self.bot.set_xlim(*args, **kwargs)
         self.top.set_xlim(*args, **kwargs)
 
-    def save(self, outfile='tmp.png', pdf=True):
+    def save(self, outfile='tmp.png', pdf=True, legend_order=None):
         self.top.text(
             0.02, 0.02,
             'Cut-based' if self.selection=='cutbased' else 'BDT',
@@ -567,7 +574,10 @@ class Plot:
             usetex=True,
             fontsize=25
             )
-        self.top.legend(title=self.legend_title)
+        if legend_order is None:
+            self.top.legend(title=self.legend_title)
+        else:
+            reorderLegend(self.top,legend_order,title=self.legend_title)
         outdir = osp.dirname(osp.abspath(outfile))
         os.makedirs(outdir, exist_ok=True)
         plt.savefig(outfile, bbox_inches="tight")
@@ -743,27 +753,36 @@ def smooth_shapes():
 
 @scripter
 def plot_smooth():
-    json_file = common.pull_arg('jsonfile', type=str).jsonfile
-    with open(json_file) as f:
-        mths = json.load(f, cls=common.Decoder)
+    json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
 
     x_max = 650.
-    href = mths['central'].cut(x_max)
-    meta = href.metadata
-    hsmooth = mths['central_smoothed']
+    plot = Plot("")
 
-    plot = Plot(meta['selection'])
-    x, y, e = get_xye(href)
-    plot.top.errorbar(x,y,yerr=e,label="central")
-    xs, ys, es = get_xye(hsmooth)
-    ys_up = ys+es
-    ys_dn = ys-es
-    plot.top.plot(xs,ys,label="smoothed")
-    plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33)
-    plot.bot.plot(xs,ys/y)
+    legend_order = []
+    for i,json_file in enumerate(json_files):
+        with open(json_file) as f:
+            mths = json.load(f, cls=common.Decoder)
+
+        href = mths['central'].cut(x_max)
+        meta = href.metadata
+        if i==0: plot.selection = meta['selection']
+        hsmooth = mths['central_smoothed']
+
+        x, y, e = get_xye(href)
+        legend_order.append("central" if i==0 else "alt. {}".format(i))
+        plot.top.errorbar(x,y,yerr=e,label=legend_order[-1])
+        xs, ys, es = get_xye(hsmooth)
+        ys_up = ys+es
+        ys_dn = ys-es
+        legend_order.append("smoothed" + (" {}".format(i) if i>0 else ""))
+        plot.top.plot(xs,ys,label=legend_order[-1])
+        plot.top.fill_between([],[],[])
+        plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33)
+        plot.bot.plot([],[])
+        plot.bot.plot(xs,ys/y)
 
     outfile = osp.basename(json_file).replace(".json","_comp.png")
-    plot.save(outfile)
+    plot.save(outfile,legend_order=legend_order)
 
 @scripter
 def merge(args=None):
