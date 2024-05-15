@@ -679,7 +679,7 @@ def plot_bkg():
 
 # scipy's chisquare function doesn't accept weights
 def chisquare(f_obs, f_exp, f_wts, ddof=0):
-    terms = ((f_obs - f_exp)/f_wts)**2
+    terms = ((f_obs - f_exp)*f_wts)**2
     stat = terms.sum()
     from scipy.stats import chi2
     ndof = len(terms)
@@ -693,14 +693,17 @@ def get_xye(hist):
     errs = hist.errs
     return x,y,errs
 
-def do_loess(hist,span,chi2=False):
+def do_loess(hist,span,target=None,chi2=False):
     from skmisc.loess import loess
     x, y, errs = get_xye(hist)
     ferrs = 1.0/errs
-    smoother = loess(x,y,weights=ferrs,span=span)
+    smoother = loess(x,y,weights=ferrs,span=span,degree=2)
     smoother.fit()
     pred = smoother.predict(x, stderror=True)
     if chi2:
+        if target is not None:
+            _, y, errs = get_xye(target)
+            ferrs = 1.0/errs
         return chisquare(y,pred.values,ferrs)
     else:
         return pred
@@ -709,9 +712,15 @@ def do_loess(hist,span,chi2=False):
 def smooth_shapes():
     span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
     do_opt = common.pull_arg('--optimize', default=False, action="store_true", help="optimize span value").optimize
+    debug = common.pull_arg('--debug', default=False, action="store_true", help="debug optimization").debug
+    target = common.pull_arg('--target', type=str, default="", help="target for optimization").target
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
+
+    if len(target)>0:
+        with open(target) as tf:
+            mths_target = json.load(tf, cls=common.Decoder)
 
     # manual check for histograms where only a fraction was kept
     if '_keep' in json_file:
@@ -730,14 +739,25 @@ def smooth_shapes():
     hist = mths['central'].rebin(rebin_factor).cut(x_max)
     meta = hist.metadata
     common.logger.info(f'central metadata:\n{meta}')
+    if len(target)>0:
+        htarget = mths_target['central'].rebin(rebin_factor).cut(x_max)
+    else:
+        htarget = None
 
     # todo: normalize shape to unit area, then scale prediction by original yield
 
     if do_opt:
         from scipy.optimize import minimize
         def loss(span, *args):
-            return do_loess(hist, span[0], chi2=True)[0]
-        res = minimize(loss, np.array([span_val]), method="Nelder-Mead", bounds=((0,1),))
+            chi2 = do_loess(hist, span[0], chi2=True, target=htarget)[0]
+            if debug: print(span[0],chi2)
+            return chi2
+        spans = np.linspace(0.1,span_val*2)
+        losses = [loss([s]) for s in spans]
+        res = minimize(
+            loss, np.array([span_val]), method="Nelder-Mead", bounds=((0.13,0.9),),
+            options={"initial_simplex": np.array([[0.13],[0.4]]), "xatol": 0.05}
+        )
         span_val = res.x[0]
         print("Optimal span: {}".format(span_val))
 
