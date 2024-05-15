@@ -540,7 +540,7 @@ def build_histograms():
 def reorderLegend(ax,order,title):
     handles, labels = ax.get_legend_handles_labels()
     lhzip = list(zip(labels,handles))
-    mapping = reversed([order.index(l) for l,h in lhzip])
+    mapping = [labels.index(o) for o in order]
     labels, handles = zip(*[lhzip[i] for i in mapping])
     ax.legend(handles, labels, title=title)
 
@@ -788,7 +788,10 @@ def plot_smooth():
         plot.top.plot(xs,ys,label=legend_order[-1])
         plot.top.fill_between([],[],[])
         plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33)
-        if i==0:
+        if len(json_files)==1:
+            plot.bot.plot([],[])
+            plot.bot.plot(xs,ys/h_denom)
+        elif i==0:
             plot.bot.plot([],[])
             plot.bot.plot([],[])
         else:
