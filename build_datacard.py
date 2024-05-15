@@ -765,7 +765,8 @@ def plot_smooth():
     plot = Plot("")
 
     legend_order = []
-    y_denom = None
+    h_denom = None
+    s_denom = None
     for i,json_file in enumerate(json_files):
         with open(json_file) as f:
             mths = json.load(f, cls=common.Decoder)
@@ -776,18 +777,23 @@ def plot_smooth():
         hsmooth = mths['central_smoothed']
 
         x, y, e = get_xye(href)
-        if y_denom is None: y_denom = y
+        if h_denom is None: h_denom = y
         legend_order.append("central" if i==0 else "alt. {}".format(i))
         plot.top.errorbar(x,y,yerr=e,label=legend_order[-1])
         xs, ys, es = get_xye(hsmooth)
         ys_up = ys+es
         ys_dn = ys-es
+        if s_denom is None: s_denom = ys
         legend_order.append("smoothed" + (" {}".format(i) if i>0 else ""))
         plot.top.plot(xs,ys,label=legend_order[-1])
         plot.top.fill_between([],[],[])
         plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33)
-        plot.bot.plot([],[])
-        plot.bot.plot(xs,ys/y_denom)
+        if i==0:
+            plot.bot.plot([],[])
+            plot.bot.plot([],[])
+        else:
+            plot.bot.plot(x,y/h_denom)
+            plot.bot.plot(xs,ys/s_denom)
 
     outfile = osp.basename(json_file).replace(".json","_comp.png")
     plot.save(outfile,legend_order=legend_order)
