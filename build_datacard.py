@@ -679,7 +679,7 @@ def plot_bkg():
 
 # scipy's chisquare function doesn't accept weights
 def chisquare(f_obs, f_exp, f_wts, ddof=0):
-    terms = ((f_obs - f_exp)*f_wts)**2
+    terms = ((f_obs - f_exp)/f_wts)**2
     stat = terms.sum()
     from scipy.stats import chi2
     ndof = len(terms)
@@ -694,19 +694,16 @@ def get_xye(hist):
     return x,y,errs
 
 def do_loess(hist,span,target=None,chi2=False):
-    from skmisc.loess import loess
+    from uloess import loess
     x, y, errs = get_xye(hist)
-    ferrs = 1.0/errs
-    smoother = loess(x,y,weights=ferrs,span=span,degree=2)
-    smoother.fit()
-    pred = smoother.predict(x, stderror=True)
+    # 1sigma interval
+    pred, conf_int = loess(x, y, errs, deg=2, alpha=0.683, span=span)
     if chi2:
         if target is not None:
             _, y, errs = get_xye(target)
-            ferrs = 1.0/errs
-        return chisquare(y,pred.values,ferrs)
+        return chisquare(y,pred,errs)
     else:
-        return pred
+        return pred, conf_int
 
 @scripter
 def smooth_shapes():
@@ -761,15 +758,14 @@ def smooth_shapes():
         span_val = res.x[0]
         print("Optimal span: {}".format(span_val))
 
-    pred = do_loess(hist,span=span_val)
-    conf = pred.confidence(alpha=1-0.683) # 1sigma interval
+    pred, conf = do_loess(hist,span=span_val)
 
     hsmooth = hist.copy()
-    hsmooth.vals = pred.values
-    hsmooth.errs = conf.upper - pred.values
-    #print(pred.values,conf.upper,conf.lower)
+    hsmooth.vals = pred
+    hsmooth.errs = conf[1] - pred
+    #print(hist.vals,pred,conf[1],conf[0])
     # to confirm errors are symmetrical
-    #print(hsmooth.errs - (pred.values - conf.lower))
+    #print(hsmooth.errs - (pred - conf[0]))
     # todo: store both conf.upper and conf.lower separately for stat unc
     mths['central_smoothed'] = hsmooth
 
