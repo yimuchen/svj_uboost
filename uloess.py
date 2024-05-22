@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.stats import norm
+from scipy.stats import t as tdist
 
-debug = False
+debug = True
 def debug_print(i):
     return debug and i==5
 
@@ -50,6 +51,17 @@ def ci(y, y_pred, L, alpha):
     if debug: print("V",V)
     if debug: print("C",C)
     cl_factor = norm.ppf((1+alpha)/2)
+    if debug: print("cl_factor",cl_factor)
+    # alternate scheme
+    IL = np.identity(L.shape[0]) - L
+    d1 = np.trace(IL.T.dot(IL))
+    d2 = np.trace((IL.T.dot(IL))**2)
+    rho = d1**2/d2
+    cl_factor_alt = tdist.ppf(1-alpha/2,df=rho)
+    if debug: print("d1",d1)
+    if debug: print("d2",d2)
+    if debug: print("rho",rho)
+    if debug: print("cl_factor_alt",cl_factor_alt)
     y_dn = y_pred - cl_factor*C
     y_up = y_pred + cl_factor*C
     return y_dn, y_up
