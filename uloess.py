@@ -50,9 +50,13 @@ def ci(y, y_pred, L, alpha):
     if debug: print("V",V)
     if debug: print("C",C)
     cl_factor = norm.ppf((1+alpha)/2)
+    if debug: print("cl_factor",cl_factor)
     y_dn = y_pred - cl_factor*C
     y_up = y_pred + cl_factor*C
-    return y_dn, y_up
+    # generalized cross validation (for span optimization)
+    gcv = S/N
+    if debug: print("gcv",gcv)
+    return y_dn, y_up, gcv
 
 # span = fraction of points to include in fit
 def loess(x, y, e, deg, alpha, span):
@@ -66,7 +70,7 @@ def loess(x, y, e, deg, alpha, span):
         y_pred[i], L_final[i] = wls(i,x,y,e,w,deg)
 #        if debug_print(i): print(y_pred[i], L_final[i].dot(y))
 
-    y_dn, y_up = ci(y, y_pred, L_final, alpha)
+    y_dn, y_up, gcv = ci(y, y_pred, L_final, alpha)
     if debug:
         i = 5
         print("stderr",y_pred[i]-y_dn[i])
@@ -74,4 +78,4 @@ def loess(x, y, e, deg, alpha, span):
         import sys
         sys.exit(0)
 
-    return y_pred, (y_dn, y_up)
+    return y_pred, (y_dn, y_up), gcv

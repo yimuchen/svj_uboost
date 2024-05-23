@@ -677,15 +677,6 @@ def plot_bkg():
             fontsize=25
             )
 
-# scipy's chisquare function doesn't accept weights
-def chisquare(f_obs, f_exp, f_wts, ddof=0):
-    terms = ((f_obs - f_exp)/f_wts)**2
-    stat = terms.sum()
-    from scipy.stats import chi2
-    ndof = len(terms)
-    p = chi2.sf(stat, ndof - 1 - ddof)
-    return stat, p
-
 def get_xye(hist):
     x = hist.binning
     x = (x[:-1]+x[1:])/2 # bin centers
@@ -693,23 +684,22 @@ def get_xye(hist):
     errs = hist.errs
     return x,y,errs
 
-def do_loess(hist,span,target=None,chi2=False):
+def do_loess(hist,span,do_gcv=False):
     from uloess import loess
     x, y, errs = get_xye(hist)
     # 1sigma interval
-    pred, conf_int = loess(x, y, errs, deg=2, alpha=0.683, span=span)
-    if chi2:
-        if target is not None:
-            _, y, errs = get_xye(target)
-        return chisquare(y,pred,errs)
+    pred, conf_int, gcv = loess(x, y, errs, deg=2, alpha=0.683, span=span)
+    if do_gcv:
+        return gcv
     else:
         return pred, conf_int
 
 @scripter
 def smooth_shapes():
     span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
-    do_opt = common.pull_arg('--optimize', default=False, action="store_true", help="optimize span value").optimize
+    do_opt = common.pull_arg('--optimize', type=int, default=0, help="optimize span value using n values").optimize
     debug = common.pull_arg('--debug', default=False, action="store_true", help="debug optimization").debug
+    # no longer used
     target = common.pull_arg('--target', type=str, default="", help="target for optimization").target
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
@@ -743,19 +733,12 @@ def smooth_shapes():
 
     # todo: normalize shape to unit area, then scale prediction by original yield
 
-    if do_opt:
-        from scipy.optimize import minimize
-        def loss(span, *args):
-            chi2 = do_loess(hist, span[0], chi2=True, target=htarget)[0]
-            if debug: print(span[0],chi2)
-            return chi2
-        spans = np.linspace(0.1,span_val*2)
-        losses = [loss([s]) for s in spans]
-        res = minimize(
-            loss, np.array([span_val]), method="Nelder-Mead", bounds=((0.13,0.9),),
-            options={"initial_simplex": np.array([[0.13],[0.4]]), "xatol": 0.05}
-        )
-        span_val = res.x[0]
+    if do_opt>0:
+        span_min = 0.1 # if span is too small, no points are included
+        spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
+        gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
+        span_val = spans[np.argmin(gcvs)]
+        if debug: print('\n'.join(['{} {}'.format(span,gcv) for span,gcv in zip(spans,gcvs)]))
         print("Optimal span: {}".format(span_val))
 
     pred, conf = do_loess(hist,span=span_val)
