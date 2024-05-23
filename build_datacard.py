@@ -696,107 +696,124 @@ def smooth_shapes():
     span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
     do_opt = common.pull_arg('--optimize', type=int, default=0, help="optimize span value using n values").optimize
     debug = common.pull_arg('--debug', default=False, action="store_true", help="debug optimization").debug
-    # no longer used
-    target = common.pull_arg('--target', type=str, default="", help="target for optimization").target
+    var = common.pull_arg('--variation', type=str, default=None, help="MT variation to debug").variation
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
 
-    if len(target)>0:
-        with open(target) as tf:
-            mths_target = json.load(tf, cls=common.Decoder)
-
     # manual check for histograms where only a fraction was kept
+    rescaled = False
     if '_keep' in json_file:
         factor = 1.0/float(json_file.split('_keep')[-1].replace('.json',''))
+        rescaled = True
     else:
         factor = 1.0
-    # persistent change
-    mths['central'] *= factor
 
     rebin_factor = 1
     x_max = 650.
 
-    hyield = mths['central'].vals.sum()
-    common.logger.info(f'central integral: {hyield}')
+    # loop over central and systematics
+    variations = get_systs()
+    variations.remove('stat')
+    variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
+    variations = ['central']+variations
+    mths_new = {}
+    save = True
+    if var is not None:
+        variations = [var]
+        save = False
+    for var in variations:
+        # persistent change
+        mths[var] *= factor
 
-    # todo: loop over all signal systematics
+        hyield = mths[var].vals.sum()
+        common.logger.info(f'{var} integral: {hyield}')
 
-    hist = mths['central'].rebin(rebin_factor).cut(x_max)
-    meta = hist.metadata
-    common.logger.info(f'central metadata:\n{meta}')
-    if len(target)>0:
-        htarget = mths_target['central'].rebin(rebin_factor).cut(x_max)
-    else:
-        htarget = None
+        hist = mths[var].rebin(rebin_factor).cut(x_max)
+        meta = hist.metadata
+        if var=='central': common.logger.info(f'central metadata:\n{meta}')
 
-    # normalize shape to unit area, then scale prediction by original yield
-    hist = hist*(1./hyield)
+        # normalize shape to unit area, then scale prediction by original yield
+        hist = hist*(1./hyield)
 
-    if do_opt>0:
-        span_min = 0.1 # if span is too small, no points are included
-        spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
-        gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
-        span_val = spans[np.argmin(gcvs)]
-        if debug: print('\n'.join(['{} {}'.format(span,gcv) for span,gcv in zip(spans,gcvs)]))
-        print("Optimal span: {}".format(span_val))
+        if do_opt>0:
+            span_min = 0.15 # if span is too small, no points are included
+            spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
+            gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
+            span_val = spans[np.argmin(gcvs)]
+            if debug: print('\n'.join(['{} {}'.format(span,gcv) for span,gcv in zip(spans,gcvs)]))
+            print("Optimal span ({}): {}".format(var,span_val))
 
-    pred, conf = do_loess(hist,span=span_val)
+        pred, conf = do_loess(hist,span=span_val)
 
-    hsmooth = hist.copy()
-    hsmooth.vals = pred
-    hsmooth.errs = conf[1] - pred
-    hsmooth = hsmooth*hyield
-    #print(hist.vals,pred,conf[1],conf[0])
-    # to confirm errors are symmetrical
-    #print(hsmooth.errs - (pred - conf[0]))
-    # todo: store both conf.upper and conf.lower separately for stat unc
-    mths['central_smoothed'] = hsmooth
+        hsmooth = hist.copy()
+        hsmooth.vals = pred
+        hsmooth.errs = conf[1] - pred
+        hsmooth = hsmooth*hyield
+        hsmooth.metadata['rescaled'] = rescaled
 
-    outfile = osp.basename(json_file).replace(".json","_smooth.json")
-    with open(outfile, 'w') as f:
-        json.dump(mths, f, indent=4, cls=common.Encoder)
+        mths_new[var] = hsmooth
+        if var=='central':
+            inames = ['down','up']
+            for ind in [0,1]:
+                hstat = hist.copy()
+                # avoid errors going negative
+                hstat.vals = np.clip(conf[ind],0,None)*hyield
+                hstat.errs = np.zeros_like(hstat.vals)
+                mths_new['stat_{}'.format(inames[ind])] = hstat
+
+    if save:
+        outfile = osp.basename(json_file).replace(".json","_smooth.json")
+        with open(outfile, 'w') as f:
+            json.dump(mths_new, f, indent=4, cls=common.Encoder)
 
 @scripter
 def plot_smooth():
+    var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot").variation
+    names = common.pull_arg('--names', type=str, nargs='*', default=[], help="legend names for files").names
     json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
+
+    if len(names)==0:
+        names = ["sample {}".format(i+1) for i in range(len(json_files))]
+    elif len(names)>0 and len(names)!=len(json_files):
+        raise ValueError("Mismatch between length of names ({}) and length of files ({})".format(len(names),len(files)))
 
     x_max = 650.
     plot = Plot("")
 
     legend_order = []
     h_denom = None
-    s_denom = None
-    for i,json_file in enumerate(json_files):
+    for i,(json_file,name) in enumerate(zip(json_files,names)):
         with open(json_file) as f:
             mths = json.load(f, cls=common.Decoder)
 
-        href = mths['central'].cut(x_max)
-        meta = href.metadata
+        meta = mths['central'].metadata
         if i==0: plot.selection = meta['selection']
-        hsmooth = mths['central_smoothed']
-
-        x, y, e = get_xye(href)
-        if h_denom is None: h_denom = y
-        legend_order.append("central" if i==0 else "alt. {}".format(i))
-        plot.top.errorbar(x,y,yerr=e,label=legend_order[-1])
-        xs, ys, es = get_xye(hsmooth)
-        ys_up = ys+es
-        ys_dn = ys-es
-        if s_denom is None: s_denom = ys
-        legend_order.append("smoothed" + (" {}".format(i) if i>0 else ""))
-        plot.top.plot(xs,ys,label=legend_order[-1])
-        plot.top.fill_between([],[],[])
-        plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33)
-        if len(json_files)==1:
-            plot.bot.plot([],[])
-            plot.bot.plot(xs,ys/h_denom)
-        elif i==0:
-            plot.bot.plot([],[])
-            plot.bot.plot([],[])
+        # manual check for histograms where only a fraction was kept
+        if '_keep' in json_file and not meta.get('rescaled',False):
+            factor = 1.0/float(json_file.split('_keep')[-1].replace('.json',''))
         else:
-            plot.bot.plot(x,y/h_denom)
-            plot.bot.plot(xs,ys/s_denom)
+            factor = 1.0
+
+        hist = mths[var].cut(x_max)*factor
+
+        x, y, e = get_xye(hist)
+        if 'stat_up' in mths.keys():
+            e = None
+        legend_order.append(name)
+        line = plot.top.errorbar(x,y,yerr=e,label=legend_order[-1])
+        line = line[0]
+
+        if 'stat_up' in mths.keys():
+            xs,ys_up,_ = get_xye(mths['stat_up'])
+            _,ys_dn,_ = get_xye(mths['stat_down'])
+            plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33,color=line.get_color())
+
+        if h_denom is None:
+            h_denom = y
+            plot.bot.set_ylabel('Ratio to {}'.format(name))
+        else:
+            plot.bot.plot(x,y/h_denom,color=line.get_color())
 
     outfile = osp.basename(json_file).replace(".json","_comp.png")
     plot.save(outfile,legend_order=legend_order)

@@ -548,6 +548,8 @@ class Histogram:
         Returns a copy.
         """
         h = self.copy()
+        if np.max(self.binning)<=x_max:
+            return h
         i_bin = np.argmax(self.binning > x_max)
         h.binning = h.binning[:i_bin]
         h.vals = h.vals[:i_bin-1]
