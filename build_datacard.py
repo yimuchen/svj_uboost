@@ -584,6 +584,8 @@ class Plot:
         plt.savefig(outfile.replace('.png', '.pdf'), bbox_inches="tight")
         common.imgcat(outfile)
 
+def get_systs():
+    return ['scale', 'jer', 'jec', 'jes', 'isr', 'fsr', 'pu', 'pdf', 'stat']
 
 @scripter
 def plot_systematics():
@@ -605,30 +607,25 @@ def plot_systematics():
     outdir = f'plots_{strftime("%Y%m%d")}_{model_str}'
     os.makedirs(outdir, exist_ok=True)
 
-    for syst in ['scale', 'jer', 'jec', 'jes', 'isr', 'fsr', 'pu', 'pdf']:
+    systs = get_systs()
+    if 'stat_up' not in mth.keys():
+        stat_up = mths['central'].copy()
+        stat_down = mths['central'].copy()
+        i = 0
+        while f'mcstat{i}_up' in mths.keys():
+            stat_up.vals[i] = mths[f'mcstat{i}_up'].vals[i]
+            stat_down.vals[i] = mths[f'mcstat{i}_down'].vals[i]
+            i += 1
+
+        mths['stat_up'] = stat_up
+        mths['stat_down'] = stat_down
+
+    for syst in systs:
         plot = Plot(meta['selection'])
         plot.plot_hist(central, label='Central')
         plot.plot_hist(mths[f'{syst}_up'].rebin(rebin_factor).cut(x_max), central, f'{syst} up')
         plot.plot_hist(mths[f'{syst}_down'].rebin(rebin_factor).cut(x_max), central, f'{syst} down')
         plot.save(f'{outdir}/{syst}.png')
-
-    stat_up = mths['central'].copy()
-    stat_down = mths['central'].copy()
-    i = 0
-    while f'mcstat{i}_up' in mths.keys():
-        stat_up.vals[i] = mths[f'mcstat{i}_up'].vals[i]
-        stat_down.vals[i] = mths[f'mcstat{i}_down'].vals[i]
-        i += 1
-
-    stat_up = stat_up.rebin(rebin_factor).cut(x_max)
-    stat_down = stat_down.rebin(rebin_factor).cut(x_max)
-
-    plot = Plot(meta['selection'])
-    plot.plot_hist(central, label='Central')
-    plot.plot_hist(stat_up, central, 'mcstat up')
-    plot.plot_hist(stat_down, central, 'mcstat down')
-    plot.save(f'{outdir}/mcstat.png')
-
 
 @scripter
 def plot_bkg():
