@@ -708,15 +708,17 @@ def smooth_shapes():
 
     # manual check for histograms where only a fraction was kept
     if '_keep' in json_file:
-        factor = float(json_file.split('_keep')[-1].replace('.json',''))
-        # persistent change
-        mths['central'] *= 1.0/factor
+        factor = 1.0/float(json_file.split('_keep')[-1].replace('.json',''))
+    else:
+        factor = 1.0
+    # persistent change
+    mths['central'] *= factor
 
     rebin_factor = 1
     x_max = 650.
 
-    n = mths['central'].vals.sum()
-    common.logger.info(f'central integral: {n}')
+    hyield = mths['central'].vals.sum()
+    common.logger.info(f'central integral: {hyield}')
 
     # todo: loop over all signal systematics
 
@@ -728,7 +730,8 @@ def smooth_shapes():
     else:
         htarget = None
 
-    # todo: normalize shape to unit area, then scale prediction by original yield
+    # normalize shape to unit area, then scale prediction by original yield
+    hist = hist*(1./hyield)
 
     if do_opt>0:
         span_min = 0.1 # if span is too small, no points are included
@@ -743,6 +746,7 @@ def smooth_shapes():
     hsmooth = hist.copy()
     hsmooth.vals = pred
     hsmooth.errs = conf[1] - pred
+    hsmooth = hsmooth*hyield
     #print(hist.vals,pred,conf[1],conf[0])
     # to confirm errors are symmetrical
     #print(hsmooth.errs - (pred - conf[0]))
