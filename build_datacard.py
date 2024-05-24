@@ -59,7 +59,7 @@ def skim():
     """
     Produces a skim from TreeMaker Ntuples that is ready to be histogrammed
     """
-    pbar = tqdm.tqdm(total=12)
+    pbar = tqdm.tqdm(total=8)
     svj.BRANCHES_GENONLY.extend([
         'PDFweights', 'PSweights',
         'puSysUp', 'puSysDown',
@@ -259,7 +259,7 @@ def skim():
     from jes import apply_jes
 
     for var in ['up', 'down']:
-        for match_type in ['both', 'full', 'partial']:
+        for match_type in ['both']: # other options are: 'full', 'partial'
             common.logger.info(f'{var=}, {match_type=}')
             variation = apply_jes(array, var, match_type)
             common.logger.info(f'Done, applying presel')
