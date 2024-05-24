@@ -507,27 +507,43 @@ def build_histograms():
     skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
 
     # Divide passed skim_files into signal or background
+    sig_outfile = None
+    bkg_outfile = None
     sig_skim_files = []
     bkg_skim_files = []
     for skim_file in skim_files:
-        for bkg_type in ['QCD', 'TTJets', 'WJets', 'ZJets']:
-            if bkg_type in skim_file:
-                bkg_skim_files.append(skim_file)
-                break
+        if skim_file.endswith('.json'):
+            if "bkghist" in skim_file:
+                bkg_outfile = skim_file
+            else:
+                sig_outfile = skim_file
         else:
-            sig_skim_files.append(skim_file)
+            for bkg_type in ['QCD', 'TTJets', 'WJets', 'ZJets']:
+                if bkg_type in skim_file:
+                    bkg_skim_files.append(skim_file)
+                    break
+            else:
+                sig_skim_files.append(skim_file)
 
-    common.logger.info(
-        'Using the following skim files for signal:\n'
-        + "\n".join(sig_skim_files)
+    if sig_outfile is None:
+        common.logger.info(
+            'Using the following skim files for signal:\n'
+            + "\n".join(sig_skim_files)
         )
-    common.logger.info(
-        'Using the following skim files for background:\n'
-        + "\n".join(bkg_skim_files)
+    else:
+        common.logger.info('Reusing {} for signal'.format(sig_outfile))
+    if bkg_outfile is None:
+        common.logger.info(
+            'Using the following skim files for background:\n'
+            + "\n".join(bkg_skim_files)
         )
+    else:
+        common.logger.info('Reusing {} for background'.format(bkg_outfile))
 
-    sig_outfile = build_sig_histograms((selection, lumi, sig_skim_files))
-    bkg_outfile = build_bkg_histograms((selection, lumi, bkg_skim_files))
+    if sig_outfile is None:
+        sig_outfile = build_sig_histograms((selection, lumi, sig_skim_files))
+    if bkg_outfile is None:
+        bkg_outfile = build_bkg_histograms((selection, lumi, bkg_skim_files))
     merged_outfile = sig_outfile.replace('.json', '_with_bkg.json')
 
     if common.MTHistogram.non_standard_binning:
