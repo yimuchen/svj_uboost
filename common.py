@@ -812,6 +812,6 @@ def ddt(mt, pt, rho, var, weight, percent):
 def mask_cutbased(col):
     return ((col.arrays['rt'] > 1.18) & (col.arrays['ecfm2b1'] > 0.09))
 
-class InvaledSelectionException(Exception):
+class InvalidSelectionException(Exception):
     def __init__(self, msg='selection argument should be "cutbased" or "bdt=X.XXX".', *args, **kwargs):
         super().__init__(msg, *args, **kwargs)

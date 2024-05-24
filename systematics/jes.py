@@ -42,6 +42,7 @@ def apply_jes(arrays, var, match_type='both'):
     except KeyError:
         common.logger.error('Possible choices for match_type are both, partial, or full')
 
+    arrays = arrays.copy()
     a = arrays.array
 
     # Before correcting, save the current pT and phi (needed for MET correction)
@@ -92,6 +93,7 @@ def apply_jes(arrays, var, match_type='both'):
     a['MET'] = np.sqrt(met_x**2 + met_y**2)
     a['METPhi'] = np.arctan2(met_y, met_x) # Should be between -pi .. pi
 
+    return arrays
 
 @scripter
 def skim_jes():

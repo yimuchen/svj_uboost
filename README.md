@@ -17,8 +17,9 @@ pip install requests
 pip install numpy
 pip install matplotlib
 pip install tqdm
+pip install numba
 
-pip install svj_ntuple_processing
+pip install git+ssh://git@github.com/boostedsvj/svj_ntuple_processing
 pip install hep_ml
 ```
 

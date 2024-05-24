@@ -78,18 +78,29 @@ def skim():
         ])
     outdir = common.pull_arg('-o', '--outdir', type=str, default=strftime('skims_%Y%m%d')).outdir
     selection = common.pull_arg('selection', type=str).selection
+    full_selection = selection
     common.logger.info(f'Selection: {selection}')
     keep = common.pull_arg('-k', '--keep', type=float, default=None).keep
     rootfile = common.pull_arg('rootfile', type=str).rootfile
     array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
 
+    def apply_keep(array, sel, keep):
+        if sel is None:
+            return array
+        array.array = array.array[sel]
+        scale = 1./keep
+        array.array["Weight"] = array.array["Weight"]*scale
+        array.cutflow['raw'] = len(array)
+        return array
+
+    sel = None
     if keep is not None:
         common.logger.info(f'Keeping only fraction {keep} of total number of events for signal MC')
         n_before = len(array)
         sel = np.random.choice(len(array), int(keep * len(array)), replace=False)
         common.logger.info(f'Downsampling from {n_before} -> {len(sel)}')
-        array.array = array.array[sel]
-        outdir += f'_keep{keep:.2f}'
+        array = apply_keep(array, sel, keep)
+        full_selection += f'_keep{keep:.2f}'
 
     common.logger.info(f'Will save skims in outdir {outdir}')
     common.logger.info(f'Found {len(array)} events in {rootfile}')
@@ -112,11 +123,11 @@ def skim():
 
     # Scale uncertainty
     # Compute normalizations before applying cuts
-    scale_weigth = array.array['ScaleWeights'].to_numpy()
-    scale_weigth = scale_weigth[:,np.array([0,1,2,3,4,6,8])] # Throw away the mur/muf .5/2 and 2/.5 variations
-    scale_norm_central = scale_weigth[:,0].sum()
-    scale_norm_up = np.max(scale_weigth, axis=-1).sum()
-    scale_norm_down = np.min(scale_weigth, axis=-1).sum()
+    scale_weight = array.array['ScaleWeights'].to_numpy()
+    scale_weight = scale_weight[:,np.array([0,1,2,3,4,6,8])] # Throw away the mur/muf .5/2 and 2/.5 variations
+    scale_norm_central = scale_weight[:,0].sum()
+    scale_norm_up = np.max(scale_weight, axis=-1).sum()
+    scale_norm_down = np.min(scale_weight, axis=-1).sum()
     scale_factor_up = scale_norm_central / scale_norm_up
     scale_factor_down = scale_norm_central / scale_norm_down
     svj.logger.info(
@@ -132,13 +143,13 @@ def skim():
     # Apply preselection and save needed vars
 
     common.logger.info('Running preselection now')
-    array = svj.filter_preselection(array)
+    central = svj.filter_preselection(array)
     # Adjust the load_mc value as needed... don't understand if the skims are alway on mc for example
-    cols = svj.bdt_feature_columns(array, load_mc=True)
-    bdt_cols = svj.bdt_feature_columns(array, load_mc=True)
+    cols = svj.bdt_feature_columns(central, load_mc=True)
+    bdt_cols = svj.bdt_feature_columns(central, load_mc=True)
 
     # Save scale weights
-    cols.arrays['scaleweights'] = array.array['ScaleWeights'].to_numpy()
+    cols.arrays['scaleweights'] = central.array['ScaleWeights'].to_numpy()
     cols.metadata['scale_norm_central'] = scale_norm_central
     cols.metadata['scale_norm_up'] = scale_norm_up
     cols.metadata['scale_norm_down'] = scale_norm_down
@@ -148,19 +159,19 @@ def skim():
     # Save PDF normalization and weights
     cols.metadata['pdfw_norm_up'] = pdfw_norm_up
     cols.metadata['pdfw_norm_down'] = pdfw_norm_down
-    cols.arrays['pdf_weights'] = array.array['PDFweights'].to_numpy()
+    cols.arrays['pdf_weights'] = central.array['PDFweights'].to_numpy()
 
     # Save PS weights
-    ps_weights = array.array['PSweights'].to_numpy()
+    ps_weights = central.array['PSweights'].to_numpy()
     cols.arrays['ps_isr_up'] = ps_weights[:,6]
     cols.arrays['ps_isr_down'] = ps_weights[:,8]
     cols.arrays['ps_fsr_up'] = ps_weights[:,7]
     cols.arrays['ps_fsr_down'] = ps_weights[:,9]
 
     # Save PU weights
-    cols.arrays['pu_central'] = array.array['puWeight'].to_numpy()
-    cols.arrays['pu_sys_up'] = array.array['puSysUp'].to_numpy()
-    cols.arrays['pu_sys_down'] = array.array['puSysDown'].to_numpy()
+    cols.arrays['pu_central'] = central.array['puWeight'].to_numpy()
+    cols.arrays['pu_sys_up'] = central.array['puSysUp'].to_numpy()
+    cols.arrays['pu_sys_down'] = central.array['puSysDown'].to_numpy()
 
     def apply_selection(cols):
         # Apply further selection now
@@ -217,20 +228,17 @@ def skim():
             cols.cutflow['ddt(bdt)'] = len(cols)
 
         else:
-            raise common.InvaledSelectionException()
+            raise common.InvalidSelectionException()
         return cols
 
     cols = apply_selection(cols)
     cols.metadata['selection'] = selection
     cols.metadata['basename'] = basename(array.metadata)
-    cols.save(f'{outdir}/{basename(array.metadata)}_{selection}_central.npz')    
+    cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_central.npz')
     pbar.update()
 
     # ______________________________
     # JEC/JER
-
-    # Reload to undo preselection
-    array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
 
     for var_name, appl in [
         ('jer_up',   svj.apply_jer_up),
@@ -242,7 +250,7 @@ def skim():
         variation = svj.filter_preselection(variation)
         cols = svj.bdt_feature_columns(variation, load_mc=True)
         cols = apply_selection(cols)
-        cols.save(f'{outdir}/{basename(array.metadata)}_{selection}_{var_name}.npz')
+        cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_{var_name}.npz')
         pbar.update()
 
     # ______________________________
@@ -253,21 +261,19 @@ def skim():
     for var in ['up', 'down']:
         for match_type in ['both', 'full', 'partial']:
             common.logger.info(f'{var=}, {match_type=}')
-            arrays = svj.open_root(rootfile)
-            common.logger.info(f'Loaded, applying jes')
-            apply_jes(arrays, var, match_type)
+            variation = apply_jes(array, var, match_type)
             common.logger.info(f'Done, applying presel')
-            arrays = svj.filter_preselection(arrays)
+            variation = svj.filter_preselection(variation)
             common.logger.info(f'Done, to columns')
-            cols = svj.bdt_feature_columns(arrays, load_mc=True)
-            cols.arrays['x_jes_1'] = arrays.array['x_jes_15'][:,0].to_numpy()
-            cols.arrays['x_jes_2'] = arrays.array['x_jes_15'][:,1].to_numpy()
-            cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(arrays.array['x_jes_15'][:,2:]), -100.).to_numpy()
-            cols.arrays['MET_precorr'] = arrays.array['MET_precorr'].to_numpy()
-            cols.arrays['METPhi_precorr'] = arrays.array['METPhi_precorr'].to_numpy()
+            cols = svj.bdt_feature_columns(variation, load_mc=True)
+            cols.arrays['x_jes_1'] = variation.array['x_jes_15'][:,0].to_numpy()
+            cols.arrays['x_jes_2'] = variation.array['x_jes_15'][:,1].to_numpy()
+            cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(variation.array['x_jes_15'][:,2:]), -100.).to_numpy()
+            cols.arrays['MET_precorr'] = variation.array['MET_precorr'].to_numpy()
+            cols.arrays['METPhi_precorr'] = variation.array['METPhi_precorr'].to_numpy()
             cols = apply_selection(cols)
             common.logger.info(f'Saving')
-            cols.save(f'{outdir}/{basename(arrays.metadata)}_{selection}_jes{var}_{match_type}.npz')
+            cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_jes{var}_{match_type}.npz')
             pbar.update()
 
     pbar.close()
@@ -296,6 +302,7 @@ def build_sig_histograms(args=None):
     mt = central.to_numpy(['mt']).ravel()
     w = central.to_numpy(['puweight']).ravel()
     w *= lumi * central.xs / central.cutflow['raw']
+    common.logger.info(f'Event weight: {lumi}*{central.xs}/{central.cutflow["raw"]} = {lumi*central.xs/central.cutflow["raw"]}')
 
     # Scale
     scale_weight = central.to_numpy(['scaleweights'])[:, np.array([0,1,2,3,4,6,8])]
@@ -858,7 +865,7 @@ def ls():
     elif infile.endswith('.root'):
         array = svj.open_root(infile, load_gen=True, load_jerjec=True)
         print(f'Found {len(array)} in {infile}')
-        print(f'Metdata:\n{array.metadata}')
+        print(f'Metadata:\n{array.metadata}')
     else:
         print(f'Unknown file format: {infile}')
 
