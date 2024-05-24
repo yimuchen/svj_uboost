@@ -21,8 +21,15 @@ pip install numba
 
 pip install git+ssh://git@github.com/boostedsvj/svj_ntuple_processing
 pip install hep_ml
+
+git clone git@github.com:boostedsvj/svj_uboost
 ```
 
+Alternatively, an editable `svj_ntuple_processing` can be installed for simultaneous developments:
+```
+git clone git@github.com:boostedsvj/svj_ntuple_processing
+pip install -e svj_ntuple_processing/
+```
 
 ## How to run a training
 
