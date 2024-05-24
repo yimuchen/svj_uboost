@@ -758,6 +758,11 @@ def smooth_shapes():
                 mths_new['stat_{}'.format(inames[ind])] = hstat
 
     if save:
+        # copy any other contents from original input
+        # omitting mcstat uncertainties, which are replaced by overall confidence interval
+        for key in mths.keys():
+            if key not in mths_new.keys() and 'mcstat' not in key:
+                mths_new[key] = mths[key]
         outfile = osp.basename(json_file).replace(".json","_smooth.json")
         with open(outfile, 'w') as f:
             json.dump(mths_new, f, indent=4, cls=common.Encoder)
