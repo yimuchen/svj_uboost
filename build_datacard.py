@@ -631,7 +631,7 @@ def plot_systematics():
     os.makedirs(outdir, exist_ok=True)
 
     systs = get_systs()
-    if 'stat_up' not in mth.keys():
+    if 'stat_up' not in mths.keys():
         stat_up = mths['central'].copy()
         stat_down = mths['central'].copy()
         i = 0
