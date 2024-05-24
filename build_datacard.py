@@ -708,14 +708,6 @@ def smooth_shapes():
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
 
-    # manual check for histograms where only a fraction was kept
-    rescaled = False
-    if '_keep' in json_file:
-        factor = 1.0/float(json_file.split('_keep')[-1].replace('.json',''))
-        rescaled = True
-    else:
-        factor = 1.0
-
     rebin_factor = 1
     x_max = 650.
 
@@ -730,9 +722,6 @@ def smooth_shapes():
         variations = [var]
         save = False
     for var in variations:
-        # persistent change
-        mths[var] *= factor
-
         hyield = mths[var].vals.sum()
         common.logger.info(f'{var} integral: {hyield}')
 
@@ -757,7 +746,6 @@ def smooth_shapes():
         hsmooth.vals = pred
         hsmooth.errs = conf[1] - pred
         hsmooth = hsmooth*hyield
-        hsmooth.metadata['rescaled'] = rescaled
 
         mths_new[var] = hsmooth
         if var=='central':
@@ -796,13 +784,8 @@ def plot_smooth():
 
         meta = mths['central'].metadata
         if i==0: plot.selection = meta['selection']
-        # manual check for histograms where only a fraction was kept
-        if '_keep' in json_file and not meta.get('rescaled',False):
-            factor = 1.0/float(json_file.split('_keep')[-1].replace('.json',''))
-        else:
-            factor = 1.0
 
-        hist = mths[var].cut(x_max)*factor
+        hist = mths[var].cut(x_max)
 
         x, y, e = get_xye(hist)
         if 'stat_up' in mths.keys():
