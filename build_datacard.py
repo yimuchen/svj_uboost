@@ -800,7 +800,7 @@ def smooth_shapes():
 def plot_smooth():
     mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
     mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
-    var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot").variation
+    var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot (or 'all')").variation
     names = common.pull_arg('--names', type=str, nargs='*', default=[], help="legend names for files").names
     json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
 
@@ -809,39 +809,53 @@ def plot_smooth():
     elif len(names)>0 and len(names)!=len(json_files):
         raise ValueError("Mismatch between length of names ({}) and length of files ({})".format(len(names),len(files)))
 
-    plot = Plot("")
+    vars = [var]
+    if var=='all':
+        vars = get_systs()
+        vars = [var+'_up' for var in vars]+[var+'_down' for var in vars]
+        vars = ['central']+vars
 
-    legend_order = []
-    h_denom = None
-    for i,(json_file,name) in enumerate(zip(json_files,names)):
+    mths = []
+    for json_file in json_files:
         with open(json_file) as f:
-            mths = json.load(f, cls=common.Decoder)
+            mths.append(json.load(f, cls=common.Decoder))
+            omit = [var for var in vars if var not in mths[-1].keys()]
+            vars = [var for var in vars if var in mths[-1].keys()]
+            if len(omit)>0: print("Omitting keys missing in {}: {}".format(json_file,', '.join(omit)))
 
-        meta = mths['central'].metadata
-        if i==0: plot.selection = meta['selection']
+    model_str = osp.basename(json_file).replace(".json","")
+    outdir = f'plot_smooth_{strftime("%Y%m%d")}_{model_str}'
+    os.makedirs(outdir, exist_ok=True)
 
-        hist = mths[var].cut(mtmin,mtmax)
+    for var in vars:
+        plot = Plot("")
+        meta = mths[0]['central'].metadata
+        plot.selection = meta['selection']
+        legend_order = []
+        h_denom = None
 
-        x, y, e = get_xye(hist)
-        if 'stat_up' in mths.keys():
-            e = None
-        legend_order.append(name)
-        line = plot.top.errorbar(x,y,yerr=e,label=legend_order[-1])
-        line = line[0]
+        for i,(mth,name) in enumerate(zip(mths,names)):
+            hist = mth[var].cut(mtmin,mtmax)
 
-        if 'stat_up' in mths.keys():
-            xs,ys_up,_ = get_xye(mths['stat_up'].cut(mtmin,mtmax))
-            _,ys_dn,_ = get_xye(mths['stat_down'].cut(mtmin,mtmax))
-            plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33,color=line.get_color())
+            x, y, e = get_xye(hist)
+            if 'smooth' in name:
+                ys_up = y+e
+                ys_dn = y-e
+                e = None
+            legend_order.append(name)
+            line = plot.top.errorbar(x,y,yerr=e,label=legend_order[-1])
+            line = line[0]
 
-        if h_denom is None:
-            h_denom = y
-            plot.bot.set_ylabel('Ratio to {}'.format(name))
-        else:
-            plot.bot.plot(x,y/h_denom,color=line.get_color())
+            if 'smooth' in name:
+                plot.top.fill_between(x,ys_dn,ys_up,alpha=0.33,color=line.get_color())
 
-    outfile = osp.basename(json_file).replace(".json","_comp.png")
-    plot.save(outfile,legend_order=legend_order)
+            if h_denom is None:
+                h_denom = y
+                plot.bot.set_ylabel('Ratio to {}'.format(name))
+            else:
+                plot.bot.plot(x,y/h_denom,color=line.get_color())
+
+        plot.save(f'{outdir}/{var}.png',legend_order=legend_order)
 
 @scripter
 def merge(args=None):
