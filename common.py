@@ -1,4 +1,4 @@
-import os, os.path as osp, logging, re, time, json, argparse, sys, math
+import os, os.path as osp, logging, re, time, json, argparse, sys, math, shutil
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -211,10 +211,8 @@ def imgcat(path) -> None:
     Only useful if you're using iTerm with imgcat on the $PATH:
     Display the image in the terminal.
     """
-    try:
+    if shutil.which('imgcat'):
         os.system('imgcat ' + path)
-    except Exception:
-        pass
 
 
 def expand_wildcards(pats):
