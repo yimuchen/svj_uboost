@@ -709,6 +709,10 @@ def get_xye(hist):
 def do_loess(hist,span,do_gcv=False):
     from uloess import loess
     x, y, errs = get_xye(hist)
+    # safety check for empty bins w/ empty errs
+    for i,yy in enumerate(y):
+        if yy==0:
+            errs[i] = 1
     # 1sigma interval
     pred, conf_int, gcv = loess(x, y, errs, deg=2, alpha=0.683, span=span)
     if do_gcv:
@@ -720,20 +724,31 @@ def do_loess(hist,span,do_gcv=False):
 def smooth_shapes():
     span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
     do_opt = common.pull_arg('--optimize', type=int, default=0, help="optimize span value using n values").optimize
+    target = common.pull_arg('--target', type=str, default='central', help="optimize only based on target hist").target
     debug = common.pull_arg('--debug', default=False, action="store_true", help="debug optimization").debug
     var = common.pull_arg('--variation', type=str, default=None, help="MT variation to debug").variation
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
+    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
 
     # loop over central and systematics
     variations = get_systs()
     variations.remove('stat')
     variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
     variations = ['central']+variations
+
+    # find optimization target
+    if len(target)>0:
+        if target not in variations:
+            raise ValueError("Unknown target {} (known: {})".format(target, ', '.join(variations)))
+        # put target first
+        variations = [target]+[v for v in variations if v!=target]
+
     mths_new = {}
     save = True
     if var is not None:
+        target = var
         variations = [var]
         save = False
     for var in variations:
@@ -742,12 +757,11 @@ def smooth_shapes():
 
         hist = mths[var]
         meta = hist.metadata
-        if var=='central': common.logger.info(f'central metadata:\n{meta}')
 
         # normalize shape to unit area, then scale prediction by original yield
         hist = hist*(1./hyield)
 
-        if do_opt>0:
+        if do_opt>0 and (var==target or len(target)==0):
             span_min = 0.1 # if span is too small, no points are included
             spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
             gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
@@ -816,8 +830,8 @@ def plot_smooth():
         line = line[0]
 
         if 'stat_up' in mths.keys():
-            xs,ys_up,_ = get_xye(mths['stat_up'])
-            _,ys_dn,_ = get_xye(mths['stat_down'])
+            xs,ys_up,_ = get_xye(mths['stat_up'].cut(mtmin,mtmax))
+            _,ys_dn,_ = get_xye(mths['stat_down'].cut(mtmin,mtmax))
             plot.top.fill_between(xs,ys_dn,ys_up,alpha=0.33,color=line.get_color())
 
         if h_denom is None:
