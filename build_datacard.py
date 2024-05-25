@@ -727,6 +727,10 @@ def smooth_shapes():
     target = common.pull_arg('--target', type=str, default='central', help="optimize only based on target hist").target
     debug = common.pull_arg('--debug', default=False, action="store_true", help="debug optimization").debug
     var = common.pull_arg('--variation', type=str, default=None, help="MT variation to debug").variation
+    save = common.pull_arg('--save', default=False, action="store_true", help="save debug variation output").save
+    mtmin = common.pull_arg('--mtmin', type=float, default=None).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=None).mtmax
+    norm = not common.pull_arg('--unnorm', default=False, action="store_true", help="fit unnormalized shape").unnorm
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
@@ -745,21 +749,24 @@ def smooth_shapes():
         # put target first
         variations = [target]+[v for v in variations if v!=target]
 
+    cut_args = {}
+    if mtmin is not None: cut_args["xmin"] = mtmin
+    if mtmax is not None: cut_args["xmax"] = mtmax
     mths_new = {}
-    save = True
+    save_all = True
     if var is not None:
         target = var
         variations = [var]
-        save = False
+        save_all = False
     for var in variations:
-        hyield = mths[var].vals.sum()
+        hist = mths[var].cut(**cut_args)
+        hyield = hist.vals.sum()
         common.logger.info(f'{var} integral: {hyield}')
 
-        hist = mths[var]
         meta = hist.metadata
 
         # normalize shape to unit area, then scale prediction by original yield
-        hist = hist*(1./hyield)
+        if norm: hist = hist*(1./hyield)
 
         if do_opt>0 and (var==target or len(target)==0):
             span_min = 0.1 # if span is too small, no points are included
@@ -774,7 +781,7 @@ def smooth_shapes():
         hsmooth = hist.copy()
         hsmooth.vals = pred
         hsmooth.errs = conf[1] - pred
-        hsmooth = hsmooth*hyield
+        if norm: hsmooth = hsmooth*hyield
 
         mths_new[var] = hsmooth
         if var=='central':
@@ -786,13 +793,16 @@ def smooth_shapes():
                 hstat.errs = np.zeros_like(hstat.vals)
                 mths_new['stat_{}'.format(inames[ind])] = hstat
 
-    if save:
+    if save_all:
         # copy any other contents from original input
         # omitting mcstat uncertainties, which are replaced by overall confidence interval
         for key in mths.keys():
             if key not in mths_new.keys() and 'mcstat' not in key:
                 mths_new[key] = mths[key]
         outfile = osp.basename(json_file).replace(".json","_smooth.json")
+    elif save:
+        outfile = osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
+    if save_all or save:
         with open(outfile, 'w') as f:
             json.dump(mths_new, f, indent=4, cls=common.Encoder)
 
