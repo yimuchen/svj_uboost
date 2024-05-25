@@ -541,19 +541,22 @@ class Histogram:
         h.metadata = self.metadata.copy()
         return h
 
-    def cut(self, x_max):
+    def cut(self, xmin=-np.inf, xmax=np.inf):
         """
-        Throws away all bins for which the right bin boundary > x_max.
+        Throws away all bins with left boundary < xmin or right boundary > xmax.
         Mostly useful for plotting purposes.
         Returns a copy.
         """
+        # safety checks
+        if xmin>xmax:
+            raise ValueError("xmin ({}) greater than xmax ({})".format(xmin,xmax))
+
         h = self.copy()
-        if np.max(self.binning)<=x_max:
-            return h
-        i_bin = np.argmax(self.binning > x_max)
-        h.binning = h.binning[:i_bin]
-        h.vals = h.vals[:i_bin-1]
-        h.errs = h.errs[:i_bin-1]
+        imin = np.argmin(self.binning < xmin) if xmin > self.binning[0] else 0
+        imax = np.argmax(self.binning > xmax) if xmax < self.binning[-1] else self.nbins+1
+        h.binning = h.binning[imin:imax]
+        h.vals = h.vals[imin:imax-1]
+        h.errs = h.errs[imin:imax-1]
         return h
 
 

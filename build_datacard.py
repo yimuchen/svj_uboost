@@ -36,10 +36,12 @@ def change_bin_width():
     Changes MT binning based on command line options
     """
     binw = common.pull_arg('--binw', type=float).binw
+    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
     if binw is not None:
         # Testing different bin widths
-        left = 180.
-        right = 720.
+        left = mtmin
+        right = mtmax
         common.MTHistogram.bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
         common.MTHistogram.non_standard_binning = True
         common.logger.warning(f'Changing bin width to {binw}; MT binning: {common.MTHistogram.bins}')
@@ -612,18 +614,18 @@ def get_systs():
 
 @scripter
 def plot_systematics():
+    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
+    rebin = common.pull_arg('--rebin', type=int, default=1).rebin
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
-        mths = json.load(f, cls=common.Decoder)    
-
-    rebin_factor = 1
-    x_max = 650.
+        mths = json.load(f, cls=common.Decoder)
 
     n = mths['central'].vals.sum()
     common.logger.info(f'central integral: {n}')
     common.logger.info(f'central metadata:\n{mths["central"].metadata}')
 
-    central = mths['central'].rebin(rebin_factor).cut(x_max)
+    central = mths['central'].rebin(rebin).cut(mtmin,mtmax)
     meta = central.metadata
 
     model_str = osp.basename(json_file).replace(".json","")
@@ -646,23 +648,23 @@ def plot_systematics():
     for syst in systs:
         plot = Plot(meta['selection'])
         plot.plot_hist(central, label='Central')
-        plot.plot_hist(mths[f'{syst}_up'].rebin(rebin_factor).cut(x_max), central, f'{syst} up')
-        plot.plot_hist(mths[f'{syst}_down'].rebin(rebin_factor).cut(x_max), central, f'{syst} down')
+        plot.plot_hist(mths[f'{syst}_up'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} up')
+        plot.plot_hist(mths[f'{syst}_down'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} down')
         plot.save(f'{outdir}/{syst}.png')
 
 @scripter
 def plot_bkg():
+    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
+    rebin = common.pull_arg('--rebin', type=int, default=1).rebin
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
-        mths = json.load(f, cls=common.Decoder)    
+        mths = json.load(f, cls=common.Decoder)
 
     sig_json_file = common.pull_arg('sigjsonfile', type=str, nargs='*').sigjsonfile
     do_signal = len(sig_json_file) > 0
 
-    rebin_factor = 1
-    x_max = 750.
-
-    h = mths['bkg'].rebin(rebin_factor).cut(750.)
+    h = mths['bkg'].rebin(rebin).cut(mtmin,mtmax)
     binning = h.binning
     nbins = h.nbins
     zero = np.zeros(nbins)
@@ -671,12 +673,12 @@ def plot_bkg():
         # for bkg in ['zjets', 'wjets', 'ttjets', 'qcd']:
         for bkg in ['qcd', 'ttjets', 'wjets', 'zjets']:
             ax.fill_between(h.binning[:-1], zero, h.vals, step='post', label=bkg)
-            h.vals -= mths[bkg].rebin(rebin_factor).cut(750.).vals
+            h.vals -= mths[bkg].rebin(rebin).cut(mtmin,mtmax).vals
 
-        if do_signal:    
+        if do_signal:
             with open(sig_json_file[0]) as f:
                 sig = json.load(f, cls=common.Decoder)['central']
-                sig = sig.rebin(rebin_factor).cut(750.)
+                sig = sig.rebin(rebin).cut(mtmin,mtmax)
                 ax.step(
                     sig.binning[:-1], sig.vals, '--k',
                     where='post', label=sig.metadata['basename']
@@ -724,9 +726,6 @@ def smooth_shapes():
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
 
-    rebin_factor = 1
-    x_max = 650.
-
     # loop over central and systematics
     variations = get_systs()
     variations.remove('stat')
@@ -741,7 +740,7 @@ def smooth_shapes():
         hyield = mths[var].vals.sum()
         common.logger.info(f'{var} integral: {hyield}')
 
-        hist = mths[var].rebin(rebin_factor).cut(x_max)
+        hist = mths[var]
         meta = hist.metadata
         if var=='central': common.logger.info(f'central metadata:\n{meta}')
 
@@ -749,7 +748,7 @@ def smooth_shapes():
         hist = hist*(1./hyield)
 
         if do_opt>0:
-            span_min = 0.15 # if span is too small, no points are included
+            span_min = 0.1 # if span is too small, no points are included
             spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
             gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
             span_val = spans[np.argmin(gcvs)]
@@ -785,6 +784,8 @@ def smooth_shapes():
 
 @scripter
 def plot_smooth():
+    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
     var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot").variation
     names = common.pull_arg('--names', type=str, nargs='*', default=[], help="legend names for files").names
     json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
@@ -794,7 +795,6 @@ def plot_smooth():
     elif len(names)>0 and len(names)!=len(json_files):
         raise ValueError("Mismatch between length of names ({}) and length of files ({})".format(len(names),len(files)))
 
-    x_max = 650.
     plot = Plot("")
 
     legend_order = []
@@ -806,7 +806,7 @@ def plot_smooth():
         meta = mths['central'].metadata
         if i==0: plot.selection = meta['selection']
 
-        hist = mths[var].cut(x_max)
+        hist = mths[var].cut(mtmin,mtmax)
 
         x, y, e = get_xye(hist)
         if 'stat_up' in mths.keys():
