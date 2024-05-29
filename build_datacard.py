@@ -542,11 +542,46 @@ def build_histograms():
     else:
         common.logger.info('Reusing {} for background'.format(bkg_outfile))
 
+    def check_rebin(hist,name):
+        msg = []
+        if hist.binning[0]>common.MTHistogram.bins[0]:
+            msg.append(f'left {hist.binning[0]}>{common.MTHistogram.bins[0]}')
+        if hist.binning[-1]<common.MTHistogram.bins[-1]:
+            msg.append(f'right {hist.binning[-1]}>{common.MTHistogram.bins[-1]}')
+        orig_width = int(hist.binning[1] - hist.binning[0])
+        new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
+        rebin_factor = int(new_width/orig_width)
+        rebin_mod = orig_width % new_width
+        if rebin_mod!=0:
+            msg.append(f'rebin {orig_width} % {new_width} = {rebin_mod}')
+        if len(msg)>0:
+            msg = ', '.join(msg)
+            common.logger.warning(f'Hist {name} inconsistent with requested binning ({msg})')
+        return hist.rebin(rebin_factor).cut(common.MTHistogram.bins[0],common.MTHistogram.bins[-1])
+
+    def rebin_outfile(outfile):
+        with open(outfile,'r') as f:
+            mths = json.load(f, cls=common.Decoder)
+        for key in mths:
+            if isinstance(mths[key],list):
+                for i,entry in enumerate(mths[key]):
+                    mths[key][i] = check_rebin(entry,f'{key}[{i}]')
+            else:
+                mths[key] = check_rebin(mths[key],key)
+        outfile2 = outfile.replace(".json","_tmp.json")
+        with open(outfile2,'w') as f:
+            json.dump(mths, f, cls=common.Encoder, indent=4)
+        return outfile2
+
     if sig_outfile is None:
         sig_outfile = build_sig_histograms((selection, lumi, sig_skim_files))
+    else:
+        sig_outfile = rebin_outfile(sig_outfile)
     if bkg_outfile is None:
         bkg_outfile = build_bkg_histograms((selection, lumi, bkg_skim_files))
-    merged_outfile = sig_outfile.replace('.json', '_with_bkg.json')
+    else:
+        bkg_outfile = rebin_outfile(bkg_outfile)
+    merged_outfile = sig_outfile.replace('_tmp.json','.json').replace('.json', '_with_bkg.json')
 
     if common.MTHistogram.non_standard_binning:
         binw = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
