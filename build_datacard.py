@@ -794,7 +794,7 @@ def smooth_shapes():
         variations = [var]
         save_all = False
     for var in variations:
-        hist = mths[var].cut(**cut_args)
+        hist = mths[var]
         hyield = hist.vals.sum()
         common.logger.info(f'{var} integral: {hyield}')
 
@@ -818,11 +818,12 @@ def smooth_shapes():
         hsmooth.errs = conf[1] - pred
         if norm: hsmooth = hsmooth*hyield
 
-        mths_new[var] = hsmooth
+        # cuts applied *after* interpolation
+        mths_new[var] = hsmooth.cut(**cut_args)
         if var=='central':
             inames = ['down','up']
             for ind in [0,1]:
-                hstat = hist.copy()
+                hstat = hsmooth.copy()
                 # avoid errors going negative
                 hstat.vals = np.clip(conf[ind],0,None)*hyield
                 hstat.errs = np.zeros_like(hstat.vals)
@@ -831,9 +832,15 @@ def smooth_shapes():
     if save_all:
         # copy any other contents from original input
         # omitting mcstat uncertainties, which are replaced by overall confidence interval
+        # and applying cuts
         for key in mths.keys():
             if key not in mths_new.keys() and 'mcstat' not in key:
-                mths_new[key] = mths[key]
+                if isinstance(mths[key],list):
+                    mths_new[key] = []
+                    for entry in mths[key]:
+                        mths_new[key].append(entry.cut(**cut_args))
+                else:
+                    mths_new[key] = mths[key].cut(**cut_args)
         outfile = osp.basename(json_file).replace(".json","_smooth.json")
     elif save:
         outfile = osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
