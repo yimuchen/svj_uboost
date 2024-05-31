@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import norm
+from scipy.stats import t as tdist
 
 debug = False
 def debug_print(i):
@@ -37,24 +38,28 @@ def wls(i, x, y, e, w, deg):
 # (https://www.netlib.org/a/cloess.pdf)
 def ci(y, y_pred, L, alpha):
     R = y-y_pred # residuals
-    D = np.trace(L) # residual DOF
-    N = len(y) - D
-    S = np.sum(R**2)/N # error variance
+    IL = np.identity(L.shape[0]) - L
+    d1 = np.trace(IL.T.dot(IL)) # effective degrees of freedom
+    d2 = np.trace((IL.T.dot(IL))**2)
+    rho = d1**2/d2 # dof for t distribution
+    S = np.sum(R**2)/d1 # estimator of variance scale
     V = S*L.dot(L.T) # fit variance
     C = np.sqrt(np.diag(V))
 #    if debug: np.set_printoptions(threshold=np.inf)
     if debug: print("L",L)
     if debug: print("R",R)
-    if debug: print("D",D)
+    if debug: print("d1",d1)
     if debug: print("S",S)
     if debug: print("V",V)
     if debug: print("C",C)
-    cl_factor = norm.ppf((1+alpha)/2)
+    cl_factor = tdist.ppf(1-alpha/2,df=rho)
+    if debug: print("d2",d2)
+    if debug: print("rho",rho)
     if debug: print("cl_factor",cl_factor)
     y_dn = y_pred - cl_factor*C
     y_up = y_pred + cl_factor*C
     # generalized cross validation (for span optimization)
-    gcv = S/N
+    gcv = S/d1
     if debug: print("gcv",gcv)
     return y_dn, y_up, gcv
 
