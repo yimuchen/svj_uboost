@@ -816,18 +816,22 @@ def smooth_shapes():
         hsmooth = hist.copy()
         hsmooth.vals = pred
         hsmooth.errs = conf[1] - pred
-        if norm: hsmooth = hsmooth*hyield
 
         # cuts applied *after* interpolation
-        mths_new[var] = hsmooth.cut(**cut_args)
+        if norm:
+            hsmooth = hsmooth*hyield
+            hsmooth = hsmooth.cut(**cut_args)
+        mths_new[var] = hsmooth
         if var=='central':
             inames = ['down','up']
-            for ind in [0,1]:
+            # computed after normalization to original yield (above)
+            ivals = [hsmooth.vals-hsmooth.errs, hsmooth.vals+hsmooth.errs]
+            for iname,ival in zip(inames,ivals):
                 hstat = hsmooth.copy()
                 # avoid errors going negative
-                hstat.vals = np.clip(conf[ind],0,None)*hyield
+                hstat.vals = np.clip(ival,0,None)
                 hstat.errs = np.zeros_like(hstat.vals)
-                mths_new['stat_{}'.format(inames[ind])] = hstat
+                mths_new[f'stat_{iname}'] = hstat
 
     if save_all:
         # copy any other contents from original input
