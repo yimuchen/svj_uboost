@@ -210,7 +210,11 @@ python build_datacard.py plot_systematics signal_name_cutbased_or_bdt_with_bkg_b
 
 Similar plots can be made to compare the results of smoothing (e.g. for systematics, between different `keep` percentages, etc.) using the `plot_smooth` function.
 
+A table of systematic uncertainty yield effects can be made as follows:
+```bash
+python build_datacard.py systematics_table signal_name_cutbased_or_bdt_with_bkg_binwXY_rangeXYZ-XYZ.json
+```
+Currently, this function only handles one signal model at a time.
+It will be expanded to summarize across all signal models once the full scans are available.
+
 And that's it for this part. To use these histograms for fits and limit setting, see the [svj_limits](https://github.com/boostedsvj/svj_limits) repo.
-
-
-

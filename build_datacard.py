@@ -644,8 +644,20 @@ class Plot:
         plt.savefig(outfile.replace('.png', '.pdf'), bbox_inches="tight")
         common.imgcat(outfile)
 
-def get_systs():
-    return ['scale', 'jer', 'jec', 'jes', 'isr', 'fsr', 'pu', 'pdf', 'stat']
+def get_systs(names=False):
+    syst_names = {
+        'scale': "Scales",
+        'jer': "JER",
+        'jec': "JEC",
+        'jes': "JES",
+        'isr': "ISR (parton shower)",
+        'fsr': "FSR (parton shower)",
+        'pu': "Pileup reweighting",
+        'pdf': "PDF",
+        'stat': "MC statistical",
+    }
+    if names: return syst_names
+    else: return list(syst_names.keys())
 
 @scripter
 def plot_systematics():
@@ -912,6 +924,54 @@ def plot_smooth():
                 plot.bot.plot(x,y/h_denom,color=line.get_color())
 
         plot.save(f'{outdir}/{var}.png',legend_order=legend_order)
+
+def get_yield(hist):
+    return hist.vals.sum()
+
+def pct_diff(central,syst):
+    return abs(1-syst/central)*100
+
+@scripter
+def systematics_table():
+    json_file = common.pull_arg('jsonfile', type=str).jsonfile
+    with open(json_file) as f:
+        mths = json.load(f, cls=common.Decoder)
+    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
+
+    # needs to be kept in sync w/ boostedsvj/svj_limits/boosted_fits.py:gen_datacard()
+    flat_systs = {
+        'lumi': 1.6,
+        'trigger_cr': 2.0,
+        'trigger_sim': 2.1,
+    }
+
+    central = mths["central"]
+    central_yield = get_yield(central)
+    systs = get_systs(names=True)
+    systs.update({
+        'lumi': "Luminosity",
+        'trigger_cr': "Trigger (CR)",
+        'trigger_sim': "Trigger (MC)",
+    })
+    syst_yield_effects = {}
+    total = 0
+    for syst in sorted(systs.keys()):
+        if f'{syst}_up' in mths:
+            syst_up_yield = get_yield(mths[f'{syst}_up'])
+            syst_dn_yield = get_yield(mths[f'{syst}_down'])
+            syst_yield_effects[syst] = max(pct_diff(central_yield,syst_up_yield),pct_diff(central_yield,syst_dn_yield))
+        elif syst in flat_systs:
+            syst_yield_effects[syst] = flat_systs[syst]
+        else:
+            common.logger.warning(f'could not find systematic: {syst}')
+            continue
+        total += syst_yield_effects[syst]**2
+    total = np.sqrt(total)
+
+    for syst,effect in syst_yield_effects.items():
+        print("{} & {:.2f} \\\\".format(systs[syst],effect))
+    print(r"\hline")
+    print("total & {:.2f} \\\\".format(total))
 
 @scripter
 def merge(args=None):
