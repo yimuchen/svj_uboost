@@ -33,9 +33,7 @@ def wls(i, x, y, e, w, deg):
     if debug_print(i): print("y_pred",y_pred)
     return y_pred, L[i]
 
-# this follows "Semiparametric Regression for the Social Sciences", L. Keele
-# which is similar to "A Package of C and Fortran Routines for Fitting Local Regression Models", W. Cleveland, E. Grosse, M.-J. Shyu
-# (https://www.netlib.org/a/cloess.pdf)
+# this follows "Locally Weighted Regression: An Approach to Regression Analysis by Local Fitting", W. Cleveland, S. Devlin
 def ci(y, y_pred, L, alpha):
     R = y-y_pred # residuals
     IL = np.identity(L.shape[0]) - L
