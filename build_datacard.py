@@ -219,6 +219,77 @@ def build_histogram(args=None):
         mths['isr_down'] = common.MTHistogram(mt, ps_weights[:,1])
         mths['fsr_up']   = common.MTHistogram(mt, ps_weights[:,2])
         mths['fsr_down'] = common.MTHistogram(mt, ps_weights[:,3])
+            # Apply the BDT
+            elif selection.startswith('bdt='):
+                common.logger.info('Applying bdt selection')
+     
+                # Split the selection string by '=' to extract the number following 'bdt='
+                parts = selection.split('=')
+                
+                # Check if the second part of the split is a valid number
+                if len(parts) == 2:
+                    try:
+                        bdt_cut = float(parts[1])
+                    except ValueError:
+                        # Handle the case where the number following 'bdt=' is not valid
+                        print("Invalid number following 'bdt='.")
+                else:
+                    # Handle the case where the number following 'bdt=' is not valid
+                    raise ValueError("Invalid number {} following 'bdt='.".format(parts[1]))
+     
+                # Apply the signal region
+                col = col.select(col.to_numpy(['rt']).ravel() > 1.18)
+                #col.cutflow['rt_signalregion'] = len(col)
+
+                # Grab the input features and weights
+                X = []
+                weight = []
+     
+                # Get the features for the bkg samples
+                X = col.to_numpy(bdt_features)
+                xgb_model = xgb.XGBClassifier()
+                xgb_model.load_model(bdt_model_file)
+                with common.time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
+                    score = xgb_model.predict_proba(X)[:,1]
+                weight = (col.record.effxs / col.cutflow['raw']) * lumi*col.arrays['puweight']
+                #weight = col.arrays['weight']*lumi*col.arrays['puweight']
+     
+                # Obtain the efficiencies for the desired BDT working point
+                # bdt_cut is the user input bdt_cut
+                bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score)) 
+                bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
+                eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0]) 
+     
+                # Apply the DDT
+                mT = col.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
+                pT = col.to_numpy(['pt']).ravel()
+                rho = col.to_numpy(['rho']).ravel()
+                bdt_ddt_score = common.ddt(mT, pT, rho, score, weight, eff*100)
+     
+                # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
+                #print('Events before BDT: ', len(col))
+                col = col.select(bdt_ddt_score > 0.0) # mask for the selection
+                #print('Events after BDT: ', len(col))
+            else:
+                raise Exception(f'selection must be cutbased or bdt=X.XXX, found {selection}')
+        
+        if len(col) == 0:
+            # Skip this background if it had 0 events passing the preselection
+            common.logger.info(f'Skipping {skim_file} because no events passed the preselection')
+            continue
+    
+        print("Process ", process)
+        #array = col.to_numpy(['mt', 'weight', 'puweight'])
+        array = col.to_numpy(['mt', 'puweight'])
+        cutflow = {}
+        for key in col.cutflow.keys():
+            cutflow[key] = col.cutflow[key] * lumi * (col.xs/col.cutflow['raw'])
+        cutflow['bdt_cut'] = len(array[:,1]) * lumi * (col.xs/col.cutflow['raw'])
+        print(cutflow)
+        mth = common.MTHistogram(array[:,0], weights=lumi*(col.xs / col.cutflow['raw'])*array[:,1])
+        mth.metadata['process'] = process
+        mth.metadata['cutflow'] = ', '.join([f'{k}: {v}' for k, v in cutflow.items()]) # convert dict to string
+>>>>>>> e9ef2ac (latest update for BDT datacards)
 
         # PU
         # also uncorrelated between years
