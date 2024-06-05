@@ -6,6 +6,8 @@ import svj_ntuple_processing as svj
 from scipy.ndimage import gaussian_filter
 import requests
 import numpy as np
+from datetime import datetime
+
 np.random.seed(1001)
 
 
@@ -859,37 +861,114 @@ def rhoddt_windowcuts(mt, pt, rho):
     return cuts
 
 def varmap(mt, pt, rho, var, weight, percent):
-    cuts = rhoddt_windowcuts(mt, pt, rho)
-    C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
-    w, h = 50, 50
-    VAR_map      = [[0 for x in range(w)] for y in range(h)]
-    VAR = var[cuts]
-    for i in range(len(RHO_edges)-1):
-       for j in range(len(PT_edges)-1):
-          CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
-          if len(VAR[CUT])==0: continue
-          if len(VAR[CUT])>0:
-             VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
+     # Apply the rho-ddt window cuts to the data
+     cuts = rhoddt_windowcuts(mt, pt, rho)
 
-    VAR_map_smooth = gaussian_filter(VAR_map,1)
-    return VAR_map_smooth, RHO_edges, PT_edges
+     # Create a 2D histogram of rho and pt, weighted by the event weights
+     C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
 
-def ddt(mt, pt, rho, var, weight, percent):
+     # Initialize a 2D map for the variable
+     w, h = 50, 50
+     VAR_map = [[0 for x in range(w)] for y in range(h)]
+
+     # Get the variable for the data that passed the cuts
+     VAR = var[cuts]
+
+     # Loop over the bins in rho and pt
+     for i in range(len(RHO_edges)-1):
+         for j in range(len(PT_edges)-1):
+             # Apply cuts to select data in the current rho and pt bin
+             CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
+
+             # If there is no data in this bin, skip it
+             if len(VAR[CUT])==0: continue
+
+             # If there is data in this bin, calculate the percentile of the variable
+             if len(VAR[CUT])>0:
+                 VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
+
+     # Smooth the variable map using a Gaussian filter
+     VAR_map_smooth = gaussian_filter(VAR_map,1)
+
+     # Return the smoothed variable map, along with the rho and pt edges
+     return VAR_map_smooth, RHO_edges, PT_edges
+
+def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
+    '''
+    This function creates the dictionary of DDT 2D maps for a range of
+        cut_vals at corresponding bkg efficiencies given as percents
+    The DDT 2D map at each cut_val contains: var_map_smooth, RHO_edges, and PT_edges, 
+        The inputs to the function are (mt, pt, rho, var, weight, percents, cut_vals, ddt_name).
+    In essense the DDT is a 2D function of rho and pt that
+        is calculated using the background data for the variable
+        that you want to decorrelate
+    '''
+
+    # Apply the rho-ddt window cuts to the data
     cuts = rhoddt_windowcuts(mt, pt, rho)
-    var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent)
+
+    # Initialize the dictionary
+    var_dict = {}
+
+    # Loop over the values in cut_vals and percents
+    for cut_val, percent in zip(cut_vals, percents):
+        # Generate a smoothed variable map, along with the rho and pt edges
+        var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent)
+
+        # Store the results in the dictionary
+        var_dict[str(cut_val)] = (var_map_smooth, RHO_edges, PT_edges)
+
+    # Save the dictionary to an npz file
+    if ddt_name is None:
+        ddt_name = 'ddt_' + str(var) + '_' + datetime.now().strftime('%Y%m%d') + '.npz'
+    np.savez(ddt_name, **var_dict)
+
+def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
+    '''
+    This is a function to apply a design decorrelated tagger 
+        it decorrelates 'var' with respect to mt using 
+        rho (a function of mass) and pt. At a given cut_val for
+        a given DDT map inside of an npz file with the name 'ddt_name'
+    The inputs to the function are (mt, pt, rho, var, weight, cut_val) 
+        where cut_val will refer to the value of the key inside of dictionary 
+        with the proper var_map_smooth, RHO_edges, and PT_edges to use.
+    '''
+
+    # Check if ddt_name exists
+    if not osp.exists(ddt_name):
+        raise FileNotFoundError(f"The file {ddt_name} does not exist.")
+
+    # Load the dictionary from the npz file
+    var_dict = np.load(ddt_name, allow_pickle=True)
+    var_dict = {key: var_dict[key].item() for key in var_dict.files}
+
+    # Check if cut_val exists in the dictionary
+    if str(cut_val) not in var_dict:
+        raise KeyError(f"The key {cut_val} does not exist in the dictionary.")
+
+    # Get the var_map_smooth, RHO_edges, and PT_edges for the given cut_val
+    var_map_smooth, RHO_edges, PT_edges = var_dict[str(cut_val)]
+
+    # Apply the rho-ddt window cuts to the data
+    cuts = rhoddt_windowcuts(mt, pt, rho)
+
+    # Define the number of bins and the min/max values for pt and rho
     nbins = 49
     Pt_min, Pt_max = min(PT_edges), max(PT_edges)
     Rho_min, Rho_max = min(RHO_edges), max(RHO_edges)
 
+    # Calculate the floating point bin indices for pt and rho
     ptbin_float  = nbins*(pt-Pt_min)/(Pt_max-Pt_min) 
     rhobin_float = nbins*(rho-Rho_min)/(Rho_max-Rho_min)
 
-    #ptbin         = np.clip(1 + ptbin_float.astype(int),   0, nbins)
-    #rhobin        = np.clip(1 + rhobin_float.astype(int),  0, nbins)
+    # Convert the floating point bin indices to integer, and clip them to the range [0, nbins]
     ptbin  = np.clip(1 + np.round(ptbin_float).astype(int), 0, nbins)
     rhobin = np.clip(1 + np.round(rhobin_float).astype(int), 0, nbins)
 
+    # Calculate the DDT-transformed variable by subtracting the 
+    # decorelation function (smoothed variable map) from the original variable
     varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
+    # Return the DDT-transformed variable
     return varDDT
 
 def apply_hemveto(cols):
