@@ -857,10 +857,17 @@ def read_training_features(model_file):
         return model['features']
 
 def rhoddt_windowcuts(mt, pt, rho):
+    '''
+    Basically a tool to constantly check the kinematics during the DDT processes
+    '''
     cuts = (mt>180) & (mt<650) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
     return cuts
 
 def varmap(mt, pt, rho, var, weight, percent):
+    '''
+    2D map that basically is the DDT
+    It decorrelates var with respect to mt using a 2D in pt rho space for a given efficiency (percent)
+    '''
      # Apply the rho-ddt window cuts to the data
      cuts = rhoddt_windowcuts(mt, pt, rho)
 
