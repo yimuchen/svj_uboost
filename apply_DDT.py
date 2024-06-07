@@ -384,7 +384,7 @@ def main():
         hep.cms.label(rlabel="2018 (13 TeV)")
         ax = fig.gca()
         ax.plot(best_bdt_cuts[:,0], best_bdt_cuts[:,1], marker='o')
-        ax.text(0.05, 0.95, f'Average: {Optimal Cut:.2f}', transform=ax.transAxes, verticalalignment='top')
+        ax.text(0.05, 0.95, f'Optimal Cut: {average:.2f}', transform=ax.transAxes, verticalalignment='top')
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('Best BDT Cut Value')
         ax.set_xlabel("m(Z')")
