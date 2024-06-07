@@ -55,16 +55,16 @@ sig_bdt_cut = 0.9
 
 # Choose the BDT cut values that you want to make for the DDT
 # or that are in the DDT you are loading
-#bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
-#bdt_cuts = [0.9, 0.95]
-bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
+#bdt_cuts = [0.5, 0.7]
+#bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
 # Choose what you want to plot
 plot_2D_DDT_map = False
-plot_bkg_scores_mt = True
-plot_fom_significance = False
+plot_bkg_scores_mt = False
+plot_fom_significance = True
 plot_sig_mt_single_BDT = False
-plot_one_sig_mt_many_bdt = True
+plot_one_sig_mt_many_bdt = False
 
 #------------------------------------------------------------------------------
 # User defined functions ------------------------------------------------------
@@ -257,7 +257,8 @@ def main():
         fig = plt.figure(figsize=(10, 7))
         hep.cms.label(rlabel="2018 (13 TeV)")
         ax = fig.gca()
- 
+
+        best_bdt_cuts = [] #store the best bdt values
         # Iterate over the variables in the 'con' dictionary
         for sig_col in sig_cols:
             mz = sig_col.metadata['mz']
@@ -329,8 +330,11 @@ def main():
                 print("mZ': ", mz, " S: ", S, "B: ", B)
                 fom.append(FOM(S,B))
              
-                # Find the cut value corresponding to the maximum figure of merit
-                #best_bdt_cut = bdt_cut_values[np.where(fom == max(fom))][0]
+            # Find the cut value corresponding to the maximum figure of merit
+            fom_array = np.array(fom)
+            bdt_cuts_array = np.array(bdt_cuts)
+            best_bdt_cuts.append([mz, bdt_cuts_array[np.where(fom_array == max(fom_array))[0]][0]])
+            print(best_bdt_cuts)
              
             # Plot the histogram of the metric variable range
             #arr = ax.hist(bdt_cut_values, bins=func.bin_cuts(bdt_cut_values), weights=fom, label=s, linewidth=2, histtype='step')
@@ -364,6 +368,23 @@ def main():
         plt.savefig(outfile+".pdf", bbox_inches='tight')
         plt.savefig(outfile+".png", bbox_inches='tight')
         plt.close()
+
+        # plot the best bdt cuts
+        best_bdt_cuts = np.array(best_bdt_cuts)
+        sort_indices = np.argsort(best_bdt_cuts[:,0]) #sort array to ascend by mz
+        best_bdt_cuts = best_bdt_cuts[sort_indices]
+        fig = plt.figure(figsize=(10, 7))
+        hep.cms.label(rlabel="2018 (13 TeV)")
+        ax = fig.gca()
+        ax.plot(best_bdt_cuts[:,0], best_bdt_cuts[:,1], marker='o')
+        ax.ticklabel_format(style='sci', axis='x')
+        ax.set_ylabel('Best BDT Cut Value')
+        ax.set_xlabel("m(Z')")
+        plt.savefig("plots/best_bdt_cuts.pdf", bbox_inches='tight')
+        plt.savefig("plots/best_bdt_cuts.png", bbox_inches='tight')
+        plt.close()
+
+        
 
     # _____________________________________________
     # Apply the DDT to different signals for one BDT cut value
