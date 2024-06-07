@@ -7,6 +7,7 @@ from scipy.ndimage import gaussian_filter
 import requests
 import numpy as np
 from datetime import datetime
+import json
 
 np.random.seed(1001)
 
@@ -868,37 +869,45 @@ def varmap(mt, pt, rho, var, weight, percent):
     2D map that basically is the DDT
     It decorrelates var with respect to mt using a 2D in pt rho space for a given efficiency (percent)
     '''
-     # Apply the rho-ddt window cuts to the data
-     cuts = rhoddt_windowcuts(mt, pt, rho)
+    # Apply the rho-ddt window cuts to the data
+    cuts = rhoddt_windowcuts(mt, pt, rho)
 
-     # Create a 2D histogram of rho and pt, weighted by the event weights
-     C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
+    # Create a 2D histogram of rho and pt, weighted by the event weights
+    C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
 
-     # Initialize a 2D map for the variable
-     w, h = 50, 50
-     VAR_map = [[0 for x in range(w)] for y in range(h)]
+    # Initialize a 2D map for the variable
+    w, h = 50, 50
+    VAR_map = [[0 for x in range(w)] for y in range(h)]
 
-     # Get the variable for the data that passed the cuts
-     VAR = var[cuts]
+    # Get the variable for the data that passed the cuts
+    VAR = var[cuts]
 
-     # Loop over the bins in rho and pt
-     for i in range(len(RHO_edges)-1):
-         for j in range(len(PT_edges)-1):
-             # Apply cuts to select data in the current rho and pt bin
-             CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
+    # Loop over the bins in rho and pt
+    for i in range(len(RHO_edges)-1):
+        for j in range(len(PT_edges)-1):
+            # Apply cuts to select data in the current rho and pt bin
+            CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
 
-             # If there is no data in this bin, skip it
-             if len(VAR[CUT])==0: continue
+            # If there is no data in this bin, skip it
+            if len(VAR[CUT])==0: continue
 
-             # If there is data in this bin, calculate the percentile of the variable
-             if len(VAR[CUT])>0:
-                 VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
+            # If there is data in this bin, calculate the percentile of the variable
+            if len(VAR[CUT])>0:
+                VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
 
-     # Smooth the variable map using a Gaussian filter
-     VAR_map_smooth = gaussian_filter(VAR_map,1)
+    # Smooth the variable map using a Gaussian filter
+    VAR_map_smooth = gaussian_filter(VAR_map,1)
 
-     # Return the smoothed variable map, along with the rho and pt edges
-     return VAR_map_smooth, RHO_edges, PT_edges
+    # Return the smoothed variable map, along with the rho and pt edges
+    return VAR_map_smooth, RHO_edges, PT_edges
+
+# Class that converts numpy arrays into list so they can be easily stored in json files
+class NumpyArrayEncoder(json.JSONEncoder):
+    """Custom encoder for numpy data types."""
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumpyArrayEncoder, self).default(obj)
 
 def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
     '''
@@ -919,6 +928,9 @@ def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
 
     # Loop over the values in cut_vals and percents
     for cut_val, percent in zip(cut_vals, percents):
+
+        print("Creating DDT 2D map for a cut value of ", cut_val, " and an efficiency (percent) of ", percent)
+
         # Generate a smoothed variable map, along with the rho and pt edges
         var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent)
 
@@ -927,8 +939,9 @@ def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
 
     # Save the dictionary to an npz file
     if ddt_name is None:
-        ddt_name = 'ddt_' + str(var) + '_' + datetime.now().strftime('%Y%m%d') + '.npz'
-    np.savez(ddt_name, **var_dict)
+        ddt_name = 'ddt_' + str(var) + '_' + datetime.now().strftime('%Y%m%d') + '.json'
+    with open(ddt_name, 'w') as f:
+        json.dump(var_dict, f, cls=NumpyArrayEncoder)
 
 def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     '''
@@ -946,8 +959,8 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
         raise FileNotFoundError(f"The file {ddt_name} does not exist.")
 
     # Load the dictionary from the npz file
-    var_dict = np.load(ddt_name, allow_pickle=True)
-    var_dict = {key: var_dict[key].item() for key in var_dict.files}
+    with open(ddt_name, 'r') as f:
+        var_dict = json.load(f)
 
     # Check if cut_val exists in the dictionary
     if str(cut_val) not in var_dict:
@@ -955,6 +968,9 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
 
     # Get the var_map_smooth, RHO_edges, and PT_edges for the given cut_val
     var_map_smooth, RHO_edges, PT_edges = var_dict[str(cut_val)]
+    var_map_smooth = np.array(var_map_smooth)
+    RHO_edges = np.array(RHO_edges)
+    PT_edges = np.array(PT_edges)
 
     # Apply the rho-ddt window cuts to the data
     cuts = rhoddt_windowcuts(mt, pt, rho)
