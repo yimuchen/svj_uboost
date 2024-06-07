@@ -60,11 +60,11 @@ bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57 0.6
 #bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
 # Choose what you want to plot
-plot_2D_DDT_map = False
-plot_bkg_scores_mt = False
+plot_2D_DDT_map = True
+plot_bkg_scores_mt = True
 plot_fom_significance = True
-plot_sig_mt_single_BDT = False
-plot_one_sig_mt_many_bdt = False
+plot_sig_mt_single_BDT = True
+plot_one_sig_mt_many_bdt = True
 
 #------------------------------------------------------------------------------
 # User defined functions ------------------------------------------------------
@@ -369,14 +369,22 @@ def main():
         plt.savefig(outfile+".png", bbox_inches='tight')
         plt.close()
 
-        # plot the best bdt cuts
+        # sort the best bdt cuts
         best_bdt_cuts = np.array(best_bdt_cuts)
         sort_indices = np.argsort(best_bdt_cuts[:,0]) #sort array to ascend by mz
         best_bdt_cuts = best_bdt_cuts[sort_indices]
+
+        # Find optimal cut
+        mask = (best_bdt_cuts[:,0] >= 200) & (best_bdt_cuts[:,0] <= 400)
+        selected_values = best_bdt_cuts[mask, 1]
+        average = np.mean(selected_values)
+
+        # plot the best bdt cuts
         fig = plt.figure(figsize=(10, 7))
         hep.cms.label(rlabel="2018 (13 TeV)")
         ax = fig.gca()
         ax.plot(best_bdt_cuts[:,0], best_bdt_cuts[:,1], marker='o')
+        ax.text(0.05, 0.95, f'Average: {Optimal Cut:.2f}', transform=ax.transAxes, verticalalignment='top')
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('Best BDT Cut Value')
         ax.set_xlabel("m(Z')")
