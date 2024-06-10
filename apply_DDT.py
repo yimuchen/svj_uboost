@@ -55,8 +55,8 @@ sig_bdt_cut = 0.9
 
 # Choose the BDT cut values that you want to make for the DDT
 # or that are in the DDT you are loading
-bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
-#bdt_cuts = [0.5, 0.7]
+#bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
+bdt_cuts = [0.5, 0.7]
 #bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
 # Choose what you want to plot
@@ -71,8 +71,54 @@ plot_one_sig_mt_many_bdt = True
 #------------------------------------------------------------------------------
 
 def FOM(s, b):
+    '''
+    The significance for signal vs. background derived from the CLs method
+    '''
     FOM = np.sqrt(2*((s+b)*np.log(1+s/b)-s))
     return FOM
+
+def bdt_ddt_inputs(col, lumi, all_features):
+
+    # Storing column features
+    X = []
+    weight = []
+    
+    # Test if more than one column
+    if isinstance(col,list):
+        for icol in col:  
+            # Grab the input features and weights
+            X.append(icol.to_numpy(all_features))
+            weight.append(icol.xs / icol.cutflow['raw'] * lumi * icol.arrays['puweight'])
+        X = np.concatenate(X)
+        weight = np.concatenate(weight)
+
+    # If only one column
+    else: 
+        X = col.to_numpy(all_features)
+        weight = col.xs / col.cutflow['raw'] * lumi * col.arrays['puweight']
+  
+    # Apply the signal region
+    rt = X[:,-1]
+    X = X[rt > 1.18]
+    weight = weight[rt > 1.18]
+ 
+    # grab rt (after cut)
+    rt = rt[rt>1.18]
+    X = X[:,:-1]
+  
+    # grab rho
+    rho = X[:,-1]
+    X = X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
+  
+    # grab mT
+    mT = X[:,-1]
+    X = X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
+  
+    # grab pT
+    pT = X[:,-1]
+    X = X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
+
+    return X, pT, mT, rho, weight
 
 
 #------------------------------------------------------------------------------
@@ -87,36 +133,7 @@ def main():
 
     # Grab the bkg data
     bkg_cols = [Columns.load(f) for f in glob.glob(bkg_data_files)]
-
-    # Grab all the features from the files necessary for making the ddt
-    bkg = []
-    bkg_weight = []
-    for col in bkg_cols:  
-        # Grab the input features and weights
-        bkg.append(col.to_numpy(all_features))
-        bkg_weight.append(col.xs / col.cutflow['raw'] * lumi * col.arrays['puweight'])
-    bkg = np.concatenate(bkg)
-    X = bkg
-    bkg_weight = np.concatenate(bkg_weight)
-
-    # grab rt and apply signal region cuts
-    rt = X[:,-1]
-    X = X[:,:-1]
-    X = X[rt > 1.18]
-    bkg_weight = bkg_weight[rt > 1.18]
-    rt = rt[rt > 1.18]
-
-    # grab rho
-    rho = X[:,-1]
-    X = X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-
-    # grab mT
-    mT = X[:,-1]
-    X = X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-
-    # grab pT
-    pT = X[:,-1]
-    X = X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
+    X, pT, mT, rho, bkg_weight = bdt_ddt_inputs(bkg_cols, lumi, all_features)
 
     # _____________________________________________
     # Open the trained models and get the scores
@@ -267,31 +284,9 @@ def main():
             s = f'bsvj_{mz:d}_10_0.3'
          
             # Grab the input features and weights
-            sig_X = sig_col.to_numpy(all_features)
-            sig_weight = sig_col.xs / sig_col.cutflow['raw'] * lumi * sig_col.arrays['puweight']
-      
-            # Apply the signal region
-            sig_rt = sig_X[:,-1]
-            sig_X = sig_X[sig_rt > 1.18]
-            sig_weight = sig_weight[sig_rt > 1.18]
+            sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs(sig_col, lumi, all_features)
             print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
   
-            # grab rt (after cut)
-            sig_rt = sig_rt[sig_rt>1.18]
-            sig_X = sig_X[:,:-1]
-      
-            # grab rho
-            sig_rho = sig_X[:,-1]
-            sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-      
-            # grab mT
-            sig_mT = sig_X[:,-1]
-            sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-      
-            # grab pT
-            sig_pT = sig_X[:,-1]
-            sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
- 
             # _____________________________________________
             # Open the trained models and get the scores
       
@@ -412,31 +407,9 @@ def main():
             mz = sig_col.metadata['mz']
          
             # Signal Column 
-            sig_X = sig_col.to_numpy(all_features)
-            sig_weight = sig_col.xs / sig_col.cutflow['raw'] * lumi * sig_col.arrays['puweight']
-  
-            # Apply the signal region
-            sig_rt = sig_X[:,-1]
-            sig_X = sig_X[sig_rt > 1.18]
-            sig_weight = sig_weight[sig_rt > 1.18]
+            sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs(sig_col, lumi, all_features)
             print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
- 
-            # grab rt (after cut)
-            sig_rt = sig_rt[sig_rt>1.18]
-            sig_X = sig_X[:,:-1]
-  
-            # grab rho
-            sig_rho = sig_X[:,-1]
-            sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-  
-            # grab mT
-            sig_mT = sig_X[:,-1]
-            sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-  
-            # grab pT
-            sig_pT = sig_X[:,-1]
-            sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-  
+
             # _____________________________________________
             # Open the trained models and get the scores
   
@@ -494,30 +467,8 @@ def main():
         mz = sig_col.metadata['mz']
         
         # Signal Column 
-        sig_X = sig_col.to_numpy(all_features)
-        sig_weight = sig_col.xs / sig_col.cutflow['raw'] * lumi * sig_col.arrays['puweight']
-  
-        # Apply the signal region
-        sig_rt = sig_X[:,-1]
-        sig_X = sig_X[sig_rt > 1.18]
-        sig_weight = sig_weight[sig_rt > 1.18]
+        sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs(sig_col, lumi, all_features)
         print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
- 
-        # grab rt (after cut)
-        sig_rt = sig_rt[sig_rt>1.18]
-        sig_X = sig_X[:,:-1]
-  
-        # grab rho
-        sig_rho = sig_X[:,-1]
-        sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-  
-        # grab mT
-        sig_mT = sig_X[:,-1]
-        sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
-  
-        # grab pT
-        sig_pT = sig_X[:,-1]
-        sig_X = sig_X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
   
         # _____________________________________________
         # Open the trained models and get the scores
