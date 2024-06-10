@@ -937,7 +937,7 @@ def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
         # Store the results in the dictionary
         var_dict[str(cut_val)] = (var_map_smooth, RHO_edges, PT_edges)
 
-    # Save the dictionary to an npz file
+    # Save the dictionary to an json file
     if ddt_name is None:
         ddt_name = 'ddt_' + str(var) + '_' + datetime.now().strftime('%Y%m%d') + '.json'
     with open(ddt_name, 'w') as f:
