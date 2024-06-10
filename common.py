@@ -1,4 +1,4 @@
-import os, os.path as osp, logging, re, time, json, argparse, sys, math
+import os, os.path as osp, logging, re, time, json, argparse, sys, math, shutil
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -211,10 +211,8 @@ def imgcat(path) -> None:
     Only useful if you're using iTerm with imgcat on the $PATH:
     Display the image in the terminal.
     """
-    try:
+    if shutil.which('imgcat'):
         os.system('imgcat ' + path)
-    except Exception:
-        pass
 
 
 def expand_wildcards(pats):
@@ -501,6 +499,16 @@ class Histogram:
             return self.copy()
         raise NotImplemented
 
+    def __mul__(self, factor):
+        """Multiply by a constant"""
+        ans = self.copy()
+        if isinstance(factor, (int, float)):
+            ans.vals = factor*ans.vals
+            ans.errs = factor*ans.errs
+        else:
+            raise NotImplemented
+        return ans
+
     @property
     def norm(self):
         return self.vals.sum()
@@ -531,17 +539,22 @@ class Histogram:
         h.metadata = self.metadata.copy()
         return h
 
-    def cut(self, x_max):
+    def cut(self, xmin=-np.inf, xmax=np.inf):
         """
-        Throws away all bins for which the right bin boundary > x_max.
+        Throws away all bins with left boundary < xmin or right boundary > xmax.
         Mostly useful for plotting purposes.
         Returns a copy.
         """
+        # safety checks
+        if xmin>xmax:
+            raise ValueError("xmin ({}) greater than xmax ({})".format(xmin,xmax))
+
         h = self.copy()
-        i_bin = np.argmax(self.binning > x_max)
-        h.binning = h.binning[:i_bin]
-        h.vals = h.vals[:i_bin-1]
-        h.errs = h.errs[:i_bin-1]
+        imin = np.argmin(self.binning < xmin) if xmin > self.binning[0] else 0
+        imax = np.argmax(self.binning > xmax) if xmax < self.binning[-1] else self.nbins+1
+        h.binning = h.binning[imin:imax]
+        h.vals = h.vals[imin:imax-1]
+        h.errs = h.errs[imin:imax-1]
         return h
 
 
@@ -800,6 +813,6 @@ def ddt(mt, pt, rho, var, weight, percent):
 def mask_cutbased(col):
     return ((col.arrays['rt'] > 1.18) & (col.arrays['ecfm2b1'] > 0.09))
 
-class InvaledSelectionException(Exception):
+class InvalidSelectionException(Exception):
     def __init__(self, msg='selection argument should be "cutbased" or "bdt=X.XXX".', *args, **kwargs):
         super().__init__(msg, *args, **kwargs)

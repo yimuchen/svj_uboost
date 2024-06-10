@@ -36,10 +36,12 @@ def change_bin_width():
     Changes MT binning based on command line options
     """
     binw = common.pull_arg('--binw', type=float).binw
+    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
     if binw is not None:
         # Testing different bin widths
-        left = 180.
-        right = 720.
+        left = mtmin
+        right = mtmax
         common.MTHistogram.bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
         common.MTHistogram.non_standard_binning = True
         common.logger.warning(f'Changing bin width to {binw}; MT binning: {common.MTHistogram.bins}')
@@ -59,7 +61,7 @@ def skim():
     """
     Produces a skim from TreeMaker Ntuples that is ready to be histogrammed
     """
-    pbar = tqdm.tqdm(total=12)
+    pbar = tqdm.tqdm(total=8)
     svj.BRANCHES_GENONLY.extend([
         'PDFweights', 'PSweights',
         'puSysUp', 'puSysDown',
@@ -78,18 +80,29 @@ def skim():
         ])
     outdir = common.pull_arg('-o', '--outdir', type=str, default=strftime('skims_%Y%m%d')).outdir
     selection = common.pull_arg('selection', type=str).selection
+    full_selection = selection
     common.logger.info(f'Selection: {selection}')
     keep = common.pull_arg('-k', '--keep', type=float, default=None).keep
     rootfile = common.pull_arg('rootfile', type=str).rootfile
     array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
 
+    def apply_keep(array, sel, keep):
+        if sel is None:
+            return array
+        array.array = array.array[sel]
+        scale = 1./keep
+        array.array["Weight"] = array.array["Weight"]*scale
+        array.cutflow['raw'] = len(array)
+        return array
+
+    sel = None
     if keep is not None:
         common.logger.info(f'Keeping only fraction {keep} of total number of events for signal MC')
         n_before = len(array)
         sel = np.random.choice(len(array), int(keep * len(array)), replace=False)
         common.logger.info(f'Downsampling from {n_before} -> {len(sel)}')
-        array.array = array.array[sel]
-        outdir += f'_keep{keep:.2f}'
+        array = apply_keep(array, sel, keep)
+        full_selection += f'_keep{keep:.2f}'
 
     common.logger.info(f'Will save skims in outdir {outdir}')
     common.logger.info(f'Found {len(array)} events in {rootfile}')
@@ -112,11 +125,11 @@ def skim():
 
     # Scale uncertainty
     # Compute normalizations before applying cuts
-    scale_weigth = array.array['ScaleWeights'].to_numpy()
-    scale_weigth = scale_weigth[:,np.array([0,1,2,3,4,6,8])] # Throw away the mur/muf .5/2 and 2/.5 variations
-    scale_norm_central = scale_weigth[:,0].sum()
-    scale_norm_up = np.max(scale_weigth, axis=-1).sum()
-    scale_norm_down = np.min(scale_weigth, axis=-1).sum()
+    scale_weight = array.array['ScaleWeights'].to_numpy()
+    scale_weight = scale_weight[:,np.array([0,1,2,3,4,6,8])] # Throw away the mur/muf .5/2 and 2/.5 variations
+    scale_norm_central = scale_weight[:,0].sum()
+    scale_norm_up = np.max(scale_weight, axis=-1).sum()
+    scale_norm_down = np.min(scale_weight, axis=-1).sum()
     scale_factor_up = scale_norm_central / scale_norm_up
     scale_factor_down = scale_norm_central / scale_norm_down
     svj.logger.info(
@@ -132,13 +145,13 @@ def skim():
     # Apply preselection and save needed vars
 
     common.logger.info('Running preselection now')
-    array = svj.filter_preselection(array)
+    central = svj.filter_preselection(array)
     # Adjust the load_mc value as needed... don't understand if the skims are alway on mc for example
-    cols = svj.bdt_feature_columns(array, load_mc=True)
-    bdt_cols = svj.bdt_feature_columns(array, load_mc=True)
+    cols = svj.bdt_feature_columns(central, load_mc=True)
+    bdt_cols = svj.bdt_feature_columns(central, load_mc=True)
 
     # Save scale weights
-    cols.arrays['scaleweights'] = array.array['ScaleWeights'].to_numpy()
+    cols.arrays['scaleweights'] = central.array['ScaleWeights'].to_numpy()
     cols.metadata['scale_norm_central'] = scale_norm_central
     cols.metadata['scale_norm_up'] = scale_norm_up
     cols.metadata['scale_norm_down'] = scale_norm_down
@@ -148,19 +161,19 @@ def skim():
     # Save PDF normalization and weights
     cols.metadata['pdfw_norm_up'] = pdfw_norm_up
     cols.metadata['pdfw_norm_down'] = pdfw_norm_down
-    cols.arrays['pdf_weights'] = array.array['PDFweights'].to_numpy()
+    cols.arrays['pdf_weights'] = central.array['PDFweights'].to_numpy()
 
     # Save PS weights
-    ps_weights = array.array['PSweights'].to_numpy()
+    ps_weights = central.array['PSweights'].to_numpy()
     cols.arrays['ps_isr_up'] = ps_weights[:,6]
     cols.arrays['ps_isr_down'] = ps_weights[:,8]
     cols.arrays['ps_fsr_up'] = ps_weights[:,7]
     cols.arrays['ps_fsr_down'] = ps_weights[:,9]
 
     # Save PU weights
-    cols.arrays['pu_central'] = array.array['puWeight'].to_numpy()
-    cols.arrays['pu_sys_up'] = array.array['puSysUp'].to_numpy()
-    cols.arrays['pu_sys_down'] = array.array['puSysDown'].to_numpy()
+    cols.arrays['pu_central'] = central.array['puWeight'].to_numpy()
+    cols.arrays['pu_sys_up'] = central.array['puSysUp'].to_numpy()
+    cols.arrays['pu_sys_down'] = central.array['puSysDown'].to_numpy()
 
     def apply_selection(cols):
         # Apply further selection now
@@ -217,20 +230,17 @@ def skim():
             cols.cutflow['ddt(bdt)'] = len(cols)
 
         else:
-            raise common.InvaledSelectionException()
+            raise common.InvalidSelectionException()
         return cols
 
     cols = apply_selection(cols)
     cols.metadata['selection'] = selection
     cols.metadata['basename'] = basename(array.metadata)
-    cols.save(f'{outdir}/{basename(array.metadata)}_{selection}_central.npz')    
+    cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_central.npz')
     pbar.update()
 
     # ______________________________
     # JEC/JER
-
-    # Reload to undo preselection
-    array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
 
     for var_name, appl in [
         ('jer_up',   svj.apply_jer_up),
@@ -242,7 +252,7 @@ def skim():
         variation = svj.filter_preselection(variation)
         cols = svj.bdt_feature_columns(variation, load_mc=True)
         cols = apply_selection(cols)
-        cols.save(f'{outdir}/{basename(array.metadata)}_{selection}_{var_name}.npz')
+        cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_{var_name}.npz')
         pbar.update()
 
     # ______________________________
@@ -251,23 +261,21 @@ def skim():
     from jes import apply_jes
 
     for var in ['up', 'down']:
-        for match_type in ['both', 'full', 'partial']:
+        for match_type in ['both']: # other options are: 'full', 'partial'
             common.logger.info(f'{var=}, {match_type=}')
-            arrays = svj.open_root(rootfile)
-            common.logger.info(f'Loaded, applying jes')
-            apply_jes(arrays, var, match_type)
+            variation = apply_jes(array, var, match_type)
             common.logger.info(f'Done, applying presel')
-            arrays = svj.filter_preselection(arrays)
+            variation = svj.filter_preselection(variation)
             common.logger.info(f'Done, to columns')
-            cols = svj.bdt_feature_columns(arrays, load_mc=True)
-            cols.arrays['x_jes_1'] = arrays.array['x_jes_15'][:,0].to_numpy()
-            cols.arrays['x_jes_2'] = arrays.array['x_jes_15'][:,1].to_numpy()
-            cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(arrays.array['x_jes_15'][:,2:]), -100.).to_numpy()
-            cols.arrays['MET_precorr'] = arrays.array['MET_precorr'].to_numpy()
-            cols.arrays['METPhi_precorr'] = arrays.array['METPhi_precorr'].to_numpy()
+            cols = svj.bdt_feature_columns(variation, load_mc=True)
+            cols.arrays['x_jes_1'] = variation.array['x_jes_15'][:,0].to_numpy()
+            cols.arrays['x_jes_2'] = variation.array['x_jes_15'][:,1].to_numpy()
+            cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(variation.array['x_jes_15'][:,2:]), -100.).to_numpy()
+            cols.arrays['MET_precorr'] = variation.array['MET_precorr'].to_numpy()
+            cols.arrays['METPhi_precorr'] = variation.array['METPhi_precorr'].to_numpy()
             cols = apply_selection(cols)
             common.logger.info(f'Saving')
-            cols.save(f'{outdir}/{basename(arrays.metadata)}_{selection}_jes{var}_{match_type}.npz')
+            cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_jes{var}_{match_type}.npz')
             pbar.update()
 
     pbar.close()
@@ -296,6 +304,7 @@ def build_sig_histograms(args=None):
     mt = central.to_numpy(['mt']).ravel()
     w = central.to_numpy(['puweight']).ravel()
     w *= lumi * central.xs / central.cutflow['raw']
+    common.logger.info(f'Event weight: {lumi}*{central.xs}/{central.cutflow["raw"]} = {lumi*central.xs/central.cutflow["raw"]}')
 
     # Scale
     scale_weight = central.to_numpy(['scaleweights'])[:, np.array([0,1,2,3,4,6,8])]
@@ -500,28 +509,79 @@ def build_histograms():
     skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
 
     # Divide passed skim_files into signal or background
+    sig_outfile = None
+    bkg_outfile = None
     sig_skim_files = []
     bkg_skim_files = []
     for skim_file in skim_files:
-        for bkg_type in ['QCD', 'TTJets', 'WJets', 'ZJets']:
-            if bkg_type in skim_file:
-                bkg_skim_files.append(skim_file)
-                break
+        if skim_file.endswith('.json'):
+            if "bkghist" in skim_file:
+                bkg_outfile = skim_file
+            else:
+                sig_outfile = skim_file
         else:
-            sig_skim_files.append(skim_file)
+            for bkg_type in ['QCD', 'TTJets', 'WJets', 'ZJets']:
+                if bkg_type in skim_file:
+                    bkg_skim_files.append(skim_file)
+                    break
+            else:
+                sig_skim_files.append(skim_file)
 
-    common.logger.info(
-        'Using the following skim files for signal:\n'
-        + "\n".join(sig_skim_files)
+    if sig_outfile is None:
+        common.logger.info(
+            'Using the following skim files for signal:\n'
+            + "\n".join(sig_skim_files)
         )
-    common.logger.info(
-        'Using the following skim files for background:\n'
-        + "\n".join(bkg_skim_files)
+    else:
+        common.logger.info('Reusing {} for signal'.format(sig_outfile))
+    if bkg_outfile is None:
+        common.logger.info(
+            'Using the following skim files for background:\n'
+            + "\n".join(bkg_skim_files)
         )
+    else:
+        common.logger.info('Reusing {} for background'.format(bkg_outfile))
 
-    sig_outfile = build_sig_histograms((selection, lumi, sig_skim_files))
-    bkg_outfile = build_bkg_histograms((selection, lumi, bkg_skim_files))
-    merged_outfile = sig_outfile.replace('.json', '_with_bkg.json')
+    def check_rebin(hist,name):
+        msg = []
+        if hist.binning[0]>common.MTHistogram.bins[0]:
+            msg.append(f'left {hist.binning[0]}>{common.MTHistogram.bins[0]}')
+        if hist.binning[-1]<common.MTHistogram.bins[-1]:
+            msg.append(f'right {hist.binning[-1]}>{common.MTHistogram.bins[-1]}')
+        orig_width = int(hist.binning[1] - hist.binning[0])
+        new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
+        rebin_factor = int(new_width/orig_width)
+        rebin_mod = orig_width % new_width
+        if rebin_mod!=0:
+            msg.append(f'rebin {orig_width} % {new_width} = {rebin_mod}')
+        if len(msg)>0:
+            msg = ', '.join(msg)
+            common.logger.warning(f'Hist {name} inconsistent with requested binning ({msg})')
+        return hist.rebin(rebin_factor).cut(common.MTHistogram.bins[0],common.MTHistogram.bins[-1])
+
+    def rebin_outfile(outfile):
+        with open(outfile,'r') as f:
+            mths = json.load(f, cls=common.Decoder)
+        for key in mths:
+            if isinstance(mths[key],list):
+                for i,entry in enumerate(mths[key]):
+                    mths[key][i] = check_rebin(entry,f'{key}[{i}]')
+            else:
+                mths[key] = check_rebin(mths[key],key)
+        outfile2 = outfile.replace(".json","_tmp.json")
+        with open(outfile2,'w') as f:
+            json.dump(mths, f, cls=common.Encoder, indent=4)
+        return outfile2
+
+    if sig_outfile is None:
+        sig_outfile = build_sig_histograms((selection, lumi, sig_skim_files))
+    else:
+        sig_outfile = rebin_outfile(sig_outfile)
+    if bkg_outfile is None:
+        bkg_outfile = build_bkg_histograms((selection, lumi, bkg_skim_files))
+    else:
+        bkg_outfile = rebin_outfile(bkg_outfile)
+    merged_outfile = sig_outfile.replace('_tmp.json','.json').replace('.json', '_with_bkg.json')
 
     if common.MTHistogram.non_standard_binning:
         binw = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
@@ -536,6 +596,13 @@ def build_histograms():
 
 # __________________________________________
 # Plotting
+
+def reorderLegend(ax,order,title):
+    handles, labels = ax.get_legend_handles_labels()
+    lhzip = list(zip(labels,handles))
+    mapping = [labels.index(o) for o in order]
+    labels, handles = zip(*[lhzip[i] for i in mapping])
+    ax.legend(handles, labels, title=title)
 
 class Plot:
     def __init__(self, selection):
@@ -557,7 +624,7 @@ class Plot:
         self.bot.set_xlim(*args, **kwargs)
         self.top.set_xlim(*args, **kwargs)
 
-    def save(self, outfile='tmp.png', pdf=True):
+    def save(self, outfile='tmp.png', pdf=True, legend_order=None):
         self.top.text(
             0.02, 0.02,
             'Cut-based' if self.selection=='cutbased' else 'BDT',
@@ -567,72 +634,84 @@ class Plot:
             usetex=True,
             fontsize=25
             )
-        self.top.legend(title=self.legend_title)
+        if legend_order is None:
+            self.top.legend(title=self.legend_title)
+        else:
+            reorderLegend(self.top,legend_order,title=self.legend_title)
         outdir = osp.dirname(osp.abspath(outfile))
         os.makedirs(outdir, exist_ok=True)
         plt.savefig(outfile, bbox_inches="tight")
         plt.savefig(outfile.replace('.png', '.pdf'), bbox_inches="tight")
         common.imgcat(outfile)
 
+def get_systs(names=False):
+    syst_names = {
+        'scale': "Scales",
+        'jer': "JER",
+        'jec': "JEC",
+        'jes': "JES",
+        'isr': "ISR (parton shower)",
+        'fsr': "FSR (parton shower)",
+        'pu': "Pileup reweighting",
+        'pdf': "PDF",
+        'stat': "MC statistical",
+    }
+    if names: return syst_names
+    else: return list(syst_names.keys())
 
 @scripter
 def plot_systematics():
+    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
+    rebin = common.pull_arg('--rebin', type=int, default=1).rebin
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
-        mths = json.load(f, cls=common.Decoder)    
-
-    rebin_factor = 1
-    x_max = 650.
+        mths = json.load(f, cls=common.Decoder)
 
     n = mths['central'].vals.sum()
     common.logger.info(f'central integral: {n}')
     common.logger.info(f'central metadata:\n{mths["central"].metadata}')
 
-    central = mths['central'].rebin(rebin_factor).cut(x_max)
+    central = mths['central'].rebin(rebin).cut(mtmin,mtmax)
     meta = central.metadata
 
     model_str = osp.basename(json_file).replace(".json","")
     outdir = f'plots_{strftime("%Y%m%d")}_{model_str}'
     os.makedirs(outdir, exist_ok=True)
 
-    for syst in ['scale', 'jer', 'jec', 'jes', 'isr', 'fsr', 'pu', 'pdf']:
+    systs = get_systs()
+    if 'stat_up' not in mths.keys():
+        stat_up = mths['central'].copy()
+        stat_down = mths['central'].copy()
+        i = 0
+        while f'mcstat{i}_up' in mths.keys():
+            stat_up.vals[i] = mths[f'mcstat{i}_up'].vals[i]
+            stat_down.vals[i] = mths[f'mcstat{i}_down'].vals[i]
+            i += 1
+
+        mths['stat_up'] = stat_up
+        mths['stat_down'] = stat_down
+
+    for syst in systs:
         plot = Plot(meta['selection'])
         plot.plot_hist(central, label='Central')
-        plot.plot_hist(mths[f'{syst}_up'].rebin(rebin_factor).cut(x_max), central, f'{syst} up')
-        plot.plot_hist(mths[f'{syst}_down'].rebin(rebin_factor).cut(x_max), central, f'{syst} down')
+        plot.plot_hist(mths[f'{syst}_up'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} up')
+        plot.plot_hist(mths[f'{syst}_down'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} down')
         plot.save(f'{outdir}/{syst}.png')
-
-    stat_up = mths['central'].copy()
-    stat_down = mths['central'].copy()
-    i = 0
-    while f'mcstat{i}_up' in mths.keys():
-        stat_up.vals[i] = mths[f'mcstat{i}_up'].vals[i]
-        stat_down.vals[i] = mths[f'mcstat{i}_down'].vals[i]
-        i += 1
-
-    stat_up = stat_up.rebin(rebin_factor).cut(x_max)
-    stat_down = stat_down.rebin(rebin_factor).cut(x_max)
-
-    plot = Plot(meta['selection'])
-    plot.plot_hist(central, label='Central')
-    plot.plot_hist(stat_up, central, 'mcstat up')
-    plot.plot_hist(stat_down, central, 'mcstat down')
-    plot.save(f'{outdir}/mcstat.png')
-
 
 @scripter
 def plot_bkg():
+    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
+    rebin = common.pull_arg('--rebin', type=int, default=1).rebin
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
-        mths = json.load(f, cls=common.Decoder)    
+        mths = json.load(f, cls=common.Decoder)
 
     sig_json_file = common.pull_arg('sigjsonfile', type=str, nargs='*').sigjsonfile
     do_signal = len(sig_json_file) > 0
 
-    rebin_factor = 1
-    x_max = 750.
-
-    h = mths['bkg'].rebin(rebin_factor).cut(750.)
+    h = mths['bkg'].rebin(rebin).cut(mtmin,mtmax)
     binning = h.binning
     nbins = h.nbins
     zero = np.zeros(nbins)
@@ -641,12 +720,12 @@ def plot_bkg():
         # for bkg in ['zjets', 'wjets', 'ttjets', 'qcd']:
         for bkg in ['qcd', 'ttjets', 'wjets', 'zjets']:
             ax.fill_between(h.binning[:-1], zero, h.vals, step='post', label=bkg)
-            h.vals -= mths[bkg].rebin(rebin_factor).cut(750.).vals
+            h.vals -= mths[bkg].rebin(rebin).cut(mtmin,mtmax).vals
 
-        if do_signal:    
+        if do_signal:
             with open(sig_json_file[0]) as f:
                 sig = json.load(f, cls=common.Decoder)['central']
-                sig = sig.rebin(rebin_factor).cut(750.)
+                sig = sig.rebin(rebin).cut(mtmin,mtmax)
                 ax.step(
                     sig.binning[:-1], sig.vals, '--k',
                     where='post', label=sig.metadata['basename']
@@ -667,6 +746,232 @@ def plot_bkg():
             fontsize=25
             )
 
+def get_xye(hist):
+    x = hist.binning
+    x = (x[:-1]+x[1:])/2 # bin centers
+    y = hist.vals
+    errs = hist.errs
+    return x,y,errs
+
+def do_loess(hist,span,do_gcv=False):
+    from uloess import loess
+    x, y, errs = get_xye(hist)
+    # safety check for empty bins w/ empty errs
+    for i,yy in enumerate(y):
+        if yy==0:
+            errs[i] = 1
+    # 1sigma interval
+    pred, conf_int, gcv = loess(x, y, errs, deg=2, alpha=0.683, span=span)
+    if do_gcv:
+        return gcv
+    else:
+        return pred, conf_int
+
+@scripter
+def smooth_shapes():
+    span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
+    do_opt = common.pull_arg('--optimize', type=int, default=0, help="optimize span value using n values").optimize
+    target = common.pull_arg('--target', type=str, default='central', help="optimize only based on target hist").target
+    debug = common.pull_arg('--debug', default=False, action="store_true", help="debug optimization").debug
+    var = common.pull_arg('--variation', type=str, default=None, help="MT variation to debug").variation
+    save = common.pull_arg('--save', default=False, action="store_true", help="save debug variation output").save
+    mtmin = common.pull_arg('--mtmin', type=float, default=None).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=None).mtmax
+    norm = not common.pull_arg('--unnorm', default=False, action="store_true", help="fit unnormalized shape").unnorm
+    json_file = common.pull_arg('jsonfile', type=str).jsonfile
+    with open(json_file) as f:
+        mths = json.load(f, cls=common.Decoder)
+    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
+
+    # loop over central and systematics
+    variations = get_systs()
+    variations.remove('stat')
+    variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
+    variations = ['central']+variations
+
+    # find optimization target
+    if len(target)>0:
+        if target not in variations:
+            raise ValueError("Unknown target {} (known: {})".format(target, ', '.join(variations)))
+        # put target first
+        variations = [target]+[v for v in variations if v!=target]
+
+    cut_args = {}
+    if mtmin is not None: cut_args["xmin"] = mtmin
+    if mtmax is not None: cut_args["xmax"] = mtmax
+    mths_new = {}
+    save_all = True
+    if var is not None:
+        target = var
+        variations = [var]
+        save_all = False
+    for var in variations:
+        hist = mths[var]
+        hyield = hist.vals.sum()
+        common.logger.info(f'{var} integral: {hyield}')
+
+        meta = hist.metadata
+
+        # normalize shape to unit area, then scale prediction by original yield
+        if norm: hist = hist*(1./hyield)
+
+        if do_opt>0 and (var==target or len(target)==0):
+            span_min = 0.1 # if span is too small, no points are included
+            spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
+            gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
+            span_val = spans[np.argmin(gcvs)]
+            if debug: print('\n'.join(['{} {}'.format(span,gcv) for span,gcv in zip(spans,gcvs)]))
+            print("Optimal span ({}): {}".format(var,span_val))
+
+        pred, conf = do_loess(hist,span=span_val)
+
+        hsmooth = hist.copy()
+        hsmooth.vals = pred
+        hsmooth.errs = conf[1] - pred
+
+        # cuts applied *after* interpolation
+        if norm:
+            hsmooth = hsmooth*hyield
+            hsmooth = hsmooth.cut(**cut_args)
+        mths_new[var] = hsmooth
+        if var=='central':
+            inames = ['down','up']
+            # computed after normalization to original yield (above)
+            ivals = [hsmooth.vals-hsmooth.errs, hsmooth.vals+hsmooth.errs]
+            for iname,ival in zip(inames,ivals):
+                hstat = hsmooth.copy()
+                # avoid errors going negative
+                hstat.vals = np.clip(ival,0,None)
+                hstat.errs = np.zeros_like(hstat.vals)
+                mths_new[f'stat_{iname}'] = hstat
+
+    if save_all:
+        # copy any other contents from original input
+        # omitting mcstat uncertainties, which are replaced by overall confidence interval
+        # and applying cuts
+        for key in mths.keys():
+            if key not in mths_new.keys() and 'mcstat' not in key:
+                if isinstance(mths[key],list):
+                    mths_new[key] = []
+                    for entry in mths[key]:
+                        mths_new[key].append(entry.cut(**cut_args))
+                else:
+                    mths_new[key] = mths[key].cut(**cut_args)
+        outfile = osp.basename(json_file).replace(".json","_smooth.json")
+    elif save:
+        outfile = osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
+    if save_all or save:
+        with open(outfile, 'w') as f:
+            json.dump(mths_new, f, indent=4, cls=common.Encoder)
+
+@scripter
+def plot_smooth():
+    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
+    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
+    var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot (or 'all')").variation
+    names = common.pull_arg('--names', type=str, nargs='*', default=[], help="legend names for files").names
+    json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
+
+    if len(names)==0:
+        names = ["sample {}".format(i+1) for i in range(len(json_files))]
+    elif len(names)>0 and len(names)!=len(json_files):
+        raise ValueError("Mismatch between length of names ({}) and length of files ({})".format(len(names),len(files)))
+
+    vars = [var]
+    if var=='all':
+        vars = get_systs()
+        vars = [var+'_up' for var in vars]+[var+'_down' for var in vars]
+        vars = ['central']+vars
+
+    mths = []
+    for json_file in json_files:
+        with open(json_file) as f:
+            mths.append(json.load(f, cls=common.Decoder))
+            omit = [var for var in vars if var not in mths[-1].keys()]
+            vars = [var for var in vars if var in mths[-1].keys()]
+            if len(omit)>0: print("Omitting keys missing in {}: {}".format(json_file,', '.join(omit)))
+
+    model_str = osp.basename(json_file).replace(".json","")
+    outdir = f'plot_smooth_{strftime("%Y%m%d")}_{model_str}'
+    os.makedirs(outdir, exist_ok=True)
+
+    for var in vars:
+        plot = Plot("")
+        meta = mths[0]['central'].metadata
+        plot.selection = meta['selection']
+        legend_order = []
+        h_denom = None
+
+        for i,(mth,name) in enumerate(zip(mths,names)):
+            hist = mth[var].cut(mtmin,mtmax)
+
+            x, y, e = get_xye(hist)
+            if 'smooth' in name:
+                ys_up = y+e
+                ys_dn = y-e
+                e = None
+            legend_order.append(name)
+            line = plot.top.errorbar(x,y,yerr=e,label=legend_order[-1])
+            line = line[0]
+
+            if 'smooth' in name:
+                plot.top.fill_between(x,ys_dn,ys_up,alpha=0.33,color=line.get_color())
+
+            if h_denom is None:
+                h_denom = y
+                plot.bot.set_ylabel('Ratio to {}'.format(name))
+            else:
+                plot.bot.plot(x,y/h_denom,color=line.get_color())
+
+        plot.save(f'{outdir}/{var}.png',legend_order=legend_order)
+
+def get_yield(hist):
+    return hist.vals.sum()
+
+def pct_diff(central,syst):
+    return abs(1-syst/central)*100
+
+@scripter
+def systematics_table():
+    json_file = common.pull_arg('jsonfile', type=str).jsonfile
+    with open(json_file) as f:
+        mths = json.load(f, cls=common.Decoder)
+    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
+
+    # needs to be kept in sync w/ boostedsvj/svj_limits/boosted_fits.py:gen_datacard()
+    flat_systs = {
+        'lumi': 1.6,
+        'trigger_cr': 2.0,
+        'trigger_sim': 2.1,
+    }
+
+    central = mths["central"]
+    central_yield = get_yield(central)
+    systs = get_systs(names=True)
+    systs.update({
+        'lumi': "Luminosity",
+        'trigger_cr': "Trigger (CR)",
+        'trigger_sim': "Trigger (MC)",
+    })
+    syst_yield_effects = {}
+    total = 0
+    for syst in sorted(systs.keys()):
+        if f'{syst}_up' in mths:
+            syst_up_yield = get_yield(mths[f'{syst}_up'])
+            syst_dn_yield = get_yield(mths[f'{syst}_down'])
+            syst_yield_effects[syst] = max(pct_diff(central_yield,syst_up_yield),pct_diff(central_yield,syst_dn_yield))
+        elif syst in flat_systs:
+            syst_yield_effects[syst] = flat_systs[syst]
+        else:
+            common.logger.warning(f'could not find systematic: {syst}')
+            continue
+        total += syst_yield_effects[syst]**2
+    total = np.sqrt(total)
+
+    for syst,effect in syst_yield_effects.items():
+        print("{} & {:.2f} \\\\".format(systs[syst],effect))
+    print(r"\hline")
+    print("total & {:.2f} \\\\".format(total))
 
 @scripter
 def merge(args=None):
@@ -708,7 +1013,7 @@ def ls():
     elif infile.endswith('.root'):
         array = svj.open_root(infile, load_gen=True, load_jerjec=True)
         print(f'Found {len(array)} in {infile}')
-        print(f'Metdata:\n{array.metadata}')
+        print(f'Metadata:\n{array.metadata}')
     else:
         print(f'Unknown file format: {infile}')
 

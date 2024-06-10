@@ -16,11 +16,20 @@ pip install pandas
 pip install requests
 pip install numpy
 pip install matplotlib
+pip install tqdm
+pip install numba
 
-pip install svj_ntuple_processing
+pip install git+ssh://git@github.com/boostedsvj/svj_ntuple_processing
 pip install hep_ml
+
+git clone git@github.com:boostedsvj/svj_uboost
 ```
 
+Alternatively, an editable `svj_ntuple_processing` can be installed for simultaneous developments:
+```
+git clone git@github.com:boostedsvj/svj_ntuple_processing
+pip install -e svj_ntuple_processing/
+```
 
 ## How to run a training
 
@@ -152,7 +161,7 @@ python study_scaleunc.py plot data/scaleunc/madpt300_mz350_mdark10_rinv0.3_scale
 
 ## Building Data Cards
 
-One of the key files in this repo is the `build_datacard.py` this is the magic file that makes everything come together. Here, datacards that can be fed into combine are built. The first step is to produce npz 'skims' of the signal files while applying the selection (either cutbased or bdt-based). This is done for individual signal samples to calculate all the necessary signal systematics.
+One of the key files in this repo is the `build_datacard.py` this is the magic file that makes everything come together. Here, datacards that can be fed into combine are built. The first step is to produce npz 'skims' of the signal files while applying the selection (either cutbased or bdt-based). This is done for individual signal samples to calculate all the necessary signal systematics. (The argument `--keep X` can be included to select a random subset of signal events for statistical studies, where `X` is a float between 0 and 1.)
 
 ```bash
 # For BDT based choose a bdt working point (the DDT is applied while running)
@@ -161,13 +170,29 @@ python build_datacard.py skim bdt=0.5 /path/to/signal_file.root
 python build_datacard.py skim cutbased /path/to/signal_file.root 
 ```
 
-The background estimation is done by creating function that fits well to background mc and then is applied to data, thus the only uncertainty in the background estimation are the parameters of the fit function. Therefore, no set of 'up and down' histograms are needed for the background mc files. Instead, the selection (bdt or cutbased) is applied to the background samples and json files containing all the necessary histograms (with user set mT binwidth `binw`) are made for a single card (one signal point) with the command:
-
+The background estimation is done by creating function that fits well to background mc and then is applied to data, thus the only uncertainty in the background estimation are the parameters of the fit function. Therefore, no set of 'up and down' histograms are needed for the background mc files. Instead, the selection (bdt or cutbased) is applied to the background samples and a json file with the mT histograms (with user setbinwidth `binw`) is made with the command:
 ```bash
-python3 build_datacard.py build_histograms bdt=0.5 path/to/background/*.npz path/to/signal_skim.npz --binw 10
+python3 build_datacard.py build_bkg_histograms --binw 10 cutbased path/to/background/*.npz
+```
+This step is only done once and reused for all the different signal points.
+
+For signal, the mT histograms including all systematic variations for one signal point should be made with the following command:
+```bash
+python3 build_datacard.py build_sig_histograms --mtmin 130 --mtmax 700 --binw 10 cutbased path/to/signal/*.npz
 ```
 
-There used to be two seperate steps `build_sig_histograms` and `build_bkg_histograms` but this became too many seperate steps and now all necessary calls to the functions are contained within `build_histograms`. The resulting merged file should use the signal name, the selection type, bin widths, and ranges: `signal_name_cutbased_or_bdt_with_bkg_binwXY_rangeXYZ-XYZ.json`
+A larger mT range than the final selection is used to facilitate smoothing of the signal shapes (using local regression), which is performed by:
+```bash
+python build_datacard.py smooth_shapes --optimize 1000 --target central --mtmin 180 --mtmax 650 signal.json
+```
+The output histograms from this step are truncated to the final mT range. (`--target central` means that the optimization of the smoothing span via generalized cross-validation uses the central histogram, and then that optimized span value is applied to the systematic variations.)
+
+Finally, the signal and background histograms are combined to make the full input for a datacard:
+```bash
+python build_datacard.py build_histograms --binw 10 signal_smooth.json bkghist.json
+```
+The resulting merged file should use the signal name, the selection type, bin widths, and ranges: `signal_name_cutbased_or_bdt_smooth_with_bkg_binwXY_rangeXYZ-XYZ.json`.
+(The `build_histograms` function can also be used to perform the individual sig and bkg histogram steps, if it is given npz files instead of json files. In this case, the signal smoothing would have to be performed similarly.)
 
 An additional function for checking the histogram json files is `ls`. However, this is not the most easy to read it provides a quick way to check for mistakes during file creation.
 
@@ -177,13 +202,19 @@ python3 build_datacard.py ls signal_name_cutbased_or_bdt_with_bkg_binwXY_rangeXY
 head -n 100 signal_name_cutbased_or_bdt_with_bkg_binwXY_rangeXYZ-XYZ.json
 ```
 
-Then all the up, down, and nominal values can be plotted for the systematics 
+Then all the up, down, and nominal values can be plotted for the systematics:
 
 ```bash
 python build_datacard.py plot_systematics signal_name_cutbased_or_bdt_with_bkg_binwXY_rangeXYZ-XYZ.json
 ```
 
-And that's it for this part. To use these histograms for fits and limit setting, see the `svj_limits` repo
+Similar plots can be made to compare the results of smoothing (e.g. for systematics, between different `keep` percentages, etc.) using the `plot_smooth` function.
 
+A table of systematic uncertainty yield effects can be made as follows:
+```bash
+python build_datacard.py systematics_table signal_name_cutbased_or_bdt_with_bkg_binwXY_rangeXYZ-XYZ.json
+```
+Currently, this function only handles one signal model at a time.
+It will be expanded to summarize across all signal models once the full scans are available.
 
-
+And that's it for this part. To use these histograms for fits and limit setting, see the [svj_limits](https://github.com/boostedsvj/svj_limits) repo.
