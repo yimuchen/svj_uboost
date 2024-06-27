@@ -30,6 +30,15 @@ bdt_features = [
     'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef', 
     ]
 
+# in units of pb-1 (xsec units: pb)
+lumis = {
+    "2016": 36330,
+    "2017": 41530,
+    "2018": 59740,
+    "2018PRE": 21090,
+    "2018POST": 38650,
+    "RUN2": 137600,
+}
 
 def change_bin_width():
     """
@@ -80,11 +89,11 @@ def skim():
         ])
     outdir = common.pull_arg('-o', '--outdir', type=str, default=strftime('skims_%Y%m%d')).outdir
     selection = common.pull_arg('selection', type=str).selection
-    full_selection = selection
     common.logger.info(f'Selection: {selection}')
     keep = common.pull_arg('-k', '--keep', type=float, default=None).keep
     rootfile = common.pull_arg('rootfile', type=str).rootfile
     array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
+    full_selection = f'{selection}_MC{array.meta["year"]}'
 
     def apply_keep(array, sel, keep):
         if sel is None:
@@ -148,7 +157,6 @@ def skim():
     central = svj.filter_preselection(array)
     # Adjust the load_mc value as needed... don't understand if the skims are alway on mc for example
     cols = svj.bdt_feature_columns(central, load_mc=True)
-    bdt_cols = svj.bdt_feature_columns(central, load_mc=True)
 
     # Save scale weights
     cols.arrays['scaleweights'] = central.array['ScaleWeights'].to_numpy()
@@ -287,19 +295,21 @@ def build_sig_histograms(args=None):
         change_bin_width()
         # Read from sys.argv
         selection = common.pull_arg('selection', type=str).selection
-        lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
-        lumi *= 1e3 # Convert to nb-1, same unit as xs
+        lumi = common.pull_arg('--lumi', type=float, default=None, help='Luminosity in pb-1 (overrides defaults)').lumi
+        year = common.pull_arg('--year', type=str, default=None, help='year (overrides metadata)').year
         common.logger.info(f'Selection: {selection}')
         skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
     else:
         # Use passed input
-        selection, lumi, skim_files = args
+        selection, lumi, year, skim_files = args
 
     def get_by_tag(tag):
         return [s for s in skim_files if tag in s][0]
 
     mths = {}
     central = svj.Columns.load(get_by_tag('central'))
+    if year is None: year = str(central.metadata[year])
+    if lumi is None: lumi = lumis[year]
 
     mt = central.to_numpy(['mt']).ravel()
     w = central.to_numpy(['puweight']).ravel()
@@ -320,10 +330,12 @@ def build_sig_histograms(args=None):
         w = col.to_numpy(['puweight']).flatten()
         w *= lumi * col.xs / col.cutflow['raw']
         return common.MTHistogram(mt, w)
-    mths['jer_up'] = mth_jerjecjes('jer_up')
-    mths['jer_down'] = mth_jerjecjes('jer_down')
-    mths['jec_up'] = mth_jerjecjes('jec_up')
-    mths['jec_down'] = mth_jerjecjes('jec_down')
+    # JER, JEC treated as uncorrelated between years (but 2018PRE, 2018POST always correlated)
+    sysyear = year[:4]
+    mths[f'jer{sysyear}_up'] = mth_jerjecjes('jer_up')
+    mths[f'jer{sysyear}_down'] = mth_jerjecjes('jer_down')
+    mths[f'jec{sysyear}_up'] = mth_jerjecjes('jec_up')
+    mths[f'jec{sysyear}_down'] = mth_jerjecjes('jec_down')
     mths['jes_up'] = mth_jerjecjes('jesup_both')
     mths['jes_down'] = mth_jerjecjes('jesdown_both')
 
@@ -336,9 +348,10 @@ def build_sig_histograms(args=None):
     mths['fsr_down'] = common.MTHistogram(mt, ps_weights[:,3])
 
     # PU
+    # also uncorrelated between years
     pu_weights = central.to_numpy(['puweight', 'pu_sys_up', 'pu_sys_down'])
-    mths['pu_up'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,1])
-    mths['pu_down'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,2])
+    mths[f'pu{sysyear}_up'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,1])
+    mths[f'pu{sysyear}_down'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,2])
 
     # PDF
     pdf_weights = central.to_numpy(['pdf_weights'])
@@ -367,7 +380,7 @@ def build_sig_histograms(args=None):
     meta = central.metadata
     outfile = (
         f'mz{meta["mz"]:.0f}_rinv{meta["rinv"]:.1f}_mdark{meta["mdark"]:.0f}'
-        f'_{selection}.json'
+        f'_{selection}_MC{year}.json'
         )
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
@@ -381,13 +394,13 @@ def build_bkg_histograms(args=None):
         change_bin_width()
         # Read from sys.argv
         selection = common.pull_arg('selection', type=str).selection
-        lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
-        lumi *= 1e3 # Convert to nb-1, same unit as xs
+        lumi = common.pull_arg('--lumi', type=float, default=None, help='Luminosity in pb-1 (overrides defaults)').lumi
+        year = common.pull_arg('--year', type=str, default=None, help='year (overrides metadata)').year
         common.logger.info(f'Selection: {selection}')
         skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
     else:
         # Use passed input
-        selection, lumi, skim_files = args
+        selection, lumi, year, skim_files = args
 
     mths = {
         'qcd_individual' : [],
@@ -421,6 +434,8 @@ def build_bkg_histograms(args=None):
             continue
 
         col = svj.Columns.load(skim_file)
+        if year is None: year = str(central.metadata[year])
+        if lumi is None: lumi = lumis[year]
 
         # Apply further selection: cutbased or bdt
         if len(col) > 0:
@@ -489,7 +504,7 @@ def build_bkg_histograms(args=None):
         mths[bkg] += mth # Add up per background category (qcd/ttjet/...)
         mths['bkg'] += mth # Add up all
 
-    outfile = f'bkghist_{strftime("%Y%m%d")}.json'
+    outfile = f'bkghist_{selection}_{year}_{strftime("%Y%m%d")}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
         json.dump(mths, f, cls=common.Encoder, indent=4)
@@ -503,8 +518,8 @@ def build_histograms():
     """
     change_bin_width()
     selection = common.pull_arg('selection', type=str).selection
-    lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
-    lumi *= 1e3 # Convert to nb-1, same unit as xs
+    lumi = common.pull_arg('--lumi', type=float, default=None, help='Luminosity in pb-1 (overrides defaults)').lumi
+    year = common.pull_arg('--year', type=str, default=None, help='year (overrides metadata)').year
     common.logger.info(f'Selection: {selection}')
     skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
 
@@ -574,11 +589,11 @@ def build_histograms():
         return outfile2
 
     if sig_outfile is None:
-        sig_outfile = build_sig_histograms((selection, lumi, sig_skim_files))
+        sig_outfile = build_sig_histograms((selection, lumi, year, sig_skim_files))
     else:
         sig_outfile = rebin_outfile(sig_outfile)
     if bkg_outfile is None:
-        bkg_outfile = build_bkg_histograms((selection, lumi, bkg_skim_files))
+        bkg_outfile = build_bkg_histograms((selection, lumi, year, bkg_skim_files))
     else:
         bkg_outfile = rebin_outfile(bkg_outfile)
     merged_outfile = sig_outfile.replace('_tmp.json','.json').replace('.json', '_with_bkg.json')
