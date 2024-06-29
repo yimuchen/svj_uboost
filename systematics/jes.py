@@ -29,71 +29,7 @@ else:
 
 scripter = common.Scripter()
 
-
-def apply_jes(arrays, var, match_type='both'):
-    from jes_numba import calc_x_jes
-
-    if not var in ['up', 'down', 'central']:
-        raise Exception('var should be up, down, or central')
-    if var == 'central': return
-
-    try:
-        match_type = dict(both=3, partial=1, full=2)[match_type]
-    except KeyError:
-        common.logger.error('Possible choices for match_type are both, partial, or full')
-
-    arrays = arrays.copy()
-    a = arrays.array
-
-    # Before correcting, save the current pT and phi (needed for MET correction)
-    pt_before = a['Jets.fCoordinates.fPt']
-    eta_before = a['Jets.fCoordinates.fEta']
-    phi_before = a['Jets.fCoordinates.fPhi']
-    energy_before = a['Jets.fCoordinates.fE']
-
-    for conesize in [.4, .8, 1.5]:
-        conesizestr = '' if conesize == .4 else f'AK{10*conesize:.0f}'
-        x_jes = calc_x_jes(
-            a[f'Jets{conesizestr}.fCoordinates.fPt'],
-            a[f'Jets{conesizestr}.fCoordinates.fEta'],
-            a[f'Jets{conesizestr}.fCoordinates.fPhi'],
-            a[f'GenJets{conesizestr}.fCoordinates.fPt'],
-            a[f'GenJets{conesizestr}.fCoordinates.fEta'],
-            a[f'GenJets{conesizestr}.fCoordinates.fPhi'],
-            a['GenParticles.fCoordinates.fEta'],
-            a['GenParticles.fCoordinates.fPhi'],
-            a['GenParticles_PdgId'],
-            a['GenParticles_Status'],
-            do_match_type = match_type,
-            drsq_comp= conesize**2
-            )
-        
-        a[f'x_jes_{10*conesize:.0f}'] = x_jes
-        if var == 'up':
-            corr = 1+x_jes
-        elif var == 'down':
-            jes_down = 1-x_jes
-            corr = ak.where(jes_down<0., 0., jes_down)
-
-        a[f'Jets{conesizestr}.fCoordinates.fPt'] = corr * a[f'Jets{conesizestr}.fCoordinates.fPt']
-        a[f'Jets{conesizestr}.fCoordinates.fE'] = corr * a[f'Jets{conesizestr}.fCoordinates.fE']
-
-
-    # Correct MET
-    a['MET_precorr'] = a['MET']
-    a['METPhi_precorr'] = a['METPhi']
-    px_before = np.cos(phi_before) * pt_before
-    py_before = np.sin(phi_before) * pt_before
-    px_after = np.cos(a[f'Jets.fCoordinates.fPhi']) * a[f'Jets.fCoordinates.fPt']
-    py_after = np.sin(a[f'Jets.fCoordinates.fPhi']) * a[f'Jets.fCoordinates.fPt']
-    dpx = ak.sum(px_after - px_before, axis=-1)
-    dpy = ak.sum(py_after - py_before, axis=-1)
-    met_x = np.cos(a['METPhi']) * a['MET'] - dpx
-    met_y = np.sin(a['METPhi']) * a['MET'] - dpy
-    a['MET'] = np.sqrt(met_x**2 + met_y**2)
-    a['METPhi'] = np.arctan2(met_y, met_x) # Should be between -pi .. pi
-
-    return arrays
+from skim import apply_jes
 
 @scripter
 def skim_jes():
