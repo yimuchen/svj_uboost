@@ -6,7 +6,7 @@ MAIN_DIR = osp.dirname(THIS_DIR)
 sys.path.append(MAIN_DIR)
 
 import common
-from common import mask_cutbased
+from common import apply_cutbased
 from produce_histograms import Histogram, repr_dict
 from cutflow_table import format_table
 
@@ -293,17 +293,17 @@ def produce_histograms():
     else:
         out = {}
 
-    sel = mask_cutbased(central) if selection=='cutbased' else None
-    central = MTHistogram(central.arrays['mt'][sel])
+    if selection=='cutbased': central = apply_cutbased(central)
+    central = MTHistogram(central.arrays['mt'])
 
     for c in all:
         if merge_into and 'both' not in c.metadata['name']: continue
-        sel = mask_cutbased(c) if selection=='cutbased' else None
-        h = MTHistogram(c.arrays['mt'][sel])
+        if selection=='cutbased': c = apply_cutbased(c)
+        h = MTHistogram(c.arrays['mt'])
         if NORMALIZE: h.vals /= central.norm
         h.metadata.update(c.metadata)
         out[c.metadata['name']] = h.json()
-    
+
     if merge_into:
         outfile = merge_into
     else:
@@ -349,10 +349,8 @@ def debug_plots():
 
     # Compute the selection mask (cutbased or bdt)
     for c in all:
-        c.sel = mask_cutbased(c) if selection=='cutbased' else None
-
-    if c.sel is None:
-        raise Exception
+        if selection=='cutbased': c = apply_cutbased(c)
+        else: raise Exception
 
     # MET histograms before and after correction
     fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2,3, figsize=(24,16))
@@ -365,8 +363,8 @@ def debug_plots():
         (ax5, full_down),
         (ax6, partial_down),
         ]:
-        met_before = c.arrays['MET_precorr'][c.sel]
-        met_after = c.arrays['met'][c.sel]
+        met_before = c.arrays['MET_precorr']
+        met_after = c.arrays['met']
         for label, met in [('before', met_before), ('after', met_after)]:
             vals = np.histogram(met, bins=bins)[0]
             ax.step(bins[:-1], vals, label=label)
@@ -386,8 +384,8 @@ def debug_plots():
         (ax5, full_down),
         (ax6, partial_down),
         ]:
-        met_before = c.arrays['METPhi_precorr'][c.sel]
-        met_after = c.arrays['metphi'][c.sel]
+        met_before = c.arrays['METPhi_precorr']
+        met_after = c.arrays['metphi']
         for label, met in [('before', met_before), ('after', met_after)]:
             vals = np.histogram(met, bins=bins)[0]
             ax.step(bins[:-1], vals, label=label)
@@ -407,8 +405,8 @@ def debug_plots():
         (ax5, full_down),
         (ax6, partial_down),
         ]:
-        pt_before = central.arrays['pt'][central.sel]
-        pt_after = c.arrays['pt'][c.sel]
+        pt_before = central.arrays['pt']
+        pt_after = c.arrays['pt']
         for label, pt in [('before', pt_before), ('after', pt_after)]:
             vals = np.histogram(pt, bins=bins)[0]
             ax.step(bins[:-1], vals, label=label)
@@ -427,11 +425,11 @@ def debug_plots():
             (ax2, 'full', full_up),
             (ax3, 'partial', partial_up),
             ]:
-            c.ptratio_1 = c.arrays['x_jes_1'][c.sel & (c.arrays['x_jes_1']!=0.)] + 1.
+            c.ptratio_1 = c.arrays['x_jes_1'][(c.arrays['x_jes_1']!=0.)] + 1.
             c.ptratio_1_hist = np.histogram(c.ptratio_1, bins)[0]
-            c.ptratio_2 = c.arrays['x_jes_2'][c.sel & (c.arrays['x_jes_2']!=0.)] + 1.
+            c.ptratio_2 = c.arrays['x_jes_2'][(c.arrays['x_jes_2']!=0.)] + 1.
             c.ptratio_2_hist = np.histogram(c.ptratio_2, bins)[0]
-            c.ptratio_3 = c.arrays['x_jes_3'][c.sel & (c.arrays['x_jes_3']!=0.) & (c.arrays['x_jes_3']!=-100.)] + 1.
+            c.ptratio_3 = c.arrays['x_jes_3'][(c.arrays['x_jes_3']!=0.) & (c.arrays['x_jes_3']!=-100.)] + 1.
             c.ptratio_3_hist = np.histogram(c.ptratio_3, bins)[0]
             c.pt_ratio = np.concatenate((c.ptratio_1, c.ptratio_2, c.ptratio_3))
             c.pt_ratio_hist = np.histogram(c.pt_ratio, bins)[0]

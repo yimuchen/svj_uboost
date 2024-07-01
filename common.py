@@ -809,10 +809,75 @@ def ddt(mt, pt, rho, var, weight, percent):
     varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
     return varDDT
 
+def apply_rt_signalregion(cols):
+    cols = cols.select(cols.arrays['rt'] > 1.18)
+    cols.cutflow['rt_signalregion'] = len(cols)
+    return cols
 
-def mask_cutbased(col):
-    return ((col.arrays['rt'] > 1.18) & (col.arrays['ecfm2b1'] > 0.09))
+def apply_cutbased(cols):
+    cols = apply_rt_signalregion(cols)
+    cols = cols.select(cols.arrays['ecfm2b1'] > 0.09)
+    cols.cutflow['cutbased'] = len(cols)
+    return cols
+
+# Relative path to the BDT
+# This specific BDT was chosen to be used during the L3 review
+bdt_model_file = '/uscms/home/bregnery/nobackup/SVJ_mass_bdt_studies/svj_uboost/models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
+# make sure bdt features match the choosen file
+bdt_features = [
+    'girth', 'ptd', 'axismajor', 'axisminor',
+    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
+    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef',
+]
+
+def split_bdt(sel):
+    parts = sel.split('=')
+    if len(parts)==2:
+        try:
+            bdt_cut = float(parts[1])
+        except ValueError:
+            # Handle the case where the number following 'bdt=' is not valid
+            print(f"Invalid number {parts[1]} following 'bdt='.")
+    else:
+        raise ValueError(f"Invalid selection string: {sel}")
+
+def apply_bdtbased(cols,wp,lumi):
+    import xgboost as xgb
+
+    cols = apply_rt_signalregion(cols)
+
+    # Grab the input features and weights
+    X = []
+    weight = []
+
+    # Get the features for the bkg samples
+    X = cols.to_numpy(bdt_features)
+    # Load the model and get the predictions
+    xgb_model = xgb.XGBClassifier()
+    xgb_model.load_model(bdt_model_file)
+    with time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
+        score = xgb_model.predict_proba(X)[:,1]
+    weight = (cols.xs / cols.cutflow['raw']) * lumi * cols.arrays['puweight']
+    print('weight length: ', len(weight), ' weight: ', weight)
+
+    # Obtain the efficiencies for the desired BDT working point
+    # bdt_cut is the user input bdt_cut
+    bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score))
+    bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
+    eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0])
+
+    # Apply the DDT
+    mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
+    pT = cols.to_numpy(['pt']).ravel()
+    rho = cols.to_numpy(['rho']).ravel()
+    bdt_ddt_score = ddt(mT, pT, rho, score, weight, eff*100)
+
+    # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
+    cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
+    cols.cutflow['ddt(bdt)'] = len(cols)
+    return cols
 
 class InvalidSelectionException(Exception):
-    def __init__(self, msg='selection argument should be "cutbased" or "bdt=X.XXX".', *args, **kwargs):
+    def __init__(self, msg='Unknown selection {}; choices are "cutbased" or "bdt=X.XXX".', sel="", *args, **kwargs):
+        msg = msg.format(sel)
         super().__init__(msg, *args, **kwargs)
