@@ -1,3 +1,5 @@
+# based on files in https://github.com/boostedsvj/svj_jobs_new
+
 import os, os.path as osp, sys, json, re, math
 from time import strftime
 

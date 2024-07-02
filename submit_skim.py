@@ -1,3 +1,5 @@
+# based on files in https://github.com/boostedsvj/svj_jobs_new
+
 import os, os.path as osp, json, argparse, fnmatch, random, math
 from time import strftime
 
@@ -120,7 +122,7 @@ def main():
         args.categories = list(samples.keys())
 
     if args.missing or args.listmissing:
-        existing_dsts = get_list_of_existing_dsts(group.group_data['stageout'])
+        existing_dsts = get_list_of_existing_dsts(args.stageout)
 
     for cat in args.categories:
         group = jdlfactory.Group.from_file('skim.py')
