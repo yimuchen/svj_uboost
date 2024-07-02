@@ -1,7 +1,6 @@
 import os, os.path as osp, sys, json, re, math
 from time import strftime
 
-import tqdm
 import numpy as np
 import awkward as ak
 import matplotlib.pyplot as plt
@@ -10,11 +9,9 @@ import svj_ntuple_processing as svj
 import common
 
 THIS_DIR = osp.dirname(osp.abspath(__file__))
-# MAIN_DIR = osp.dirname(THIS_DIR)
 sys.path.append(osp.join(THIS_DIR, 'systematics'))
 
 scripter = common.Scripter()
-DST = osp.join(THIS_DIR, 'skims')
 
 # in units of pb-1 (xsec units: pb)
 lumis = {
@@ -41,6 +38,60 @@ def change_bin_width():
         common.MTHistogram.non_standard_binning = True
         common.logger.warning(f'Changing bin width to {binw}; MT binning: {common.MTHistogram.bins}')
 
+def check_rebin(hist,name):
+    if not common.MTHistogram.non_standard_binning:
+        return hist
+    msg = []
+    if hist.binning[0]>common.MTHistogram.bins[0]:
+        msg.append(f'left {hist.binning[0]}>{common.MTHistogram.bins[0]}')
+    if hist.binning[-1]<common.MTHistogram.bins[-1]:
+        msg.append(f'right {hist.binning[-1]}>{common.MTHistogram.bins[-1]}')
+    orig_width = int(hist.binning[1] - hist.binning[0])
+    new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
+    rebin_factor = int(new_width/orig_width)
+    rebin_mod = orig_width % new_width
+    if rebin_mod!=0:
+        msg.append(f'rebin {orig_width} % {new_width} = {rebin_mod}')
+    if len(msg)>0:
+        msg = ', '.join(msg)
+        common.logger.warning(f'Hist {name} inconsistent with requested binning ({msg})')
+    return hist.rebin(rebin_factor).cut(common.MTHistogram.bins[0],common.MTHistogram.bins[-1])
+
+def rebin_dict(hists):
+    if not common.MTHistogram.non_standard_binning:
+        return hists
+    for key in hists:
+        if isinstance(hists[key],list):
+            for i,entry in enumerate(hists[key]):
+                hists[key][i] = check_rebin(entry,f'{key}[{i}]')
+        elif isinstance(hists[key],dict):
+            for k,v in hists[key].items():
+                hists[key][k] = check_rebin(v,f'{key}[{k}]')
+        else:
+            hists[key] = check_rebin(hists[key],key)
+    return hists
+
+def rebin_name(outfile):
+    if common.MTHistogram.non_standard_binning:
+        binw = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
+        left = common.MTHistogram.bins[0]
+        right = common.MTHistogram.bins[-1]
+        outfile = outfile.replace(
+            '.json',
+            f'_binw{binw:02d}_range{left:.0f}-{right:.0f}.json'
+        )
+    return outfile
+
+def rebin_file(file):
+    file2 = rebin_name(file)
+    if file2==file:
+        return file
+    with open(file,'r') as f:
+        mths = json.load(f, cls=common.Decoder)
+    mths = rebin_dict(mths)
+    with open(file2,'w') as f:
+        json.dump(mths, f, cls=common.Encoder, indent=4)
+    return file2
 
 def basename(meta):
     """
@@ -62,7 +113,7 @@ def build_histogram(args=None):
         skimfile = common.pull_arg('skimfile', type=str).skimfile
     else:
         # Use passed input
-        selection, lumi, year, skimfile = args
+        selection, lumi, year, fullyear, skimfile = args
 
     def filter_bkg(cols):
         bkgs = [cols]
@@ -201,109 +252,114 @@ def build_histogram(args=None):
     outdir = f'hists_{strftime("%Y%m%d")'
     os.makedirs(outdir, exist_ok=True)
     process = osp.basename(skimfile)
-    outfile = f'{outdir}/{process}_{selection}_year{year}.json'
+    outfile = f'{outdir}/{process}_sel-{selection}_year-{year}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
         json.dump(mths, f, cls=common.Encoder, indent=4)
     return [outfile]
 
 @scripter
-def build_histograms():
-    """
-    Runs both build_sig_histograms and build_bkg_histograms.
-    """
+def build_all_histograms():
+    change_bin_width()
+    # Read from sys.argv
+    selection = common.pull_arg('selection', type=str).selection
+    fullyear = common.pull_arg('--fullyear', action="store_true", help='treat 2018 as one year instead of splitting into pre and post').fullyear
+    skimdir = common.pull_arg('skimdir', type=str).skimdir
+
+    from hadd_skims import expand_wildcards
+    skims = expand_wildcards(skimdir)
+    for skim in skims:
+        build_histogram(selection, None, None, fullyear, skim)
+
+@scripter
+def merge_histograms():
     change_bin_width()
     selection = common.pull_arg('selection', type=str).selection
-    lumi = common.pull_arg('--lumi', type=float, default=None, help='Luminosity in pb-1 (overrides defaults)').lumi
-    year = common.pull_arg('--year', type=str, default=None, help='year (overrides metadata)').year
-    common.logger.info(f'Selection: {selection}')
-    skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
+    histdir = common.pull_arg('histdir', type=str).histdir
+    cat = common.pull_arg('--cat', type=str, required=True, choices=['sig','bkg','data']).cat
+    years = common.pull_arg('--years', type=str, default=["2016","2017","2018PRE","2018POST"], nargs='*').years
+    if histdir[-1]!='/': histdir += '/'
 
-    # Divide passed skim_files into signal or background
-    sig_outfile = None
-    bkg_outfile = None
-    sig_skim_files = []
-    bkg_skim_files = []
-    for skim_file in skim_files:
-        if skim_file.endswith('.json'):
-            if "bkghist" in skim_file:
-                bkg_outfile = skim_file
-            else:
-                sig_outfile = skim_file
-        else:
-            for bkg_type in ['QCD', 'TTJets', 'WJets', 'ZJets']:
-                if bkg_type in skim_file:
-                    bkg_skim_files.append(skim_file)
-                    break
-            else:
-                sig_skim_files.append(skim_file)
+    def get_files(samples,years):
+        files = []
+        for year in years:
+            for sample in samples:
+                files += expand_wildcards(histdir+f'*{sample}*_sel-{selection}_year-{year}')
+        return files
 
-    if sig_outfile is None:
-        common.logger.info(
-            'Using the following skim files for signal:\n'
-            + "\n".join(sig_skim_files)
-        )
-    else:
-        common.logger.info('Reusing {} for signal'.format(sig_outfile))
-    if bkg_outfile is None:
-        common.logger.info(
-            'Using the following skim files for background:\n'
-            + "\n".join(bkg_skim_files)
-        )
-    else:
-        common.logger.info('Reusing {} for background'.format(bkg_outfile))
+    def get_hists(file):
+        with open(file,'r') as f:
+            return json.load(f, cls=common.Decoder)
 
-    def check_rebin(hist,name):
-        msg = []
-        if hist.binning[0]>common.MTHistogram.bins[0]:
-            msg.append(f'left {hist.binning[0]}>{common.MTHistogram.bins[0]}')
-        if hist.binning[-1]<common.MTHistogram.bins[-1]:
-            msg.append(f'right {hist.binning[-1]}>{common.MTHistogram.bins[-1]}')
-        orig_width = int(hist.binning[1] - hist.binning[0])
-        new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
-        rebin_factor = int(new_width/orig_width)
-        rebin_mod = orig_width % new_width
-        if rebin_mod!=0:
-            msg.append(f'rebin {orig_width} % {new_width} = {rebin_mod}')
-        if len(msg)>0:
-            msg = ', '.join(msg)
-            common.logger.warning(f'Hist {name} inconsistent with requested binning ({msg})')
-        return hist.rebin(rebin_factor).cut(common.MTHistogram.bins[0],common.MTHistogram.bins[-1])
+    outdir = histdir.replace("hists","merged")
+    def write(hists,proc):
+        outfile = f'{outdir}/{proc}_sel-{selection}.json'
+        hists = rebin_dict(hists)
+        outfile = rebin_name(outfile)
+        common.logger.info(f'Dumping merged histograms to {outfile}')
+        with open(outfile, 'w') as f:
+            json.dump(hists, f, cls=common.Encoder, indent=4)
 
-    def rebin_outfile(outfile):
-        with open(outfile,'r') as f:
-            mths = json.load(f, cls=common.Decoder)
-        for key in mths:
-            if isinstance(mths[key],list):
-                for i,entry in enumerate(mths[key]):
-                    mths[key][i] = check_rebin(entry,f'{key}[{i}]')
-            else:
-                mths[key] = check_rebin(mths[key],key)
-        outfile2 = outfile.replace(".json","_tmp.json")
-        with open(outfile2,'w') as f:
-            json.dump(mths, f, cls=common.Encoder, indent=4)
-        return outfile2
+    lumi_total = sum(lumis[year] for year in years)
+    def assign_metadata(hist):
+        hist.metadata['selection'] = selection
+        hist.metadata['lumi'] = lumi_total
 
-    if sig_outfile is None:
-        sig_outfile = build_sig_histograms((selection, lumi, year, sig_skim_files))
-    else:
-        sig_outfile = rebin_outfile(sig_outfile)
-    if bkg_outfile is None:
-        bkg_outfile = build_bkg_histograms((selection, lumi, year, bkg_skim_files))
-    else:
-        bkg_outfile = rebin_outfile(bkg_outfile)
-    merged_outfile = sig_outfile.replace('_tmp.json','.json').replace('.json', '_with_bkg.json')
+    samples = {
+        "data": ["JetHT", "HTMHT"],
+        "bkg": ['QCD', 'TTJets', 'ZJets', 'WJets'],
+        "sig": ['SVJ'],
+    }
+    files = get_files(samples[cat],years)
 
-    if common.MTHistogram.non_standard_binning:
-        binw = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
-        left = common.MTHistogram.bins[0]
-        right = common.MTHistogram.bins[-1]
-        merged_outfile = merged_outfile.replace(
-            '.json',
-            f'_binw{binw:02d}_range{left:.0f}-{right:.0f}.json'
-            )
-    merge((merged_outfile, [sig_outfile, bkg_outfile]))
+    default = 'central'
+    if cat=="data":
+        # just add them all up
+        mths = {
+            cat : common.MTHistogram.empty(),
+        }
+        assign_metadata(mths[cat])
+        for file in files:
+            mths[cat] += get_hists(file)[default]
+        write(mths,cat)
 
+    elif cat=="bkg":
+        # add up but keep components
+        mths = {
+            cat : common.MTHistogram.empty(),
+        }
+        for b in bkg:
+            b = b.lower()
+            mths[b+'_individual'] = []
+            mths[b] = common.MTHistogram.empty()
+        for file in files:
+            tmp = get_hists(file)[default]
+            bkg = next((b for b in samples["bkg"] if b in file)).lower()
+            mths[bkg+'_individual'].append(tmp) # Save individual histogram
+            mths[bkg] += tmp # Add up per background category
+            mths[cat] += tmp # Add up all
+        write(mths,cat)
+
+    elif cat=="sig":
+        # just add years
+        signals = defaultdict(list)
+        for file in files:
+            signals['_'.join(file.split('_')[1:-2]].append(file)
+        for signal,sigfiles in signals.items():
+            sighists = {year: get_hists(next((f for f in sigfiles if year in f))) for year in years}
+            keys = list(sorted(set([key for y,h in sighists.items() for key in h])))
+            mths = {}
+            for key in keys:
+                mths[signal][key] = common.MTHistogram.empty()
+                # handle uncorrelated systematics (vary one year at a time)
+                if '20' in key:
+                    getter = lambda h: h.get(key,'central')
+                # correlated systematics must be present in all years
+                else:
+                    getter = lambda h: h[key]
+                for year,sighist in sighists.items():
+                    mths[signal][key] += getter(sighist)
+            write(mths,signal)
 
 # __________________________________________
 # Plotting
