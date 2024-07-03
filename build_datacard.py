@@ -1,5 +1,6 @@
 import os, os.path as osp, sys, json, re, math
 from time import strftime
+from collections import defaultdict
 
 import numpy as np
 import awkward as ak
@@ -7,6 +8,7 @@ import matplotlib.pyplot as plt
 
 import svj_ntuple_processing as svj
 import common
+from hadd_skims import expand_wildcards
 
 THIS_DIR = osp.dirname(osp.abspath(__file__))
 sys.path.append(osp.join(THIS_DIR, 'systematics'))
@@ -270,7 +272,6 @@ def build_all_histograms():
     fullyear = common.pull_arg('--fullyear', action="store_true", help='treat 2018 as one year instead of splitting into pre and post').fullyear
     skimdir = common.pull_arg('skimdir', type=str).skimdir
 
-    from hadd_skims import expand_wildcards
     skims = expand_wildcards(skimdir)
     for skim in skims:
         build_histogram((selection, None, None, fullyear, skim))
@@ -288,7 +289,7 @@ def merge_histograms():
         files = []
         for year in years:
             for sample in samples:
-                files += expand_wildcards(histdir+f'*{sample}*_sel-{selection}_year-{year}')
+                files += expand_wildcards(histdir+f'{sample}*_sel-{selection}_year-{year}.json')
         return files
 
     def get_hists(file):
@@ -296,6 +297,7 @@ def merge_histograms():
             return json.load(f, cls=common.Decoder)
 
     outdir = histdir.replace("hists","merged")
+    os.makedirs(outdir, exist_ok=True)
     def write(hists,proc):
         outfile = f'{outdir}/{proc}_sel-{selection}.json'
         hists = rebin_dict(hists)
@@ -348,13 +350,13 @@ def merge_histograms():
         # just add years
         signals = defaultdict(list)
         for file in files:
-            signals['_'.join(file.split('_')[1:-2])].append(file)
+            signals['_'.join(file.split('/')[1].split('_')[:-1])].append(file)
         for signal,sigfiles in signals.items():
             sighists = {year: get_hists(next((f for f in sigfiles if year in f))) for year in years}
             keys = list(sorted(set([key for y,h in sighists.items() for key in h])))
             mths = {}
             for key in keys:
-                mths[signal][key] = common.MTHistogram.empty()
+                mths[key] = common.MTHistogram.empty()
                 # handle uncorrelated systematics (vary one year at a time)
                 if '20' in key:
                     getter = lambda h: h.get(key,'central')
@@ -362,7 +364,7 @@ def merge_histograms():
                 else:
                     getter = lambda h: h[key]
                 for year,sighist in sighists.items():
-                    mths[signal][key] += getter(sighist)
+                    mths[key] += getter(sighist)
             write(mths,signal)
 
 # __________________________________________
