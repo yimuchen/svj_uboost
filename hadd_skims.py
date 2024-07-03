@@ -18,7 +18,8 @@ def expand_wildcards(pats):
 
 def process_directory(tup):
     directory, outfile = tup
-    npzfiles = expand_wildcards([directory+'*.npz'])[0]
+    if directory[-1]!='/': directory += '/'
+    npzfiles = expand_wildcards([directory+'*.npz'])
     svj.logger.info(f'Processing {directory} -> {outfile} ({len(npzfiles)} files)')
     cols = []
     for f in npzfiles:
@@ -27,7 +28,7 @@ def process_directory(tup):
         except Exception as e:
             svj.logger.error(f'Failed for file {f}, error:\n{e}')
     concatenated = svj.concat_columns(cols)
-    concatenated.save(outfile)
+    concatenated.save(outfile,force=True)
 
 if __name__ == '__main__':
     import argparse
@@ -43,7 +44,7 @@ if __name__ == '__main__':
 
     fn_args = []
     for d in directories:
-        outfile = args.stageout+'/'.join(path.split('/')[-3:-1])+'.npz'
+        outfile = args.stageout+'/'.join(d.split('/')[-2:])+'.npz'
         fn_args.append((d, outfile))
 
     import multiprocessing as mp
