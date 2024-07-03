@@ -193,11 +193,15 @@ def build_histogram(args=None):
 
     if metadata["sample_type"]=="sig":
         # Scale
-        scale_weight = central.to_numpy(['scaleweights'])[:, np.array([0,1,2,3,4,6,8])]
-        weight_up = w * np.max(scale_weight, axis=-1) * central.metadata['scale_factor_up']
-        weight_down = w * np.min(scale_weight, axis=-1) * central.metadata['scale_factor_down']
-        mths['scale_up'] = common.MTHistogram(mt, weight_up)
-        mths['scale_down'] = common.MTHistogram(mt, weight_down)
+        good_scales = np.array([0,1,2,3,4,6,8])
+        scale_weight = central.to_numpy(['scaleweights'])
+        scale_weight = scale_weight[ak.num(scale_weight,axis=1)>np.max(good_scales)]
+        scale_weight = scale_weight[:, good_scales]
+        if len(scale_weight):
+            weight_up = w * np.max(scale_weight, axis=-1) * central.metadata['scale_factor_up']
+            weight_down = w * np.min(scale_weight, axis=-1) * central.metadata['scale_factor_down']
+            mths['scale_up'] = common.MTHistogram(mt, weight_up)
+            mths['scale_down'] = common.MTHistogram(mt, weight_down)
 
         # JEC/JER/JES
         def mth_jerjecjes(tag):
