@@ -19,9 +19,9 @@ pip install matplotlib
 pip install tqdm
 pip install numba
 
-pip install jdlfactory
-pip install seutils
-pip install git+ssh://git@github.com/boostedsvj/svj_ntuple_processing
+pip install git+https://github.com/boostedsvj/jdlfactory
+pip install git+https://github.com/boostedsvj/seutils
+pip install git+https://github.com/boostedsvj/svj_ntuple_processing
 pip install hep_ml
 
 git clone git@github.com:boostedsvj/svj_uboost
@@ -31,6 +31,12 @@ Alternatively, an editable `svj_ntuple_processing` can be installed for simultan
 ```
 git clone git@github.com:boostedsvj/svj_ntuple_processing
 pip install -e svj_ntuple_processing/
+```
+
+Optional additional packages to read files over xrootd directly instead of making local copies (may not work on all machines):
+```
+pip install xrootd
+pip install fsspec-xrootd
 ```
 
 ## How to run a training

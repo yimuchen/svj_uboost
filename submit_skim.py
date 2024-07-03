@@ -10,7 +10,7 @@ from skim import dst
 
 datadir = 'root://cmseos.fnal.gov//store/user/lpcsusyhad/SusyRA2Analysis2015/Run2ProductionV20'
 mcyears = ['Summer20UL16', 'Summer20UL17', 'Summer20UL18']
-sigdir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/signal_production_3Dscan/'
+sigdir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/signal_production_3Dscan'
 sigyears = [f'20{year}/NTUPLE/Private3DUL{year}' for year in [16,17,18]]
 
 samples = {
@@ -67,30 +67,30 @@ def get_list_of_all_rootfiles(cat):
     cache_file = f'cached_{cat}_rootfiles.json'
     if osp.isfile(cache_file):
         jdlfactory.logger.info('Returning cached list of rootfiles')
-        with open(cache_file, 'rb') as f:
+        with open(cache_file, 'r') as f:
             return json.load(f)
 
-    seutils.MAX_RECURSION_DEPTH = 100
+    seutils.MAX_RECURSION_DEPTH = 1000
     jdlfactory.logger.info(f'Rebuilding {cat} filelist...')
     rootfiles = []
-    for sample in samples[cat]:
-        sampledir = sample['dir']
-        for year in sample['years']:
-            pat = f'{sampledir}/{year}/{cat}/*.root'
+    for sample,info in samples[cat].items():
+        sampledir = info['dir']
+        for year in info['years']:
+            pat = f'{sampledir}/{year}/{sample}*/*.root'
             jdlfactory.logger.info('Querying for pattern %s...', pat)
             rootfiles_for_pat = seutils.ls_wildcard(pat)
             jdlfactory.logger.info('  {} rootfiles found'.format(len(rootfiles_for_pat)))
             rootfiles.extend(rootfiles_for_pat)
 
     jdlfactory.logger.info('Caching list of {} rootfiles to {}'.format(len(rootfiles), cache_file))
-    with open(cache_file, 'wb') as f:
+    with open(cache_file, 'w') as f:
         json.dump(rootfiles, f)
     return rootfiles
 
 def get_list_of_existing_dsts(stageout, cache_file='cached_existing_npzs.json'):
     if osp.isfile(cache_file):
         jdlfactory.logger.info('Returning cached list of existing npz files')
-        with open(cache_file, 'rb') as f:
+        with open(cache_file, 'r') as f:
             return json.load(f)
 
     jdlfactory.logger.info('Building list of all existing .npz files. This can take ~10-15 min.')
@@ -101,7 +101,7 @@ def get_list_of_existing_dsts(stageout, cache_file='cached_existing_npzs.json'):
         existing.extend(fnmatch.filter(files, '*.npz'))
 
     jdlfactory.logger.info('Caching list of {} npz files to {}'.format(len(existing), cache_file))
-    with open(cache_file, 'wb') as f:
+    with open(cache_file, 'w') as f:
         json.dump(existing, f)
 
     return existing
@@ -114,9 +114,15 @@ def main():
     parser.add_argument('--categories', type=str, default='all', nargs='*', choices=samples.keys())
     parser.add_argument('-k', '--keep', type=float, default=None)
     parser.add_argument('--stageout', type=str, help='stageout directory', required=True)
+    parser.add_argument('--branch', type=str, default=None, help='svj_ntuple_processing branch')
     parser.add_argument('--impl', type=str, help='storage implementation', default='xrd', choices=['xrd', 'gfal'])
     parser.add_argument('--singlejob', action='store_true', help='Single job for testing.')
     args = parser.parse_args()
+
+    if args.branch is not None:
+        args.branch = '@'+args.branch
+    else:
+        args.branch = ''
 
     if args.categories=='all':
         args.categories = list(samples.keys())
@@ -126,13 +132,12 @@ def main():
 
     for cat in args.categories:
         group = jdlfactory.Group.from_file('skim.py')
-        group.venv()
-        group.sh('pip install seutils')
-        group.sh('pip install enum')
-        group.sh('pip install --ignore-installed --no-cache numpy')
-        group.sh('pip install --ignore-installed --no-cache awkward')
-        group.sh('pip install --ignore-installed --no-cache numba')
-        group.sh('pip install git+https://github.com/boostedsvj/svj_ntuple_processing')
+        group.venv(py3=True)
+        group.sh('pip install git+https://github.com/boostedsvj/seutils')
+        group.sh('pip install --ignore-installed --no-cache "numpy<2"')
+        group.sh('pip install --no-cache awkward')
+        group.sh('pip install --no-cache numba')
+        group.sh('pip install git+https://github.com/boostedsvj/svj_ntuple_processing'+args.branch)
 
         group.htcondor['on_exit_hold'] = '(ExitBySignal == true) || (ExitCode != 0)'
 
@@ -140,6 +145,7 @@ def main():
         group.group_data['category'] = cat
         group.group_data['stageout'] = args.stageout
         group.group_data['storage_implementation'] = args.impl
+        group.group_data['local_copy'] = True
 
         # 64249 rootfiles, approx 10s per file means approx 180 CPU hours needed
         # do 5h per job --> 180/5 = 36 jobs with 1785 files each
@@ -157,7 +163,7 @@ def main():
             # suffs in dst
             suffs = []
             if args.keep: suffs.append(f'keep{keep:.2f}')
-            needed_dsts = [dst(f,suffs) for f in rootfiles]
+            needed_dsts = [dst(f,args.stageout,suffs) for f in rootfiles]
             missing_dsts = set(needed_dsts) - set(existing_dsts)
 
             rootfiles_for_missing_dsts = []

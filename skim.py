@@ -1,6 +1,6 @@
 # based on files in https://github.com/boostedsvj/svj_jobs_new
 
-import os, os.path as osp, sys, json, re, math
+import os, os.path as osp, sys, json, re, math, traceback
 from time import strftime
 
 #########################################
@@ -14,11 +14,7 @@ from time import strftime
 import numpy as np
 import awkward as ak
 
-from jdlfactory_server import data, group_data # type: ignore
-import seutils # type: ignore
 import svj_ntuple_processing as svj
-
-seutils.set_preferred_implementation(group_data.storage_implementation.encode())
 
 ###########
 # JES stuff
@@ -279,7 +275,7 @@ def apply_jes(arrays, var, match_type='both'):
 # General skimming
 ##################
 
-def dst(path,suffs=[]):
+def dst(path,stageout,suffs=[]):
     """
     Generates a destination .npz for a rootfile
     """
@@ -289,21 +285,28 @@ def dst(path,suffs=[]):
     suff = '_'.join(suffs)
     if len(suff)>0:
         path = path.replace('.npz',f'_{suff}.npz')
-    return group_data.stageout + ('' if group_data.stageout.endswith('/') else '/') + path
+    if stageout[-1]!='/': stageout += '/'
+    return stageout + path
 
-def skim(rootfile, keep=None):
+def skim(rootfile, group_data):
     """
     Produces a skim from TreeMaker Ntuples that is ready to be histogrammed
     """
+    import seutils # type: ignore
+    seutils.set_preferred_implementation(group_data.storage_implementation)
+
     suffs = []
+    keep = None
+    if hasattr(group_data,"keep"):
+        keep = group_data.keep
     if keep is not None:
         suffs.append(f'keep{keep:.2f}')
-    outfile = dst(rootfile,suffs)
+    outfile = dst(rootfile,group_data.stageout,suffs)
     if seutils.isfile(outfile):
         svj.logger.info('    File %s exists, skipping', outfile)
         return
 
-    array = svj.open_root(rootfile)
+    array = svj.open_root(rootfile,local=group_data.local_copy)
 
     def apply_keep(array, sel, keep):
         if sel is None:
@@ -340,7 +343,9 @@ def skim(rootfile, keep=None):
         # Scale uncertainty
         # Compute normalizations before applying cuts
         scale_weight = array.array['ScaleWeights'].to_numpy()
-        scale_weight = scale_weight[:,np.array([0,1,2,3,4,6,8])] # Throw away the mur/muf .5/2 and 2/.5 variations
+        good_scales = np.array([0,1,2,3,4,6,8])
+        scale_weight = scale_weight[ak.num(scale_weight,axis=1)>np.max(good_scales)]
+        scale_weight = scale_weight[:,good_scales] # Throw away the mur/muf .5/2 and 2/.5 variations
         scale_norm_central = scale_weight[:,0].sum()
         scale_norm_up = np.max(scale_weight, axis=-1).sum()
         scale_norm_down = np.min(scale_weight, axis=-1).sum()
@@ -395,8 +400,8 @@ def skim(rootfile, keep=None):
     # Check again, to avoid race conditions
     if seutils.isfile(outfile):
         svj.logger.info('    File %s exists now, not staging out', outfile)
-        continue
-    cols.save(outfile)
+    else:
+        cols.save(outfile)
 
     # systematic variations
     if array.metadata["sample_type"]=="sig":
@@ -413,13 +418,11 @@ def skim(rootfile, keep=None):
             variation = svj.filter_preselection(variation)
             cols = svj.bdt_feature_columns(variation, load_mc=True)
             cols.metadata['selection'] = var_name
-            outfile = dst(rootfile,[var_name]+suffs)
+            outfile = dst(rootfile,group_data.stageout,[var_name]+suffs)
             cols.save(outfile)
 
         # ______________________________
         # JES
-
-        from jes import apply_jes
 
         for var in ['up', 'down']:
             for match_type in ['both']: # other options are: 'full', 'partial'
@@ -431,18 +434,35 @@ def skim(rootfile, keep=None):
                 cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(variation.array['x_jes_15'][:,2:]), -100.).to_numpy()
                 cols.arrays['MET_precorr'] = variation.array['MET_precorr'].to_numpy()
                 cols.arrays['METPhi_precorr'] = variation.array['METPhi_precorr'].to_numpy()
-                cols = apply_selection(cols)
-                outfile = dst(rootfile,[f'jes{var}_{match_type}']+suffs)
+                outfile = dst(rootfile,group_data.stageout,[f'jes{var}_{match_type}']+suffs)
                 cols.save(outfile)
 
 # loop over inputs
 if __name__=="__main__":
+    try:
+        from jdlfactory_server import data, group_data # type: ignore
+        rootfiles = data.rootfiles
+    except:
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--stageout', type=str, help='stageout directory', required=True)
+        parser.add_argument('-k', '--keep', type=float, default=None)
+        parser.add_argument('--impl', dest='storage_implementation', type=str, help='storage implementation', default='xrd', choices=['xrd', 'gfal'])
+        parser.add_argument('rootfiles', type=str, nargs='+')
+        group_data = parser.parse_args()
+        rootfiles = group_data.rootfiles
+        try:
+            import XRootD
+            group_data.local_copy = False
+        except:
+            group_data.local_copy = True
+
     failed_rootfiles = []
 
-    for i, rootfile in enumerate(data.rootfiles):
-        svj.logger.info('Processing rootfile %s/%s: %s', i, len(data.rootfiles)-1, rootfile)
+    for i, rootfile in enumerate(rootfiles):
+        svj.logger.info('Processing rootfile %s/%s: %s', i, len(rootfiles)-1, rootfile)
         try:
-            skim(rootfile)
+            skim(rootfile,group_data)
         except Exception:
             failed_rootfiles.append(rootfile)
             svj.logger.error('Error processing %s; continuing. Error:\n%s', rootfile, traceback.format_exc())
