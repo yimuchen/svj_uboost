@@ -152,10 +152,10 @@ def build_histogram(args=None):
             cols = svj.filter_hemveto(cols)
         # signal region
         if selection=='cutbased':
-            cols = apply_cutbased(cols)
+            cols = common.apply_cutbased(cols)
         elif selection.startswith('bdt='):
             wp = split_bdt(selection)
-            cols = apply_bdtbased(cols,wp,lumi)
+            cols = common.apply_bdtbased(cols,wp,lumi)
         else:
             raise common.InvalidSelectionException(sel=selection)
         return cols
@@ -180,7 +180,7 @@ def build_histogram(args=None):
         w = None
     else:
         w = lumi * central.to_numpy(['puweight']).ravel()
-	    if metadata["sample_type"]=="sig":
+        if metadata["sample_type"]=="sig":
             w *= central.xs / central.cutflow['raw']
             common.logger.info(f'Event weight: {lumi}*{central.xs}/{central.cutflow["raw"]} = {lumi*central.xs/central.cutflow["raw"]}')
         else:
@@ -249,7 +249,7 @@ def build_histogram(args=None):
             mth.vals[i] -= mc_stat_err[i]
             mths[f'mcstat{i}_down'] = mth
 
-    outdir = f'hists_{strftime("%Y%m%d")'
+    outdir = f'hists_{strftime("%Y%m%d")}'
     os.makedirs(outdir, exist_ok=True)
     process = osp.basename(skimfile)
     outfile = f'{outdir}/{process}_sel-{selection}_year-{year}.json'
@@ -269,7 +269,7 @@ def build_all_histograms():
     from hadd_skims import expand_wildcards
     skims = expand_wildcards(skimdir)
     for skim in skims:
-        build_histogram(selection, None, None, fullyear, skim)
+        build_histogram((selection, None, None, fullyear, skim))
 
 @scripter
 def merge_histograms():
@@ -344,7 +344,7 @@ def merge_histograms():
         # just add years
         signals = defaultdict(list)
         for file in files:
-            signals['_'.join(file.split('_')[1:-2]].append(file)
+            signals['_'.join(file.split('_')[1:-2])].append(file)
         for signal,sigfiles in signals.items():
             sighists = {year: get_hists(next((f for f in sigfiles if year in f))) for year in years}
             keys = list(sorted(set([key for y,h in sighists.items() for key in h])))

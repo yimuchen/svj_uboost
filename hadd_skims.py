@@ -5,6 +5,7 @@ import seutils
 import svj_ntuple_processing as svj
 
 def expand_wildcards(pats):
+    if not isinstance(pats,list): pats = [pats]
     expanded = []
     for pat in pats:
         if '*' in pat:
