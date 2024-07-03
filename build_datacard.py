@@ -258,6 +258,9 @@ def build_histogram(args=None):
     outdir = f'hists_{strftime("%Y%m%d")}'
     os.makedirs(outdir, exist_ok=True)
     process = osp.basename(skimfile).replace(".npz","")
+    if metadata["sample_type"]=="data":
+        # keep data era info to avoid overwriting
+        process += '_'+osp.dirname(skimfile)
     outfile = f'{outdir}/{process}_sel-{selection}_year-{year}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
