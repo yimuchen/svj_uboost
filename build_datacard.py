@@ -132,12 +132,6 @@ def build_histogram(args=None):
     def get_variation(var):
         return skimfile.replace(".npz",f"_{var}.npz")
 
-    # process 2018 samples twice as PRE and POST
-    if year=="2018" and not fullyear:
-        outfiles1 = build_histogram((selection,None,"2018PRE",skimfile))
-        outfiles2 = build_histogram((selection,None,"2018POST",skimfile))
-        return outfiles1+outfiles2
-
     # apply final selections
     def apply_selection(cols,year):
         metadata = cols.metadata
@@ -149,7 +143,7 @@ def build_histogram(args=None):
         elif year=="2018POST":
             if metadata["sample_type"]=="data":
                 cols = cols.select(cols.arrays['run']>=startHEM)
-            cols = svj.filter_hemveto(cols)
+            cols = common.apply_hemveto(cols)
         # signal region
         if selection=='cutbased':
             cols = common.apply_cutbased(cols)
@@ -171,6 +165,12 @@ def build_histogram(args=None):
     if year is None: year = str(metadata["year"])
     else: metadata["year"] = year
     if lumi is None: lumi = lumis[year]
+
+    # process 2018 samples twice as PRE and POST
+    if year=="2018" and not fullyear:
+        outfiles1 = build_histogram((selection,None,"2018PRE",False,skimfile))
+        outfiles2 = build_histogram((selection,None,"2018POST",False,skimfile))
+        return outfiles1+outfiles2
 
     common.logger.info(f'Selection: {selection}')
     central = apply_selection(central,year)
@@ -255,7 +255,7 @@ def build_histogram(args=None):
 
     outdir = f'hists_{strftime("%Y%m%d")}'
     os.makedirs(outdir, exist_ok=True)
-    process = osp.basename(skimfile)
+    process = osp.basename(skimfile).replace(".npz","")
     outfile = f'{outdir}/{process}_sel-{selection}_year-{year}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:

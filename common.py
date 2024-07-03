@@ -2,7 +2,7 @@ import os, os.path as osp, logging, re, time, json, argparse, sys, math, shutil
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from contextlib import contextmanager
-import svj_ntuple_processing
+import svj_ntuple_processing as svj
 from scipy.ndimage import gaussian_filter
 import requests
 import numpy as np
@@ -605,7 +605,7 @@ class Decoder(json.JSONDecoder):
 #__________________________________________________
 # Data pipeline
 
-class Columns(svj_ntuple_processing.Columns):
+class Columns(svj.Columns):
     """
     Data structure that contains all the training data (features)
     and information about the sample.
@@ -808,6 +808,11 @@ def ddt(mt, pt, rho, var, weight, percent):
 
     varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
     return varDDT
+
+def apply_hemveto(cols):
+    cols = cols.select(svj.veto_HEM(cols.arrays['ak4_subl_eta'],cols.arrays['ak4_subl_phi'],cols.arrays['ak4_subl_pt']))
+    cols.cutflow['hem_veto'] = len(cols)
+    return cols
 
 def apply_rt_signalregion(cols):
     cols = cols.select(cols.arrays['rt'] > 1.18)
