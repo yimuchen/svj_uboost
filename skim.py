@@ -279,12 +279,16 @@ def dst(path,stageout,suffs=[]):
     """
     Generates a destination .npz for a rootfile
     """
-    # Get the stump starting from the dir with year in it
-    path = '/'.join(path.split('/')[-3:])
-    path = path.replace('.root', '.npz')
     suff = '_'.join(suffs)
+    # Get the stump starting from the dir with year in it
+    pathsplit = path.split('/')[-3:]
+    # put suff in [1] because [2] gets discarded during hadd
     if len(suff)>0:
-        path = path.replace('.npz',f'_{suff}.npz')
+        pathsplit[1] += '_'+suff
+    # remove extraneous
+    pathsplit[2] = pathsplit[2].replace('_RA2AnalysisTree','')
+    path = '/'.join(pathsplit)
+    path = path.replace('.root', '.npz')
     if stageout[-1]!='/': stageout += '/'
     return stageout + path
 
@@ -401,7 +405,7 @@ def skim(rootfile, group_data):
     if seutils.isfile(outfile):
         svj.logger.info('    File %s exists now, not staging out', outfile)
     else:
-        cols.save(outfile)
+        cols.save(outfile,force=True)
 
     # systematic variations
     if array.metadata["sample_type"]=="sig":
@@ -419,7 +423,7 @@ def skim(rootfile, group_data):
             cols = svj.bdt_feature_columns(variation, load_mc=True)
             cols.metadata['selection'] = var_name
             outfile = dst(rootfile,group_data.stageout,[var_name]+suffs)
-            cols.save(outfile)
+            cols.save(outfile,force=True)
 
         # ______________________________
         # JES
@@ -435,7 +439,7 @@ def skim(rootfile, group_data):
                 cols.arrays['MET_precorr'] = variation.array['MET_precorr'].to_numpy()
                 cols.arrays['METPhi_precorr'] = variation.array['METPhi_precorr'].to_numpy()
                 outfile = dst(rootfile,group_data.stageout,[f'jes{var}_{match_type}']+suffs)
-                cols.save(outfile)
+                cols.save(outfile,force=True)
 
 # loop over inputs
 if __name__=="__main__":
