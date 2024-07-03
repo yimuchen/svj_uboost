@@ -250,10 +250,10 @@ def build_histogram(args=None):
         for i in range(mth_central.nbins):
             mth = mth_central.copy()
             mth.vals[i] += mc_stat_err[i]
-            mths[f'mcstat{i}_up'] = mth
+            mths[f'mcstat{i}_{sysyear}_up'] = mth
             mth = mth_central.copy()
             mth.vals[i] -= mc_stat_err[i]
-            mths[f'mcstat{i}_down'] = mth
+            mths[f'mcstat{i}_{sysyear}_down'] = mth
 
     outdir = f'hists_{strftime("%Y%m%d")}'
     os.makedirs(outdir, exist_ok=True)
