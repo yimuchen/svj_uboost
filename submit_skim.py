@@ -109,6 +109,7 @@ def get_list_of_existing_dsts(stageout, cache_file='cached_existing_npzs.json'):
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-g', '--go', action='store_true', help="submit to condor (otherwise run locally)")
+    parser.add_argument('-d', '--dryrun', action='store_true', help="don't run anything")
     parser.add_argument('--missing', action='store_true', help="create jobs for missing outputs")
     parser.add_argument('--listmissing', action='store_true', help="just list missing outputs")
     parser.add_argument('--categories', type=str, default='all', nargs='*', choices=samples.keys(), help="categories to process")
@@ -200,7 +201,7 @@ def main():
         if args.go:
             group.prepare_for_jobs(group_name)
             os.system('cd {}; condor_submit submit.jdl'.format(group_name))
-        else:
+        elif not args.dryrun:
             group.run_locally(keep_temp_dir=False)
 
 if __name__ == '__main__':
