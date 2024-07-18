@@ -11,7 +11,7 @@ from skim import dst
 datadir = 'root://cmseos.fnal.gov//store/user/lpcsusyhad/SusyRA2Analysis2015/Run2ProductionV20'
 mcyears = ['Summer20UL16', 'Summer20UL17', 'Summer20UL18']
 sigdir = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/signal_production_3Dscan'
-sigyears = [f'20{year}/NTUPLE/Private3DUL{year}' for year in [16,17,18]]
+sigyears = [f'NTUPLE/Private3DUL{year}' for year in [16,17,18]]
 
 samples = {
     'data': {
