@@ -107,12 +107,12 @@ def get_list_of_existing_dsts(stageout, cache_file='cached_existing_npzs.json'):
     return existing
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-g', '--go', action='store_true')
-    parser.add_argument('--missing', action='store_true')
-    parser.add_argument('--listmissing', action='store_true')
-    parser.add_argument('--categories', type=str, default='all', nargs='*', choices=samples.keys())
-    parser.add_argument('-k', '--keep', type=float, default=None)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-g', '--go', action='store_true', help="submit to condor (otherwise run locally)")
+    parser.add_argument('--missing', action='store_true', help="create jobs for missing outputs")
+    parser.add_argument('--listmissing', action='store_true', help="just list missing outputs")
+    parser.add_argument('--categories', type=str, default='all', nargs='*', choices=samples.keys(), help="categories to process")
+    parser.add_argument('-k', '--keep', type=float, default=None, help="keep fraction of samples")
     parser.add_argument('--stageout', type=str, help='stageout directory', required=True)
     parser.add_argument('--branch', type=str, default=None, help='svj_ntuple_processing branch')
     parser.add_argument('--impl', type=str, help='storage implementation', default='xrd', choices=['xrd', 'gfal'])
