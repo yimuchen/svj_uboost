@@ -106,6 +106,15 @@ def get_list_of_existing_dsts(stageout, cache_file='cached_existing_npzs.json'):
 
     return existing
 
+# get regex capture group from file
+def match(pattern,fname):
+    import re
+    with open(fname,'r') as file:
+        result = re.search(pattern,file.read())
+        if result is not None and len(result.groups())>0:
+            return result.group(1)
+    return None
+
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-g', '--go', action='store_true', help="submit to condor (otherwise run locally)")
@@ -133,6 +142,10 @@ def main():
 
     for cat in args.categories:
         group = jdlfactory.Group.from_file('skim.py')
+        group.sh('echo "System release "`cat /etc/redhat-release`')
+        # in case worker node doesn't have git
+        group.sh('export PATH=/cvmfs/sft.cern.ch/lcg/releases/lcgenv/1.3.22-6078d/x86_64-el9-gcc12-opt/:$PATH')
+        group.sh('source /cvmfs/sft.cern.ch/lcg/releases/LCG_105/git/2.29.2/x86_64-el9-gcc12-opt/git-env.sh')
         group.venv(py3=True)
         group.sh('pip install git+https://github.com/boostedsvj/seutils')
         group.sh('pip install --ignore-installed --no-cache "numpy<2"')
@@ -140,7 +153,11 @@ def main():
         group.sh('pip install --no-cache numba')
         group.sh('pip install git+https://github.com/boostedsvj/svj_ntuple_processing'+args.branch)
 
+        os_version = match("[^0-9]*([0-9]+).*","/etc/redhat-release")
+        group.htcondor['+REQUIRED_OS'] = "rhel"+os_version
+        group.htcondor['+DesiredOS'] = "REQUIRED_OS"
         group.htcondor['on_exit_hold'] = '(ExitBySignal == true) || (ExitCode != 0)'
+        group.htcondor['on_exit_hold_reason'] = 'strcat("Job held by ON_EXIT_HOLD due to ",	ifThenElse((ExitBySignal == True), "exit by signal", strcat("exit code ",ExitCode)), ".")'
 
         group.group_data['keep'] = args.keep
         group.group_data['category'] = cat
