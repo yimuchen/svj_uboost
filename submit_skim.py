@@ -115,6 +115,11 @@ def match(pattern,fname):
             return result.group(1)
     return None
 
+def pip_install_git_local(group,user,repo,branch="main"):
+    group.sh(f'wget https://github.com/{user}/{repo}/archive/refs/heads/{branch}.tar.gz -O {repo}.tar.gz')
+    group.sh(f'mkdir {repo} && tar -xzf {repo}.tar.gz -C {repo} --strip-components 1 && rm {repo}.tar.gz')
+    group.sh(f'cd {repo} && pip install -e . && cd -')
+
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-g', '--go', action='store_true', help="submit to condor (otherwise run locally)")
@@ -129,10 +134,8 @@ def main():
     parser.add_argument('--singlejob', action='store_true', help='Single job for testing.')
     args = parser.parse_args()
 
-    if args.branch is not None:
-        args.branch = '@'+args.branch
-    else:
-        args.branch = ''
+    if args.branch is None:
+        args.branch = "main"
 
     if args.categories=='all':
         args.categories = list(samples.keys())
@@ -142,16 +145,14 @@ def main():
 
     for cat in args.categories:
         group = jdlfactory.Group.from_file('skim.py')
+        group.sh('set -x')
         group.sh('echo "System release "`cat /etc/redhat-release`')
-        # in case worker node doesn't have git
-        group.sh('export PATH=/cvmfs/sft.cern.ch/lcg/releases/lcgenv/1.3.22-6078d/x86_64-el9-gcc12-opt/:$PATH')
-        group.sh('source /cvmfs/sft.cern.ch/lcg/releases/LCG_105/git/2.29.2/x86_64-el9-gcc12-opt/git-env.sh')
         group.venv(py3=True)
-        group.sh('pip install git+https://github.com/boostedsvj/seutils')
+        pip_install_git_local(group,"boostedsvj","seutils")
         group.sh('pip install --ignore-installed --no-cache "numpy<2"')
         group.sh('pip install --no-cache awkward')
         group.sh('pip install --no-cache numba')
-        group.sh('pip install git+https://github.com/boostedsvj/svj_ntuple_processing'+args.branch)
+        pip_install_git_local(group,"boostedsvj","svj_ntuple_processing",args.branch)
 
         os_version = match("[^0-9]*([0-9]+).*","/etc/redhat-release")
         group.htcondor['+REQUIRED_OS'] = "rhel"+os_version
