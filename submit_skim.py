@@ -94,10 +94,9 @@ def get_list_of_existing_dsts(stageout, cache_file='cached_existing_npzs.json'):
             return json.load(f)
 
     jdlfactory.logger.info('Building list of all existing .npz files. This can take ~10-15 min.')
-    seutils.MAX_RECURSION_DEPTH = 1000
+    seutils.MAX_RECURSION_DEPTH = 100000
     existing = []
     for path, _, files in seutils.walk(stageout):
-        jdlfactory.logger.info(path)
         existing.extend(fnmatch.filter(files, '*.npz'))
 
     jdlfactory.logger.info('Caching list of {} npz files to {}'.format(len(existing), cache_file))
