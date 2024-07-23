@@ -237,6 +237,9 @@ def build_histogram(args=None):
 
         # PDF
         pdf_weights = central.to_numpy(['pdf_weights'])
+        # set massive unphysical weights to physical max
+        pdf_max = np.max(pdf_weights, where=pdf_weights<100, initial=1)
+        pdf_weights = np.clip(pdf_weights,a_min=None,a_max=pdf_max)
         pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
         mu_pdf = np.mean(pdf_weights, axis=1)
         sigma_pdf = np.std(pdf_weights, axis=1)

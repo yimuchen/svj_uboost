@@ -336,6 +336,9 @@ def skim(rootfile, group_data):
         # PDF weights
         svj.logger.info('    Calculating PDFweight norm factors')
         pdf_weights = array.array['PDFweights'].to_numpy()
+        # set massive unphysical weights to physical max
+        pdf_max = np.max(pdf_weights, where=pdf_weights<100, initial=1)
+        pdf_weights = np.clip(pdf_weights,a_min=None,a_max=pdf_max)
         pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
         # mu and sigma _per event_
         mu = np.mean(pdf_weights, axis=1)
@@ -343,6 +346,11 @@ def skim(rootfile, group_data):
         # Normalization factors for the weights
         pdfw_norm_up   = np.mean(mu+sigma)
         pdfw_norm_down = np.mean(mu-sigma)
+        svj.logger.info(
+            '    PDF unc:'
+            f'\n        norm_up      = {pdfw_norm_up:.5f}'
+            f'\n        norm_down    = {pdfw_norm_down:.5f}'
+            )
 
         # Scale uncertainty
         # Compute normalizations before applying cuts
