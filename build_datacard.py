@@ -452,7 +452,9 @@ def get_systs(names=False,years=None):
         'pu2017': "Pileup reweighting (2017)",
         'pu2018': "Pileup reweighting (2018)",
         'pdf': "PDF",
-        'stat': "MC statistical",
+        'stat2016': "MC statistical (2016)",
+        'stat2017': "MC statistical (2017)",
+        'stat2018': "MC statistical (2018)",
     }
     if years is not None:
         if not isinstance(years,list): years = [years]
@@ -482,18 +484,22 @@ def plot_systematics():
     outdir = f'plots_{strftime("%Y%m%d")}_{model_str}'
     os.makedirs(outdir, exist_ok=True)
 
-    systs = get_systs(years=meta['year'])
-    if 'stat_up' not in mths.keys():
-        stat_up = mths['central'].copy()
-        stat_down = mths['central'].copy()
-        i = 0
-        while f'mcstat{i}_up' in mths.keys():
-            stat_up.vals[i] = mths[f'mcstat{i}_up'].vals[i]
-            stat_down.vals[i] = mths[f'mcstat{i}_down'].vals[i]
-            i += 1
+    years = meta['year']
+    if not isinstance(years,list): years = [years]
+    systs = get_systs(years=years)
+    for year in years:
+        sysyear = year[:4]
+        if f'stat{sysyear}_up' not in mths.keys():
+            stat_up = mths['central'].copy()
+            stat_down = mths['central'].copy()
+            i = 0
+            while f'mcstat{i}_{sysyear}_up' in mths.keys():
+                stat_up.vals[i] = mths[f'mcstat{i}_{sysyear}_up'].vals[i]
+                stat_down.vals[i] = mths[f'mcstat{i}_{sysyear}_down'].vals[i]
+                i += 1
 
-        mths['stat_up'] = stat_up
-        mths['stat_down'] = stat_down
+            mths[f'stat{sysyear}_up'] = stat_up
+            mths[f'stat{sysyear}_down'] = stat_down
 
     for syst in systs:
         plot = Plot(meta)
