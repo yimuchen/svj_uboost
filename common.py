@@ -151,6 +151,10 @@ def put_on_cmslabel(ax, text='Simulation Preliminary', year=2018):
         usetex=True,
         fontsize=fontsize
         )
+    # assume float means lumi, convert to fb-1
+    if isinstance(year,float):
+        year = "{:.1f} ".format(year/1000)
+        year = year+r"$\mathrm{fb}^{-1}$"
     ax.text(
         1.0, 1.005,
         '{} (13 TeV)'.format(year),

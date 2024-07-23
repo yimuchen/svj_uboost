@@ -322,6 +322,7 @@ def merge_histograms():
     lumi_total = sum(lumis[year] for year in years)
     def assign_metadata(hist):
         hist.metadata['selection'] = selection
+        hist.metadata['year'] = years
         hist.metadata['lumi'] = lumi_total
 
     samples = {
@@ -337,9 +338,9 @@ def merge_histograms():
         mths = {
             cat : None,
         }
-        assign_metadata(mths[cat])
         for file in files:
             mths[cat] = add_hist(mths[cat],get_hists(file)[default])
+        assign_metadata(mths[cat])
         write(mths,cat)
 
     elif cat=="bkg":
@@ -357,6 +358,7 @@ def merge_histograms():
             mths[bkg+'_individual'].append(tmp) # Save individual histogram
             mths[bkg] = add_hists(mths[bkg],tmp) # Add up per background category
             mths[cat] = add_hists(mths[cat],tmp) # Add up all
+        assign_metadata(mths[cat])
         write(mths,cat)
 
     elif cat=="sig":
@@ -378,6 +380,7 @@ def merge_histograms():
                     getter = lambda h: h[key]
                 for year,sighist in sighists.items():
                     mths[key] = add_hists(mths[key],getter(sighist))
+            assign_metadata(mths[default])
             write(mths,signal)
 
 # __________________________________________
@@ -391,11 +394,11 @@ def reorderLegend(ax,order,title):
     ax.legend(handles, labels, title=title)
 
 class Plot:
-    def __init__(self, selection):
-        self.selection = selection
+    def __init__(self, meta):
+        self.selection = meta['selection']
         self.fig, (self.top, self.bot) = plt.subplots(2,1, height_ratios=[3,1], figsize=(10,13))
         self.top.set_yscale('log')
-        common.put_on_cmslabel(self.top)
+        common.put_on_cmslabel(self.top, year = meta['lumi'] if 'lumi' in meta else meta['year'])
         self.top.set_ylabel('Event count')
         self.bot.set_ylabel('Ratio to central')
         self.bot.set_xlabel(r'$m_{T}$ (GeV)')
@@ -433,12 +436,18 @@ class Plot:
 def get_systs(names=False):
     syst_names = {
         'scale': "Scales",
-        'jer': "JER",
-        'jec': "JEC",
+        'jer2016': "JER (2016)",
+        'jer2017': "JER (2017)",
+        'jer2018': "JER (2018)",
+        'jec2016': "JEC (2016)",
+        'jec2017': "JEC (2017)",
+        'jec2018': "JEC (2018)",
         'jes': "JES",
         'isr': "ISR (parton shower)",
         'fsr': "FSR (parton shower)",
-        'pu': "Pileup reweighting",
+        'pu2016': "Pileup reweighting (2016)",
+        'pu2017': "Pileup reweighting (2017)",
+        'pu2018': "Pileup reweighting (2018)",
         'pdf': "PDF",
         'stat': "MC statistical",
     }
@@ -479,7 +488,7 @@ def plot_systematics():
         mths['stat_down'] = stat_down
 
     for syst in systs:
-        plot = Plot(meta['selection'])
+        plot = Plot(meta)
         plot.plot_hist(central, label='Central')
         plot.plot_hist(mths[f'{syst}_up'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} up')
         plot.plot_hist(mths[f'{syst}_down'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} down')
@@ -682,9 +691,8 @@ def plot_smooth():
     os.makedirs(outdir, exist_ok=True)
 
     for var in vars:
-        plot = Plot("")
         meta = mths[0]['central'].metadata
-        plot.selection = meta['selection']
+        plot = Plot(meta)
         legend_order = []
         h_denom = None
 
