@@ -433,7 +433,7 @@ class Plot:
         plt.savefig(outfile.replace('.png', '.pdf'), bbox_inches="tight")
         common.imgcat(outfile)
 
-def get_systs(names=False):
+def get_systs(names=False,years=None):
     syst_names = {
         'scale': "Scales",
         'jer2016': "JER (2016)",
@@ -451,6 +451,11 @@ def get_systs(names=False):
         'pdf': "PDF",
         'stat': "MC statistical",
     }
+    if years is not None:
+        if not isinstance(years,list): years = [years]
+        # convert to sysyears
+        years = [year[:4] for year in years]
+        syst_names = {k:v for k,v in syst_names.items() if '20' not in k or any(year in k for year in years)}
     if names: return syst_names
     else: return list(syst_names.keys())
 
@@ -474,7 +479,7 @@ def plot_systematics():
     outdir = f'plots_{strftime("%Y%m%d")}_{model_str}'
     os.makedirs(outdir, exist_ok=True)
 
-    systs = get_systs()
+    systs = get_systs(years=meta['year'])
     if 'stat_up' not in mths.keys():
         stat_up = mths['central'].copy()
         stat_down = mths['central'].copy()
@@ -579,7 +584,7 @@ def smooth_shapes():
     common.logger.info(f'central metadata:\n{mths["central"].metadata}')
 
     # loop over central and systematics
-    variations = get_systs()
+    variations = get_systs(years=mths["central"].metadata["year"])
     variations.remove('stat')
     variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
     variations = ['central']+variations
