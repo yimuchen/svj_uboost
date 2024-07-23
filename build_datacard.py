@@ -304,11 +304,15 @@ def merge_histograms():
             hist = htmp
         else:
             hist += htmp
+        return hist
 
     outdir = histdir.replace("hists","merged")
     os.makedirs(outdir, exist_ok=True)
     def write(hists,proc):
-        outfile = f'{outdir}/{proc}_sel-{selection}.json'
+        if selection in proc:
+            outfile = f'{outdir}/{proc}.json'
+        else:
+            outfile = f'{outdir}/{proc}_sel-{selection}.json'
         hists = rebin_dict(hists)
         outfile = rebin_name(outfile)
         common.logger.info(f'Dumping merged histograms to {outfile}')
@@ -335,7 +339,7 @@ def merge_histograms():
         }
         assign_metadata(mths[cat])
         for file in files:
-            add_hist(mths[cat],get_hists(file)[default])
+            mths[cat] = add_hist(mths[cat],get_hists(file)[default])
         write(mths,cat)
 
     elif cat=="bkg":
@@ -351,8 +355,8 @@ def merge_histograms():
             tmp = get_hists(file)[default]
             bkg = next((b for b in samples["bkg"] if b in file)).lower()
             mths[bkg+'_individual'].append(tmp) # Save individual histogram
-            add_hists(mths[bkg],tmp) # Add up per background category
-            add_hists(mths[cat],tmp) # Add up all
+            mths[bkg] = add_hists(mths[bkg],tmp) # Add up per background category
+            mths[cat] = add_hists(mths[cat],tmp) # Add up all
         write(mths,cat)
 
     elif cat=="sig":
@@ -368,12 +372,12 @@ def merge_histograms():
                 mths[key] = None
                 # handle uncorrelated systematics (vary one year at a time)
                 if '20' in key:
-                    getter = lambda h: h.get(key,'central')
+                    getter = lambda h: h.get(key,h[default])
                 # correlated systematics must be present in all years
                 else:
                     getter = lambda h: h[key]
                 for year,sighist in sighists.items():
-                    add_hists(mths[key],getter(sighist))
+                    mths[key] = add_hists(mths[key],getter(sighist))
             write(mths,signal)
 
 # __________________________________________

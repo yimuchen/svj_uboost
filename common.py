@@ -497,7 +497,7 @@ class Histogram:
     def __radd__(self, other):
         if other == 0:
             return self.copy()
-        raise NotImplemented
+        raise NotImplementedError
 
     def __mul__(self, factor):
         """Multiply by a constant"""
