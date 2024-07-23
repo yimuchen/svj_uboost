@@ -123,9 +123,9 @@ def build_histogram(args=None):
         bkgs = [c for c in bkgs if len(c)]
         # Filter out QCD with pT<300
         # Only singular events pass the preselection, which creates spikes in the final bkg dist
-        bkgs = filter_pt(bkgs, 300)
+        bkgs = common.filter_pt(bkgs, 300)
         # Same story for wjets with HT<400
-        bkgs = filter_ht(bkgs, 400, 'wjets')
+        bkgs = common.filter_ht(bkgs, 400, 'wjets')
         # Filter out wjets inclusive bin - it's practically the HT<100 bin,
         # and it's giving problems
         bkgs = [c for c in bkgs if not (c.metadata['bkg_type']=='wjets' and 'htbin' not in c.metadata)]
@@ -299,6 +299,12 @@ def merge_histograms():
         with open(file,'r') as f:
             return json.load(f, cls=common.Decoder)
 
+    def add_hists(hist,htmp):
+        if hist is None:
+            hist = htmp
+        else:
+            hist += htmp
+
     outdir = histdir.replace("hists","merged")
     os.makedirs(outdir, exist_ok=True)
     def write(hists,proc):
@@ -325,28 +331,28 @@ def merge_histograms():
     if cat=="data":
         # just add them all up
         mths = {
-            cat : common.MTHistogram.empty(),
+            cat : None,
         }
         assign_metadata(mths[cat])
         for file in files:
-            mths[cat] += get_hists(file)[default]
+            add_hist(mths[cat],get_hists(file)[default])
         write(mths,cat)
 
     elif cat=="bkg":
         # add up but keep components
         mths = {
-            cat : common.MTHistogram.empty(),
+            cat : None
         }
-        for b in bkg:
+        for b in samples["bkg"]:
             b = b.lower()
             mths[b+'_individual'] = []
-            mths[b] = common.MTHistogram.empty()
+            mths[b] = None
         for file in files:
             tmp = get_hists(file)[default]
             bkg = next((b for b in samples["bkg"] if b in file)).lower()
             mths[bkg+'_individual'].append(tmp) # Save individual histogram
-            mths[bkg] += tmp # Add up per background category
-            mths[cat] += tmp # Add up all
+            add_hists(mths[bkg],tmp) # Add up per background category
+            add_hists(mths[cat],tmp) # Add up all
         write(mths,cat)
 
     elif cat=="sig":
@@ -359,7 +365,7 @@ def merge_histograms():
             keys = list(sorted(set([key for y,h in sighists.items() for key in h])))
             mths = {}
             for key in keys:
-                mths[key] = common.MTHistogram.empty()
+                mths[key] = None
                 # handle uncorrelated systematics (vary one year at a time)
                 if '20' in key:
                     getter = lambda h: h.get(key,'central')
@@ -367,7 +373,7 @@ def merge_histograms():
                 else:
                     getter = lambda h: h[key]
                 for year,sighist in sighists.items():
-                    mths[key] += getter(sighist)
+                    add_hists(mths[key],getter(sighist))
             write(mths,signal)
 
 # __________________________________________

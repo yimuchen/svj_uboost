@@ -5,6 +5,7 @@ import seutils
 import svj_ntuple_processing as svj
 
 def expand_wildcards(pats):
+    seutils.MAX_RECURSION_DEPTH = 100000
     if not isinstance(pats,list): pats = [pats]
     expanded = []
     for pat in pats:

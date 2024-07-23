@@ -458,7 +458,7 @@ class Histogram:
         for k, v in self.metadata.items():
             try:
                 self.metadata[k] = float(v)
-            except ValueError:
+            except (ValueError,TypeError) as e:
                 pass
         return dict(
             type = 'Histogram',
