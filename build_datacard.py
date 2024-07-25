@@ -15,16 +15,6 @@ sys.path.append(osp.join(THIS_DIR, 'systematics'))
 
 scripter = common.Scripter()
 
-# in units of pb-1 (xsec units: pb)
-lumis = {
-    "2016": 36330,
-    "2017": 41530,
-    "2018PRE": 21090,
-    "2018POST": 38650,
-}
-lumis["2018"] = lumis["2018PRE"]+lumis["2018POST"] # 59740
-lumis["RUN2"] = lumis["2016"]+lumis["2017"]+lumis["2018"] # 137600
-
 def change_bin_width():
     """
     Changes MT binning based on command line options
@@ -165,8 +155,9 @@ def build_histogram(args=None):
             return [""]
 
     if year is None: year = str(metadata["year"])
-    else: metadata["year"] = year
-    if lumi is None: lumi = lumis[year]
+    else:
+        metadata["year"] = year
+        lumi = common.lumis(year)
 
     # process 2018 samples twice as PRE and POST
     if year=="2018" and not fullyear:
@@ -181,14 +172,14 @@ def build_histogram(args=None):
     if metadata["sample_type"]=="data":
         w = None
     else:
-        w = lumi * central.to_numpy(['puweight']).ravel()
-        if metadata["sample_type"]=="sig":
-            w *= central.xs / central.cutflow['raw']
-            common.logger.info(f'Event weight: {lumi}*{central.xs}/{central.cutflow["raw"]} = {lumi*central.xs/central.cutflow["raw"]}')
+        w = central.to_numpy(['puweight']).ravel()
+        event_weight = common.get_event_weight(central,lumi)
+        w *= event_weight
+        # save event weight
+        if isinstance(event_weight,float):
+            metadata['event_weight'] = event_weight
         else:
-            tree_weights = central.to_numpy(['weight']).ravel()
-            w *= tree_weights
-            common.logger.info(f'Event weight: {lumi}*{tree_weights[0]} = {lumi*tree_weights[0]}')
+            metadata['event_weight'] = event_weight[0]
     mth_central = common.MTHistogram(mt, w)
     mth_central.metadata.update(metadata)
     mths['central'] = mth_central
@@ -210,8 +201,9 @@ def build_histogram(args=None):
             col = svj.Columns.load(get_variation(tag))
             col = apply_selection(col,year)
             mt = col.to_numpy(['mt']).flatten()
-            w = lumi * col.to_numpy(['puweight']).flatten()
-            w *= col.xs / col.cutflow['raw']
+            w = col.to_numpy(['puweight']).flatten()
+            event_weight = common.get_event_weight(col,lumi)
+            w *= event_weight
             return common.MTHistogram(mt, w)
         # JER, JEC treated as uncorrelated between years (but 2018PRE, 2018POST always correlated)
         sysyear = year[:4]
@@ -258,6 +250,8 @@ def build_histogram(args=None):
             mth.vals[i] -= mc_stat_err[i]
             mths[f'mcstat{i}_{sysyear}_down'] = mth
 
+    # save cutflow after applying final selection & after doing any copying (to avoid duplication)
+    mths['central'].cutflow = central.cutflow.copy()
     outdir = f'hists_{strftime("%Y%m%d")}'
     os.makedirs(outdir, exist_ok=True)
     process = osp.basename(skimfile).replace(".npz","")
@@ -322,7 +316,7 @@ def merge_histograms():
         with open(outfile, 'w') as f:
             json.dump(hists, f, cls=common.Encoder, indent=4)
 
-    lumi_total = sum(lumis[year] for year in years)
+    lumi_total = sum(common.lumis[year] for year in years)
     def assign_metadata(hist):
         hist.metadata['selection'] = selection
         hist.metadata['year'] = years
@@ -594,7 +588,7 @@ def smooth_shapes():
 
     # loop over central and systematics
     variations = get_systs(years=mths["central"].metadata["year"])
-    variations.remove('stat')
+    variations = [v for v in variations if not v.startswith('stat')]
     variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
     variations = ['central']+variations
 

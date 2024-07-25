@@ -431,6 +431,56 @@ def filter_ht(cols, min_ht, bkg_type=None):
 #__________________________________________________
 # Histogram classes
 
+# in units of pb-1 (xsec units: pb)
+lumis = {
+    "2016": 36330,
+    "2017": 41530,
+    "2018PRE": 21090,
+    "2018POST": 38650,
+}
+lumis["2018"] = lumis["2018PRE"]+lumis["2018POST"] # 59740
+lumis["RUN2"] = lumis["2016"]+lumis["2017"]+lumis["2018"] # 137600
+
+# from madgraph, MADPT>300, jet matching efficiency included, for gq = 0.25
+signal_xsecs = {
+    200 : 7.412,
+    250 : 7.044,
+    300 : 6.781,
+    350 : 6.158,
+    400 : 5.566,
+    450 : 5.021,
+    500 : 4.439,
+    550 : 3.795,
+}
+
+def get_event_weight(obj,lumi=None):
+    if isinstance(obj,svj.Columns):
+        if lumi is None:
+            lumi = lumis[str(obj.metadata['year'])]
+
+        if obj.metadata["sample_type"]=="sig":
+            mz = obj.metadata["mz"]
+            br = 0.47 # branching fraction to dark
+            if mz in signal_xsecs:
+                xsec = signal_xsecs[mz]
+            else:
+                # uses interpolation
+                xsec = central.xs
+            nevents = obj.cutflow['raw']
+            event_weight = lumi*xsec*br/nevents
+            logger.info(f'Event weight: {lumi}*{br}*{xsec}/{nevents} = {event_weight}')
+            return event_weight
+        else:
+            tree_weights = central.to_numpy(['weight']).ravel()
+            common.logger.info(f'Event weight: {lumi}*{tree_weights[0]} = {lumi*tree_weights[0]}')
+            return lumi*tree_weights
+
+    elif isinstance(obj,Histogram):
+        return obj.metadata['event_weight']
+
+    else:
+        raise RuntimeError(f'Unknown weight method for object of class {type(obj).__name__}')
+
 class Histogram:
     """
     Histogram container class.
@@ -445,6 +495,8 @@ class Histogram:
         inst.vals = np.array(dict['vals'])
         inst.errs = np.array(dict['errs'])
         inst.metadata = dict['metadata'].copy()
+        if 'cutflow_keys' and 'cutflow_vals' in dict:
+            inst.cutflow = OrderedDict((k,v) for k,v in zip(dict['cutflow_keys'],dict['cutflow_vals']))
         return inst
 
     def __init__(self, binning, vals=None, errs=None):
@@ -452,6 +504,7 @@ class Histogram:
         self.vals = np.zeros(self.nbins) if vals is None else vals
         self.errs = np.sqrt(self.vals) if errs is None else errs
         self.metadata = {}
+        self.cutflow = OrderedDict()
 
     @property
     def nbins(self):
@@ -469,7 +522,9 @@ class Histogram:
             binning = list(self.binning),
             vals = list(self.vals),
             errs = list(self.errs),
-            metadata = self.metadata.copy()
+            metadata = self.metadata.copy(),
+            cutflow_keys = list(self.cutflow.keys()),
+            cutflow_vals = [v.item() if type(v).__module__=='numpy' else v for v in self.cutflow.values()], # convert from np int64 to serializable type
             )
 
     def __repr__(self):
@@ -484,18 +539,33 @@ class Histogram:
     def copy(self):
         the_copy = Histogram(self.binning.copy(), self.vals.copy(), self.errs.copy())
         the_copy.metadata = self.metadata.copy()
+        the_copy.cutflow = self.cutflow.copy()
         return the_copy
 
     def __add__(self, other):
         """Add another Histogram or a numpy array to this histogram. Returns new object."""
         ans = self.copy()
+
         if isinstance(other, Histogram):
             ans.vals = self.vals + other.vals
             ans.errs = np.sqrt(self.errs**2 + other.errs**2)
+
+            # add cutflows if present, accounting for weights
+            self_keys = list(self.cutflow.keys())
+            other_keys = list(other.cutflow.keys())
+            if len(self_keys)==0 or len(other_keys)==0:
+                ans.cutflow = OrderedDict()
+            elif self_keys!=other_keys:
+                logger.warning(f'Unable to add cutflows with different keys ({self_keys} vs. {other_keys})')
+                ans.cutflow = OrderedDict()
+            else:
+                ans.cutflow = OrderedDict((k, self.cutflow[k]*self.metadata["event_weight"] + other.cutflow[k]*other.metadata["event_weight"]) for k in self_keys)
+
         elif hasattr(other, 'shape') and self.vals.shape == other.shape:
             # Add a simple np histogram on top of it
             ans.vals += other
             ans.errs = np.sqrt(self.errs**2 + other)
+
         return ans
 
     def __radd__(self, other):
