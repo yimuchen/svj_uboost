@@ -176,10 +176,7 @@ def build_histogram(args=None):
         event_weight = common.get_event_weight(central,lumi)
         w *= event_weight
         # save event weight
-        if isinstance(event_weight,float):
-            metadata['event_weight'] = event_weight
-        else:
-            metadata['event_weight'] = event_weight[0]
+        metadata['event_weight'] = common.get_single_event_weight(event_weight)
     mth_central = common.MTHistogram(mt, w)
     mth_central.metadata.update(metadata)
     mths['central'] = mth_central

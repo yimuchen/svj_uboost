@@ -481,6 +481,23 @@ def get_event_weight(obj,lumi=None):
     else:
         raise RuntimeError(f'Unknown weight method for object of class {type(obj).__name__}')
 
+def get_single_event_weight(weights):
+    if isinstance(weights,float): return weights
+    else: return weights[0]
+
+def add_cutflows(obj1, obj2):
+    # add cutflows if present, accounting for weights
+    keys1 = list(obj1.cutflow.keys()) if hasattr(obj1,'cutflow') else []
+    keys2 = list(obj2.cutflow.keys()) if hasattr(obj2,'cutflow') else []
+    if len(keys1)>0 and len(keys2)>0 and keys1==keys2:
+        weight1 = get_single_event_weight(get_event_weight(obj1))
+        weight2 = get_single_event_weight(get_event_weight(obj2))
+        return OrderedDict((k, obj1.cutflow[k]*weight1 + obj2.cutflow[k]*weight2) for k in keys1)
+    else:
+        if keys1 and keys2 and keys1!=keys2:
+            logger.warning(f'Unable to add cutflows with different keys ({keys1} vs. {keys2})')
+        return OrderedDict()
+
 class Histogram:
     """
     Histogram container class.
@@ -549,17 +566,7 @@ class Histogram:
         if isinstance(other, Histogram):
             ans.vals = self.vals + other.vals
             ans.errs = np.sqrt(self.errs**2 + other.errs**2)
-
-            # add cutflows if present, accounting for weights
-            self_keys = list(self.cutflow.keys())
-            other_keys = list(other.cutflow.keys())
-            if len(self_keys)==0 or len(other_keys)==0:
-                ans.cutflow = OrderedDict()
-            elif self_keys!=other_keys:
-                logger.warning(f'Unable to add cutflows with different keys ({self_keys} vs. {other_keys})')
-                ans.cutflow = OrderedDict()
-            else:
-                ans.cutflow = OrderedDict((k, self.cutflow[k]*self.metadata["event_weight"] + other.cutflow[k]*other.metadata["event_weight"]) for k in self_keys)
+            ans.cutflow = add_cutflows(self, other)
 
         elif hasattr(other, 'shape') and self.vals.shape == other.shape:
             # Add a simple np histogram on top of it
