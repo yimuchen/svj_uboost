@@ -470,13 +470,15 @@ def get_event_weight(obj,lumi=None):
             event_weight = lumi*xsec*br/nevents
             logger.info(f'Event weight: {lumi}*{br}*{xsec}/{nevents} = {event_weight}')
             return event_weight
-        else:
+        elif obj.metadata["sample_type"]=="bkg":
             tree_weights = central.to_numpy(['weight']).ravel()
             common.logger.info(f'Event weight: {lumi}*{tree_weights[0]} = {lumi*tree_weights[0]}')
             return lumi*tree_weights
+        else: # data
+            return 1.0
 
     elif isinstance(obj,Histogram):
-        return obj.metadata['event_weight']
+        return obj.metadata.get('event_weight',1)
 
     else:
         raise RuntimeError(f'Unknown weight method for object of class {type(obj).__name__}')

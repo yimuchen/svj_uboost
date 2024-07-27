@@ -297,7 +297,10 @@ def merge_histograms():
         if hist is None:
             hist = htmp
         else:
+            # once two hists (& their cutflows) are added, event_weight no longer needed -> set to 1
             hist += htmp
+            if 'event_weight' in hist.metadata:
+                hist.metadata['event_weight'] = 1.0
         return hist
 
     outdir = histdir.replace("hists","merged")
