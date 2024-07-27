@@ -485,17 +485,16 @@ def get_single_event_weight(weights):
     if isinstance(weights,float): return weights
     else: return weights[0]
 
-def add_cutflows(obj1, obj2):
+def add_cutflows(*objs):
     # add cutflows if present, accounting for weights
-    keys1 = list(obj1.cutflow.keys()) if hasattr(obj1,'cutflow') else []
-    keys2 = list(obj2.cutflow.keys()) if hasattr(obj2,'cutflow') else []
-    if len(keys1)>0 and len(keys2)>0 and keys1==keys2:
-        weight1 = get_single_event_weight(get_event_weight(obj1))
-        weight2 = get_single_event_weight(get_event_weight(obj2))
-        return OrderedDict((k, obj1.cutflow[k]*weight1 + obj2.cutflow[k]*weight2) for k in keys1)
+    keys = [list(obj.cutflow.keys()) if hasattr(obj,'cutflow') else [] for obj in objs]
+    if keys and all(keys) and all(k == keys[0] for k in keys):
+        weights = [get_single_event_weight(get_event_weight(obj)) for obj in objs]
+        return OrderedDict((k, sum(obj.cutflow[k]*weight for obj,weight in zip(objs,weights))) for k in keys[0])
     else:
-        if keys1 and keys2 and keys1!=keys2:
-            logger.warning(f'Unable to add cutflows with different keys ({keys1} vs. {keys2})')
+        if keys and all(keys):
+            keylist = '\n'.join(f'  {k}' for k in keys)
+            logger.warning(f'Unable to add cutflows with different keys:\n{keylist}')
         return OrderedDict()
 
 class Histogram:
