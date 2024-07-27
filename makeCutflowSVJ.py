@@ -52,7 +52,7 @@ def compute_cutflow(cutflow):
     prev = 1
     for key,val in cutflow.items():
         if nentries is None: nentries = val
-        cutflow[key] = {"raw": val, "abs": val/nentries, "rel": val/prev}
+        cutflow[key] = {"raw": val, "abs": val/nentries*100, "rel": val/prev*100}
         prev = val
     return cutflow
 
@@ -148,7 +148,7 @@ if __name__=='__main__':
         sig_names = OrderedDict([(shortname(point), '$\\{} = {}{}$'.format(varied,point[varied_ind],sig_units[varied])) for point in sigs])
 
     # todo: make this work for .json as well
-    def add_all_cutflows(cats,dir,subdirs):
+    def add_all_cutflows(cats,dir,subdirs,wildcard):
         collected = {cat:[] for cat in cats}
         def get_col_key(col):
             meta = col.metadata
@@ -156,7 +156,7 @@ if __name__=='__main__':
             elif meta['sample_type']=='sig': return shortname(meta)
             else: return ''
         for subdir in subdirs:
-            files = expand_wildcards(dir+subdir+'/*.npz')
+            files = expand_wildcards(dir+subdir+'/'+wildcard)
             cols = [svj.Columns.load(file) for file in files]
             cols = common.filter_pt(cols, 170.)
             cols = [c for c in cols if not (c.metadata.get('bkg_type','')=='wjets' and 'htbin' not in c.metadata)]
@@ -168,11 +168,13 @@ if __name__=='__main__':
         cutflows = {cat:common.add_cutflows(*cols) for cat,cols in collected.items()}
         return cutflows
 
-    bkg_cutflows = add_all_cutflows(list(bkg_names.keys()), args.dir, ["Summer20UL16","Summer20UL17","Summer20UL18"]) if len(bkg_names)>0 else {}
-    sig_cutflows = add_all_cutflows(list(sig_names.keys()), args.dir, ["Private3DUL16","Private3DUL17","Private3DUL18"]) if len(sig_names)>0 else {}
+    bkg_cutflows = add_all_cutflows(list(bkg_names.keys()), args.dir, ["Summer20UL16","Summer20UL17","Summer20UL18"], '*.npz') if len(bkg_names)>0 else {}
+    sig_cutflows = add_all_cutflows(list(sig_names.keys()), args.dir, ["Private3DUL16","Private3DUL17","Private3DUL18"], '*pythia8.npz') if len(sig_names)>0 else {}
 
     procs = OrderedDict(list(bkg_names.items())+list(sig_names.items()))
-    cutflows = dict().update(bkg_cutflows).update(sig_cutflows)
+    cutflows = {}
+    cutflows.update(bkg_cutflows)
+    cutflows.update(sig_cutflows)
 
     multicol = 3 if args.type=='rawrel' and args.error else 2
     if not args.error: multicol = 1
@@ -192,11 +194,11 @@ if __name__=='__main__':
             if (args.efficiency and key=='raw') or (not args.efficiency and key=='stitch'):
                 started = True
             elif started:
-                otmp = " & \\colspace"+print_val(val[args.type[:3]]) # +(" & "+splitline[cutflow_ind+2] if args.error else "")
+                otmp = " & \\colspace"+print_val(val[args.type[:3]],args.prec,args.minprec) # +(" & "+splitline[cutflow_ind+2] if args.error else "")
                 if args.alignDecimal: otmp = otmp.replace(".", "&.", 1)
                 outDict[key] += otmp
                 #max_err = max(max_err, splitline[cutflow_ind+2])
-                if args.type=='rawrel': outDict[key] += " & "+print_val(val['rel'])
+                if args.type=='rawrel': outDict[key] += " & "+print_val(val['rel'],args.prec,args.minprec)
                 if first is None: first = float(val['raw'])
                 last = float(val['raw'])
         if args.efficiency:
@@ -207,7 +209,7 @@ if __name__=='__main__':
 
     # caption
     captions = {
-        'raw': "Expected number of events for {:.1f}\\fbinv".format(sum([y for x,y in lumis.items()])/1000.), # convert pbinv to fbinv
+        'raw': "Expected number of events for {:.1f}\\fbinv".format(sum([common.lumis[y] for y in ["2016","2017","2018"]])/1000.), # convert pbinv to fbinv
         'abs': "Absolute cumulative efficiencies in \%",
         'rel': "Relative efficiencies in \%",
     }
@@ -219,7 +221,7 @@ if __name__=='__main__':
         caption = "\\{}{{{} for each step of the event selection process for the major background processes{}.{}{}}}".format(
             "topcaption" if args.topcapt else "caption",
             captions[args.type],
-            " and benchmark signal model ($\\mZprime = 350\\GeV$, $\\mDark = 10\\GeV$, $\\rinv = 0.3$)" if args.procs=="all" else "",
+            " and benchmark signal model ($\\mz = 350\\GeV$, $\\mdark = 10\\GeV$, $\\rinv = 0.3$)" if args.procs=="all" else "",
             staterr_caption if args.error else maxerr_caption if args.summarizeerror else "",
             eff_caption if args.efficiency else "",
         )

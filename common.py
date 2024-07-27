@@ -471,8 +471,8 @@ def get_event_weight(obj,lumi=None):
             logger.info(f'Event weight: {lumi}*{br}*{xsec}/{nevents} = {event_weight}')
             return event_weight
         elif obj.metadata["sample_type"]=="bkg":
-            tree_weights = central.to_numpy(['weight']).ravel()
-            common.logger.info(f'Event weight: {lumi}*{tree_weights[0]} = {lumi*tree_weights[0]}')
+            tree_weights = obj.to_numpy(['weight']).ravel()
+            if len(tree_weights)>0: logger.info(f'Event weight: {lumi}*{tree_weights[0]} = {lumi*tree_weights[0]}')
             return lumi*tree_weights
         else: # data
             return 1.0
@@ -485,7 +485,8 @@ def get_event_weight(obj,lumi=None):
 
 def get_single_event_weight(weights):
     if isinstance(weights,float): return weights
-    else: return weights[0]
+    elif len(weights)>0: return weights[0]
+    else: return 1.0
 
 def add_cutflows(*objs):
     # add cutflows if present, accounting for weights
