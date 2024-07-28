@@ -1,6 +1,7 @@
 import os, stat, sys
 import argparse
 from collections import OrderedDict, defaultdict
+from itertools import islice
 import svj_ntuple_processing as svj
 import common
 from hadd_skims import expand_wildcards
@@ -74,11 +75,22 @@ def print_val(val, prcsn, minprec=0):
         if not has_enough: new_prcsn += 1
     return sval
 
+def omit_lines(odict,args):
+    # skipping a line essentially combines the efficiency of that line with the next line
+    for skipline in args.skiplines:
+        odict.pop(skipline,None)
+    # stop at last line
+    if args.lastline is not None:
+        stop = list(odict.keys()).index(args.lastline)+1
+        odict = OrderedDict(islice(odict.items(),stop))
+    return odict
+
 if __name__=='__main__':
     # define options
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-d", "--dir", type=str, default="root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd", help="location of root files (PFN)")
     parser.add_argument("-o", "--outname", type=str, default="svj_cutflow.tex", help="output TeX file name")
+    parser.add_argument("-y", "--years", type=str, default=["2016","2017","2018"], nargs='*', help="years to combine")
     parser.add_argument("-t", "--type", type=str, default="abs", choices=['abs','rel','raw','rawrel'], help="type of cutflow (abs, rel, raw, rawrel)")
     parser.add_argument("-p", "--prec", type=int, default=1, help="numerical precision of output")
     parser.add_argument("-m", "--minprec", type=int, default=1, help="minimum number of digits to display")
@@ -96,6 +108,7 @@ if __name__=='__main__':
 
     if args.dir[-1]!='/': args.dir += '/'
     args.efficiency = args.efficiency or 'raw' in args.type
+    namesDict = omit_lines(namesDict, args)
 
     outDict = OrderedDict([])
     outDict["header1"] = r"\multicolumn{2}{c}{Selection}"
@@ -110,6 +123,11 @@ if __name__=='__main__':
         ('wjets', r'\wjets'),
         ('zjets', r'\zjets'),
     ])
+    bkg_folders = {
+        "2016": "Summer20UL16",
+        "2017": "Summer20UL17",
+        "2018": "Summer20UL18",
+    }
 
     # signal groups
     benchmarks = OrderedDict([
@@ -124,6 +142,11 @@ if __name__=='__main__':
     ])
     sig_units = {"mz": r"\GeV", "mdark": r"\GeV", "rinv": ""}
     sig_names = OrderedDict()
+    sig_folders = {
+        "2016": "Private3DUL16",
+        "2017": "Private3DUL17",
+        "2018": "Private3DUL18",
+    }
     if args.procs=='all':
         sig_names = OrderedDict([
             (shortname(benchmarks), 'signal'),
@@ -168,8 +191,8 @@ if __name__=='__main__':
         cutflows = {cat:common.add_cutflows(*cols) for cat,cols in collected.items()}
         return cutflows
 
-    bkg_cutflows = add_all_cutflows(list(bkg_names.keys()), args.dir, ["Summer20UL16","Summer20UL17","Summer20UL18"], '*.npz') if len(bkg_names)>0 else {}
-    sig_cutflows = add_all_cutflows(list(sig_names.keys()), args.dir, ["Private3DUL16","Private3DUL17","Private3DUL18"], '*pythia8.npz') if len(sig_names)>0 else {}
+    bkg_cutflows = add_all_cutflows(list(bkg_names.keys()), args.dir, [bkg_folders[y] for y in args.years], '*.npz') if len(bkg_names)>0 else {}
+    sig_cutflows = add_all_cutflows(list(sig_names.keys()), args.dir, [sig_folders[y] for y in args.years], '*pythia8.npz') if len(sig_names)>0 else {}
 
     procs = OrderedDict(list(bkg_names.items())+list(sig_names.items()))
     cutflows = {}
@@ -184,9 +207,7 @@ if __name__=='__main__':
         outDict["header1"] += " & " + "\\multicolumn{"+str(multicol)+"}{r}{"+procname+"}"
 
         cutflow = cutflows[proc]
-        # skipping a line essentially combines the efficiency of that line with the next line
-        for skipline in args.skiplines:
-            cutflow.pop(skipline,None)
+        cutflow = omit_lines(cutflow, args)
         cutflow = compute_cutflow(cutflow)
         first = None
         last = None
@@ -209,7 +230,7 @@ if __name__=='__main__':
 
     # caption
     captions = {
-        'raw': "Expected number of events for {:.1f}\\fbinv".format(sum([common.lumis[y] for y in ["2016","2017","2018"]])/1000.), # convert pbinv to fbinv
+        'raw': "Expected number of events for {:.1f}\\fbinv".format(sum([common.lumis[y] for y in args.years])/1000.), # convert pbinv to fbinv
         'abs': "Absolute cumulative efficiencies in \%",
         'rel': "Relative efficiencies in \%",
     }
