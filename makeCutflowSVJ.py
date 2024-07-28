@@ -186,7 +186,14 @@ if __name__=='__main__':
             # sort cols into categories
             for col in cols:
                 col_key = get_col_key(col)
-                if col_key in collected: collected[col_key].append(col)
+                if col_key in collected:
+                    # fix potentially missing key
+                    if 'stitch' not in col.cutflow:
+                        raw_index = list(col.cutflow.keys()).index('raw')
+                        items = list(col.cutflow.items())
+                        items.insert(raw_index+1,('stitch',col.cutflow['raw']))
+                        col.cutflow = OrderedDict(items)
+                    collected[col_key].append(col)
                 elif args.verbose: print(f'Skipping column key {col_key}')
         cutflows = {cat:common.add_cutflows(*cols) for cat,cols in collected.items()}
         return cutflows
@@ -285,7 +292,7 @@ if __name__=='__main__':
             r'\hline',
             r'\end{tabular}',
             r'}',
-            r'\label{tab:sel-eff-'+args.outname.replace('.tex',''),
+            r'\label{tab:sel-eff-'+args.outname.replace('.tex','')+'}',
             r'\end{table}',
         ])
     )
