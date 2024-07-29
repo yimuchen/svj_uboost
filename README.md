@@ -104,8 +104,7 @@ python training.py xgboost \
 Training with xgboost on the full background should take about 45 min.
 The script `hyperparameteroptimization.py` runs this command for various settings in parallel.
 
-
-## Evaluate
+### Evaluate
 
 ```bash
 python evaluate.py
@@ -113,34 +112,7 @@ python evaluate.py
 
 The paths to the model are currently hard-coded! Things are still too fluid for a good abstraction.
 
-
-## Produce histograms
-
-To produce the histograms needed for the limit setting, use:
-
-```bash
-python produce_histograms.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json
-```
-
-It creates a file called `histograms_%b%d.json`, which contains background and signal histograms for various BDT working points (currently 0.0 to 0.9).
-
-To make some quick debug plots for the histograms:
-
-```bash
-python plot_histograms.py histograms_Dec01.json
-```
-
-
-## Cutflow table
-
-```bash
-python makeCutflowSVJ.py -o svj.tex -d skims_20240718_hadd -t rawrel -p 0 -k raw preselection 'n_ak4jets>=2' -l '180<mt<650' --compile
-```
-
-Creates the cutflow tables in LaTeX format, along with a compiled pdf (`--compile` argument, requires that LaTeX is installed).
-
-
-## Overfitting check: Kolmogorov-Smirnov test
+### Overfitting check: Kolmogorov-Smirnov test
 
 ```bash
 python overfitting.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json
@@ -150,16 +122,13 @@ python overfitting.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.
 
 With p-values close to 1.0, there is no reason to assume any overfitting.
 
+## Cutflow table
 
-## Scale uncertainties
-
-```
-mkdir data/scaleunc
-xrdcp root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/signal_madpt300_2023_scaleunc/BDTCOLS/madpt300_mz350_mdark10_rinv0.3_scaleunc.npz data/scaleunc/
-python study_scaleunc.py plot data/scaleunc/madpt300_mz350_mdark10_rinv0.3_scaleunc.npz models/svjbdt_Apr21_reweight_mt.json
+```bash
+python makeCutflowSVJ.py -o svj.tex -d skims_20240718_hadd -t rawrel -p 0 -k raw preselection 'n_ak4jets>=2' -l '180<mt<650' --compile
 ```
 
-![scale uncertainty plot](example_plots/scaleunc.png)
+Creates the cutflow tables in LaTeX format, along with a compiled pdf (`--compile` argument, requires that LaTeX is installed).
 
 ## Building Data Cards
 
