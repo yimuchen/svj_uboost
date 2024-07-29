@@ -658,6 +658,8 @@ def smooth_shapes():
                 hstat.errs = np.zeros_like(hstat.vals)
                 mths_new[f'stat_{iname}'] = hstat
 
+    outdir = os.path.dirname(json_file).replace("hists","smooth").replace("merged","smooth")
+    os.makedirs(outdir, exist_ok=True)
     if save_all:
         # copy any other contents from original input
         # omitting mcstat uncertainties, which are replaced by overall confidence interval
@@ -670,9 +672,9 @@ def smooth_shapes():
                         mths_new[key].append(entry.cut(**cut_args))
                 else:
                     mths_new[key] = mths[key].cut(**cut_args)
-        outfile = osp.basename(json_file).replace(".json","_smooth.json")
+        outfile = outdir+'/'+osp.basename(json_file)
     elif save:
-        outfile = osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
+        outfile = outdir+'/'+osp.basename(json_file).replace(".json","_{}.json".format(var))
     if save_all or save:
         with open(outfile, 'w') as f:
             json.dump(mths_new, f, indent=4, cls=common.Encoder)
