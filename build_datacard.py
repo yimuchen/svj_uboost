@@ -203,7 +203,7 @@ def build_histogram(args=None):
             w *= event_weight
             return common.MTHistogram(mt, w)
         # JER, JEC treated as uncorrelated between years (but 2018PRE, 2018POST always correlated)
-        sysyear = year[:4]
+        sysyear = get_sysyear(year)
         mths[f'jer{sysyear}_up'] = mth_jerjecjes('jer_up')
         mths[f'jer{sysyear}_down'] = mth_jerjecjes('jer_down')
         mths[f'jec{sysyear}_up'] = mth_jerjecjes('jec_up')
@@ -430,38 +430,50 @@ class Plot:
         plt.savefig(outfile.replace('.png', '.pdf'), bbox_inches="tight")
         common.imgcat(outfile)
 
-def get_systs(names=False,years=None,smooth=False):
+def get_sysyear(year):
+    return year[:4]
+
+def get_systs_uncorrelated():
+    uncorrelated = [
+        'jer',
+        'jec',
+        'pu',
+        'stat',
+    ]
+    return uncorrelated
+
+# years = None -> generic case (uncorrelated systs not expanded)
+def get_systs(names=False,years=["2016","2017","2018"],smooth=False):
+    uncorrelated = get_systs_uncorrelated()
     syst_names = {
         'scale': "Scales",
-        'jer2016': "JER (2016)",
-        'jer2017': "JER (2017)",
-        'jer2018': "JER (2018)",
-        'jec2016': "JEC (2016)",
-        'jec2017': "JEC (2017)",
-        'jec2018': "JEC (2018)",
+        'jer': "JER",
+        'jec': "JEC",
         'jes': "JES",
         'isr': "ISR (parton shower)",
         'fsr': "FSR (parton shower)",
-        'pu2016': "Pileup reweighting (2016)",
-        'pu2017': "Pileup reweighting (2017)",
-        'pu2018': "Pileup reweighting (2018)",
+        'pu': "Pileup reweighting",
         'pdf': "PDF",
     }
     if smooth:
         syst_names.update({
             'stat': "MC statistical (fit)",
         })
+        uncorrelated.pop('stat')
     else:
         syst_names.update({
-            'stat2016': "MC statistical (2016)",
-            'stat2017': "MC statistical (2017)",
-            'stat2018': "MC statistical (2018)",
+            'stat': "MC statistical",
         })
+    # expand uncorrelated systs
     if years is not None:
         if not isinstance(years,list): years = [years]
         # convert to sysyears
-        years = [year[:4] for year in years]
-        syst_names = {k:v for k,v in syst_names.items() if '20' not in k or any(year in k for year in years)}
+        years = [get_sysyear(years) for year in years]
+        syst_names2 = {k:v for k,v in syst_names.items() if k not in uncorrelated}
+        for unc in uncorrelated:
+            for year in years:
+                syst_names2[unc+year] = syst_names[unc]+f' ({year})'
+        syst_names = syst_names2
     if names: return syst_names
     else: return list(syst_names.keys())
 
@@ -490,7 +502,7 @@ def plot_systematics():
     if not isinstance(years,list): years = [years]
     systs = get_systs(years=years,smooth="smooth" in json_file)
     for year in years:
-        sysyear = year[:4]
+        sysyear = get_sysyear(year)
         if f'stat{sysyear}_up' not in mths.keys():
             stat_up = mths['central'].copy()
             stat_down = mths['central'].copy()
@@ -747,10 +759,9 @@ def pct_diff(central,syst):
 
 @scripter
 def systematics_table():
-    json_file = common.pull_arg('jsonfile', type=str).jsonfile
-    with open(json_file) as f:
-        mths = json.load(f, cls=common.Decoder)
-    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
+    change_bin_width()
+    skimdir = common.pull_arg('skimdir', type=str).skimdir
+    skims = expand_wildcards(skimdir)
 
     # needs to be kept in sync w/ boostedsvj/svj_limits/boosted_fits.py:gen_datacard()
     flat_systs = {
@@ -759,31 +770,67 @@ def systematics_table():
         'trigger_sim': 2.1,
     }
 
-    central = mths["central"]
-    central_yield = get_yield(central)
-    systs = get_systs(names=True)
+    unc_systs = get_systs_uncorrelated()
+    systs = get_systs(names=True,years=None)
     systs.update({
         'lumi': "Luminosity",
         'trigger_cr': "Trigger (CR)",
         'trigger_sim': "Trigger (MC)",
     })
-    syst_yield_effects = {}
-    total = 0
-    for syst in sorted(systs.keys()):
-        if f'{syst}_up' in mths:
-            syst_up_yield = get_yield(mths[f'{syst}_up'])
-            syst_dn_yield = get_yield(mths[f'{syst}_down'])
-            syst_yield_effects[syst] = max(pct_diff(central_yield,syst_up_yield),pct_diff(central_yield,syst_dn_yield))
-        elif syst in flat_systs:
-            syst_yield_effects[syst] = flat_systs[syst]
-        else:
-            common.logger.warning(f'could not find systematic: {syst}')
-            continue
-        total += syst_yield_effects[syst]**2
-    total = np.sqrt(total)
 
-    for syst,effect in syst_yield_effects.items():
-        print("{} & {:.2f} \\\\".format(systs[syst],effect))
+    # indexing: [year][syst]
+    syst_effects = defaultdict(lambda: defaultdict(lambda: (0.0, 0.0)))
+    def update_effect(year,syst,effect):
+        syst_effects[year][syst] = (min(effect, syst_effects[year][syst][0]), max(effect, syst_effects[year][syst][1]))
+    for skim in skims:
+        with open(skim) as f:
+            mths = json.load(f, cls=common.Decoder)
+        mths = rebin_dict(mths)
+        central = mths['central']
+        meta = central.metadata
+        central_yield = get_yield(central)
+        #common.logger.info(f'central metadata:\n{meta}')
+        year = meta['year']
+        if not isinstance(year,str): year = str(int(year))
+
+        total = 0
+        for syst in sorted(systs.keys()):
+            syst_effect = 0
+            asyst = syst
+            # uncorrelated systs stored with sysyear naming (for datacard creation)
+            if syst in unc_systs: asyst += get_sysyear(year)
+            if f'{asyst}_up' in mths:
+                syst_up_yield = get_yield(mths[f'{asyst}_up'])
+                syst_dn_yield = get_yield(mths[f'{asyst}_down'])
+                syst_effect = max(pct_diff(central_yield,syst_up_yield),pct_diff(central_yield,syst_dn_yield))
+            elif syst in flat_systs:
+                syst_effect = flat_systs[syst]
+            else:
+                #common.logger.warning(f'could not find systematic: {syst}')
+                continue
+            update_effect(year,syst,syst_effect)
+            total += syst_effect**2
+        total = np.sqrt(total)
+        update_effect(year,"total",total)
+
+    # keep correct order
+    all_years = ["2016","2017","2018","2018PRE","2018POST"]
+    years = [y for y in all_years if y in list(syst_effects.keys())]
+    # add overall
+    if len(years)>1:
+        years.append("Overall")
+        for syst in list(systs.keys())+["total"]:
+            syst_effects["Overall"][syst] = (min([syst_effects[year][syst][0] for year in years]), max([syst_effects[year][syst][1] for year in years]))
+
+    print(" & ".join(["Systematic"]+years)+r" \\")
+    print(r"\hline")
+    def print_syst_row(syst):
+        print(" & ".join([systs[syst]]+["{:.2f}--{:.2f}".format(*syst_effects[year][syst]) for year in years])+r" \\")
+    for syst in systs:
+        print_syst_row(syst)
+    print(r"\hline")
+    systs["total"] = "total"
+    print_syst_row("total")
     print(r"\hline")
     print("total & {:.2f} \\\\".format(total))
 
