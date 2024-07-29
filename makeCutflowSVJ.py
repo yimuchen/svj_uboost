@@ -52,7 +52,9 @@ def compute_cutflow(cutflow):
     nentries = None
     prev = 1
     for key,val in cutflow.items():
-        if nentries is None: nentries = val
+        if nentries is None:
+            nentries = val
+            prev = val
         cutflow[key] = {"raw": val, "abs": val/nentries*100, "rel": val/prev*100}
         prev = val
     return cutflow
@@ -104,6 +106,7 @@ if __name__=='__main__':
     parser.add_argument("-E", "--efficiency", default=False, action="store_true", help="include line for overall efficiency")
     parser.add_argument("-D", "--align-decimal", dest="alignDecimal", default=False, action="store_true", help="align columns at decimal")
     parser.add_argument("--topcapt", dest="topcapt", default=False, action="store_true", help="use topcaption instead of caption")
+    parser.add_argument("-c", "--compile", default=False, action="store_true", help="compile standalone pdf")
     args = parser.parse_args()
 
     if args.dir[-1]!='/': args.dir += '/'
@@ -206,12 +209,13 @@ if __name__=='__main__':
     cutflows.update(bkg_cutflows)
     cutflows.update(sig_cutflows)
 
-    multicol = 3 if args.type=='rawrel' and args.error else 2
-    if not args.error: multicol = 1
+    multicol = 2
+    if not args.error: multicol -= 1
+    if args.type=='rawrel': multicol += 1
     if args.alignDecimal: multicol *= 2
     max_err = 0
     for proc,procname in procs.items():
-        outDict["header1"] += " & " + "\\multicolumn{"+str(multicol)+"}{r}{"+procname+"}"
+        outDict["header1"] += " & " + "\\multicolumn{"+str(multicol)+"}{c}{"+procname+"}"
 
         cutflow = cutflows[proc]
         cutflow = omit_lines(cutflow, args)
@@ -219,19 +223,16 @@ if __name__=='__main__':
         first = None
         last = None
         for key,val in cutflow.items():
-            if (args.efficiency and key=='raw') or (not args.efficiency and key=='stitch'):
-                started = True
-            elif started:
-                otmp = " & \\colspace"+print_val(val[args.type[:3]],args.prec,args.minprec) # +(" & "+splitline[cutflow_ind+2] if args.error else "")
-                if args.alignDecimal: otmp = otmp.replace(".", "&.", 1)
-                outDict[key] += otmp
-                #max_err = max(max_err, splitline[cutflow_ind+2])
-                if args.type=='rawrel': outDict[key] += " & "+print_val(val['rel'],args.prec,args.minprec)
-                if first is None: first = float(val['raw'])
-                last = float(val['raw'])
+            otmp = " & "+print_val(val[args.type[:3]],args.prec,args.minprec) # +(" & "+splitline[cutflow_ind+2] if args.error else "")
+            if args.alignDecimal: otmp = otmp.replace(".", "&.", 1)
+            outDict[key] += otmp
+            #max_err = max(max_err, splitline[cutflow_ind+2])
+            if args.type=='rawrel': outDict[key] += " & "+print_val(val['rel'],args.prec,args.minprec)
+            if first is None: first = float(val['raw'])
+            last = float(val['raw'])
         if args.efficiency:
             print(procname,last/first*100)
-            outDict["efficiency"] += " & \\multicolumn{"+str(multicol)+"}{"+("l" if args.alignDecimal else "r")+"}{"+("\\colspace" if args.alignDecimal else "")+"{:.2g}".format(last/first*100)+"}"
+            outDict["efficiency"] += " & \\multicolumn{"+str(multicol)+"}{"+("l" if args.alignDecimal else "c")+"}{"+("\\colspace" if args.alignDecimal else "")+"{:.2g}".format(last/first*100)+"}"
 
     wfile = open(args.outname,'w')
 
@@ -275,10 +276,10 @@ if __name__=='__main__':
             r'\begin{table}[htb]',
             r'\centering',
             caption,
-            r'\cmsTable{'
+            r'\cmsTable{',
             r'\begin{tabular}{c'+coltype*len(procs)+'}',
             r'\hline',
-        ])
+        ])+'\n'
     )
 
     for key,val in outDict.items():
@@ -299,3 +300,27 @@ if __name__=='__main__':
     )
 
     wfile.close()
+
+    # compilation
+    if args.compile:
+        clines = [
+            r'\documentclass[12pt,varwidth]{standalone}',
+            r'\usepackage{fullpage, amsmath, amssymb, graphicx, xspace, topcapt, cite, array}',
+            r'\usepackage{tex/hepparticles}',
+            r'\usepackage{tex/heppennames2}',
+            r'\usepackage{tex/ptdr-definitions}',
+#            r'\usepackage[top=0.1in, bottom=0.1in, left=0.1in, right=0.1in]{geometry}',
+            r'\begin{document}',
+            r'\pagenumbering{gobble}',
+            r'\input{tex/commands.tex}',
+#            r'\minipage{0.9\textwidth}'
+            r'\input{'+args.outname+'}',
+#            r'\endminipage'
+            r'\end{document}',
+        ]
+        cname = 'cutflow_'+args.outname
+        with open(cname,'w') as cfile:
+            cfile.write('\n'.join(clines))
+        cmd = f'pdflatex -interaction=nonstopmode -synctex=-1 "{cname}"'
+        if args.verbose: print(cmd)
+        os.system(cmd)
