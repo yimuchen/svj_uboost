@@ -760,8 +760,14 @@ def pct_diff(central,syst):
 @scripter
 def systematics_table():
     change_bin_width()
+    qtyrange = common.pull_arg('--qtyrange', metavar=("qty min max"), default=[], type=str, action='append', nargs=3).qtyrange
     skimdir = common.pull_arg('skimdir', type=str).skimdir
     skims = expand_wildcards(skimdir)
+
+    # set up qty range limitations
+    qtyfilters = []
+    for iq,qr in enumerate(qtyrange):
+        qtyfilters.append(lambda md: float(qtyrange[iq][1])<=md[qtyrange[iq][0]] and md[qtyrange[iq][0]]<=float(qtyrange[iq][2]))
 
     # needs to be kept in sync w/ boostedsvj/svj_limits/boosted_fits.py:gen_datacard()
     flat_systs = {
@@ -792,6 +798,14 @@ def systematics_table():
         #common.logger.info(f'central metadata:\n{meta}')
         year = meta['year']
         if not isinstance(year,str): year = str(int(year))
+
+        passed = True
+        for qf in qtyfilters:
+            if not qf(meta):
+                passed = False
+                break
+        if not passed:
+            continue
 
         total = 0
         for syst in sorted(systs.keys()):
@@ -831,8 +845,6 @@ def systematics_table():
     print(r"\hline")
     systs["total"] = "total"
     print_syst_row("total")
-    print(r"\hline")
-    print("total & {:.2f} \\\\".format(total))
 
 @scripter
 def merge(args=None):
