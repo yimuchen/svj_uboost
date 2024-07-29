@@ -157,7 +157,7 @@ def build_histogram(args=None):
     if year is None: year = str(metadata["year"])
     else:
         metadata["year"] = year
-        lumi = common.lumis(year)
+        lumi = common.lumis[year]
 
     # process 2018 samples twice as PRE and POST
     if year=="2018" and not fullyear:
@@ -430,7 +430,7 @@ class Plot:
         plt.savefig(outfile.replace('.png', '.pdf'), bbox_inches="tight")
         common.imgcat(outfile)
 
-def get_systs(names=False,years=None):
+def get_systs(names=False,years=None,smooth=False):
     syst_names = {
         'scale': "Scales",
         'jer2016': "JER (2016)",
@@ -446,10 +446,17 @@ def get_systs(names=False,years=None):
         'pu2017': "Pileup reweighting (2017)",
         'pu2018': "Pileup reweighting (2018)",
         'pdf': "PDF",
-        'stat2016': "MC statistical (2016)",
-        'stat2017': "MC statistical (2017)",
-        'stat2018': "MC statistical (2018)",
     }
+    if smooth:
+        syst_names.update({
+            'stat': "MC statistical (fit)",
+        })
+    else:
+        syst_names.update({
+            'stat2016': "MC statistical (2016)",
+            'stat2017': "MC statistical (2017)",
+            'stat2018': "MC statistical (2018)",
+        })
     if years is not None:
         if not isinstance(years,list): years = [years]
         # convert to sysyears
@@ -463,6 +470,7 @@ def plot_systematics():
     mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
     mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
     rebin = common.pull_arg('--rebin', type=int, default=1).rebin
+    yrange = common.pull_arg('--yrange', type=float, nargs=2, default=None).yrange
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
@@ -480,7 +488,7 @@ def plot_systematics():
 
     years = meta['year']
     if not isinstance(years,list): years = [years]
-    systs = get_systs(years=years)
+    systs = get_systs(years=years,smooth="smooth" in json_file)
     for year in years:
         sysyear = year[:4]
         if f'stat{sysyear}_up' not in mths.keys():
@@ -500,6 +508,8 @@ def plot_systematics():
         plot.plot_hist(central, label='Central')
         plot.plot_hist(mths[f'{syst}_up'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} up')
         plot.plot_hist(mths[f'{syst}_down'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} down')
+        if yrange is not None:
+            plot.bot.set_ylim(yrange[0],yrange[1])
         plot.save(f'{outdir}/{syst}.png')
 
 @scripter
