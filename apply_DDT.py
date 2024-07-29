@@ -12,6 +12,7 @@ from time import strftime
 from collections import OrderedDict
 from common import create_DDT_map_dict, calculate_varDDT
 import json
+import argparse
 
 import numpy as np
 import matplotlib
@@ -32,7 +33,7 @@ np.random.seed(1001)
 from common import logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy
 
 #------------------------------------------------------------------------------
-# User input global variables (to document options during running) ------------
+# Global variables and user input arguments -----------------------------------
 #------------------------------------------------------------------------------
 
 training_features = [
@@ -41,30 +42,34 @@ training_features = [
     'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef', 
     ]
 
-bkg_data_files = 'data/bkg_20240515/Summer20UL18/*.npz'
-sig_data_files = 'data/signal/*mDark-10_rinv-0p3*.npz'
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Process some inputs.')
 
-model_file = 'models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
-ddt_map_file = 'models/ddt_Feb28_lowmass_iterative_qcdtt_100p38.json'
+    parser.add_argument('--bkg_data_files', default='data/bkg_20240515/Summer20UL18/*.npz', help='Background data files')
+    parser.add_argument('--sig_data_files', default='data/signal/*mDark-10_rinv-0p3*.npz', help='Signal data files')
 
-# Make sure this is what you want set for the specific ddt
-lumi = 14026.948 + 7044.413  # PreHEM RunII 2018
+    # BDT and ddt model
+    parser.add_argument('--bdt_file', default='models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json', help='BDT model file')
+    parser.add_argument('--ddt_map_file', default='models/ddt_Feb28_lowmass_iterative_qcdonly_100p38.json', help='DDT map file')
 
-# bdt cut to use when plotting signal mt
-sig_bdt_cut = 0.9
+    parser.add_argument('--lumi', type=float, default=21071.361, help='Luminosity')
 
-# Choose the BDT cut values that you want to make for the DDT
-# or that are in the DDT you are loading
-#bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
-bdt_cuts = [0.5, 0.7]
-#bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    parser.add_argument('--sig_bdt_cut', type=float, default=0.65, help='BDT cut for signal plotting')
 
-# Choose what you want to plot
-plot_2D_DDT_map = True
-plot_bkg_scores_mt = True
-plot_fom_significance = True
-plot_sig_mt_single_BDT = True
-plot_one_sig_mt_many_bdt = True
+    # Choose the BDT cut values that you want to make for the DDT
+    # or that are in the DDT you are loading
+    # another common set of cuts is
+    # bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
+    parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], help='List of BDT cuts')
+
+    # Select the plots to make
+    parser.add_argument('--plot_2D_DDT_map', action='store_true', help='Plot 2D DDT map')
+    parser.add_argument('--plot_bkg_scores_mt', action='store_true', help='Plot background scores mt')
+    parser.add_argument('--plot_fom_significance', action='store_true', help='Plot FOM significance')
+    parser.add_argument('--plot_sig_mt_single_BDT', action='store_true', help='Plot signal mt single BDT')
+    parser.add_argument('--plot_one_sig_mt_many_bdt', action='store_true', help='Plot one signal mt many BDT')
+
+    return parser.parse_args()
 
 #------------------------------------------------------------------------------
 # User defined functions ------------------------------------------------------
@@ -126,6 +131,23 @@ def bdt_ddt_inputs(col, lumi, all_features):
 #------------------------------------------------------------------------------
 
 def main():
+    
+    # Parse arguments and take the results
+    args = parse_arguments()
+
+    bkg_data_files = args.bkg_data_files
+    sig_data_files = args.sig_data_files
+    model_file = args.bdt_file
+    ddt_map_file = args.ddt_map_file
+    lumi = args.lumi
+    sig_bdt_cut = args.sig_bdt_cut
+    bdt_cuts = args.bdt_cuts
+    plot_2D_DDT_map = args.plot_2D_DDT_map
+    plot_bkg_scores_mt = args.plot_bkg_scores_mt
+    plot_fom_significance = args.plot_fom_significance
+    plot_sig_mt_single_BDT = args.plot_sig_mt_single_BDT
+    plot_one_sig_mt_many_bdt = args.plot_one_sig_mt_many_bdt
+
     set_mpl_fontsize(18, 22, 26)
 
     # add ddt necessary variables in addition to the bdt input features
@@ -133,6 +155,8 @@ def main():
 
     # Grab the bkg data
     bkg_cols = [Columns.load(f) for f in glob.glob(bkg_data_files)]
+    #bkg_cols = [Columns.load(f) for f in glob.glob(qcd_data_files)]
+    #bkg_cols.extend(Columns.load(f) for f in glob.glob(tt_data_files))
     X, pT, mT, rho, bkg_weight = bdt_ddt_inputs(bkg_cols, lumi, all_features)
 
     # _____________________________________________
@@ -379,7 +403,7 @@ def main():
         hep.cms.label(rlabel="2018 (13 TeV)")
         ax = fig.gca()
         ax.plot(best_bdt_cuts[:,0], best_bdt_cuts[:,1], marker='o')
-        ax.text(0.05, 0.95, f'Optimal Cut: {average:.2f}', transform=ax.transAxes, verticalalignment='top')
+        ax.text(0.05, 0.10, f'Optimal Cut: {average:.2f}', transform=ax.transAxes, verticalalignment='top')
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('Best BDT Cut Value')
         ax.set_xlabel("m(Z')")
