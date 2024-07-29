@@ -91,7 +91,7 @@ if __name__=='__main__':
     parser.add_argument("-d", "--dir", type=str, default="root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd", help="location of root files (PFN)")
     parser.add_argument("-o", "--outname", type=str, default="svj_cutflow.tex", help="output TeX file name")
     parser.add_argument("-y", "--years", type=str, default=["2016","2017","2018"], nargs='*', help="years to combine")
-    parser.add_argument("-t", "--type", type=str, default="abs", choices=['abs','rel','raw','rawrel'], help="type of cutflow (abs, rel, raw, rawrel)")
+    parser.add_argument("-t", "--type", type=str, default="abs", choices=['abs','rel','raw','rawrel'], help="type of cutflow")
     parser.add_argument("-p", "--prec", type=int, default=1, help="numerical precision of output")
     parser.add_argument("-m", "--minprec", type=int, default=1, help="minimum number of digits to display")
     parser.add_argument("-e", "--error", default=False, action="store_true", help="display statistical errors")
@@ -111,11 +111,11 @@ if __name__=='__main__':
     namesDict = omit_lines(namesDict, args)
 
     outDict = OrderedDict([])
-    outDict["header1"] = r"\multicolumn{2}{c}{Selection}"
+    outDict["header1"] = r"Selection"
 
     outDict = OrderedDict(list(outDict.items())+list(namesDict.items()))
     if args.efficiency:
-        outDict["efficiency"] = r"\multicolumn{2}{c}{Efficiency [\%]}"
+        outDict["efficiency"] = r"Efficiency [\%]"
 
     bkg_names = OrderedDict([
         ('qcd', 'QCD'),
@@ -276,13 +276,14 @@ if __name__=='__main__':
             r'\centering',
             caption,
             r'\cmsTable{'
-            r'\begin{tabular}{M'+coltype*len(procs)+'}',
+            r'\begin{tabular}{c'+coltype*len(procs)+'}',
             r'\hline',
         ])
     )
 
     for key,val in outDict.items():
         if key=='stitch' and not 'raw' in args.type: continue
+        if len(val)==0: continue
         wfile.write(val+" \\\\"+"\n")
         if key=="header1" or (args.efficiency and key==list(namesDict)[-1]): wfile.write("\\hline\n")
 
