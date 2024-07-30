@@ -893,7 +893,7 @@ def systematics_table():
                 trange = smax
             cols.append(trange)
         print(" & ".join(cols)+r" \\")
-    for syst in systs:
+    for syst in sorted(systs):
         print_syst_row(syst)
     print(r"\hline")
     systs["total"] = "total"
