@@ -470,7 +470,7 @@ def get_systs(names=False,years=["2016","2017","2018"],smooth=False):
     if years is not None:
         if not isinstance(years,list): years = [years]
         # convert to sysyears
-        years = [get_sysyear(years) for year in years]
+        years = [get_sysyear(year) for year in years]
         syst_names2 = {k:v for k,v in syst_names.items() if k not in uncorrelated}
         for unc in uncorrelated:
             for year in years:
