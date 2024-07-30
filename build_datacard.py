@@ -900,6 +900,20 @@ def systematics_table():
     print_syst_row("total")
 
 @scripter
+def acc():
+    qty = common.pull_arg('--qty', type=str, required=True, help="signal qty").qty
+    skimdir = common.pull_arg('skimdir', type=str).skimdir
+    skims = expand_wildcards(skimdir)
+    def get_from_cutflow(cutflow,index):
+        return float(list(cutflow.items())[index][1])
+    for skim in skims:
+        with open(skim) as f:
+            mths = json.load(f, cls=common.Decoder)
+        meta = mths['central'].metadata
+        cutflow = mths['central'].cutflow
+        print(meta[qty],get_from_cutflow(cutflow,-1)/get_from_cutflow(cutflow,0)*100)
+
+@scripter
 def merge(args=None):
     if args is None:
         outfile = common.pull_arg('-o', '--outfile', type=str).outfile
