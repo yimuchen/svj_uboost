@@ -927,7 +927,7 @@ def split_bdt(sel):
             # Handle the case where the number following 'bdt=' is not valid
             print(f"Invalid number {parts[1]} following 'bdt='.")
     else:
-        raise ValueError(f"Invalid selection string: {sel}")
+        raise InvalidSelectionException(sel=selection)
 
 def apply_bdtbased(cols,wp,lumi):
     import xgboost as xgb
@@ -966,6 +966,6 @@ def apply_bdtbased(cols,wp,lumi):
     return cols
 
 class InvalidSelectionException(Exception):
-    def __init__(self, msg='Unknown selection {}; choices are "cutbased" or "bdt=X.XXX".', sel="", *args, **kwargs):
+    def __init__(self, msg='Unknown selection {}; choices are "preselection", "cutbased", or "bdt=X.XXX".', sel="", *args, **kwargs):
         msg = msg.format(sel)
         super().__init__(msg, *args, **kwargs)

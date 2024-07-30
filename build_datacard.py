@@ -142,6 +142,8 @@ def build_histogram(args=None):
         elif selection.startswith('bdt='):
             wp = split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi)
+        elif selection=='preselection':
+            pass
         else:
             raise common.InvalidSelectionException(sel=selection)
         return cols
