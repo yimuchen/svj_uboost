@@ -477,49 +477,50 @@ def get_systs(names=False,years=["2016","2017","2018"],smooth=False):
     if names: return syst_names
     else: return list(syst_names.keys())
 
+# should always be run before any rebinning
+def make_stat_combined(mths,sysyear):
+    if f'stat{sysyear}_up' not in mths.keys():
+        stat_up = mths['central'].copy()
+        stat_down = mths['central'].copy()
+        i = 0
+        while f'mcstat{i}_{sysyear}_up' in mths.keys():
+            stat_up.vals[i] = mths[f'mcstat{i}_{sysyear}_up'].vals[i]
+            stat_down.vals[i] = mths[f'mcstat{i}_{sysyear}_down'].vals[i]
+            i += 1
+
+        mths[f'stat{sysyear}_up'] = stat_up
+        mths[f'stat{sysyear}_down'] = stat_down
+    return mths
+
 @scripter
 def plot_systematics():
-    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
-    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
-    rebin = common.pull_arg('--rebin', type=int, default=1).rebin
+    change_bin_width()
     yrange = common.pull_arg('--yrange', type=float, nargs=2, default=None).yrange
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
-
-    n = mths['central'].vals.sum()
-    common.logger.info(f'central integral: {n}')
-    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
-
-    central = mths['central'].rebin(rebin).cut(mtmin,mtmax)
-    meta = central.metadata
-
-    model_str = osp.basename(json_file).replace(".json","")
-    outdir = f'plots_{strftime("%Y%m%d")}_{model_str}'
-    os.makedirs(outdir, exist_ok=True)
-
+    meta = mths['central'].metadata
     years = meta['year']
     if not isinstance(years,list): years = [years]
     systs = get_systs(years=years,smooth="smooth" in json_file)
     for year in years:
         sysyear = get_sysyear(year)
-        if f'stat{sysyear}_up' not in mths.keys():
-            stat_up = mths['central'].copy()
-            stat_down = mths['central'].copy()
-            i = 0
-            while f'mcstat{i}_{sysyear}_up' in mths.keys():
-                stat_up.vals[i] = mths[f'mcstat{i}_{sysyear}_up'].vals[i]
-                stat_down.vals[i] = mths[f'mcstat{i}_{sysyear}_down'].vals[i]
-                i += 1
+        mths = make_stat_combined(mths,sysyear)
 
-            mths[f'stat{sysyear}_up'] = stat_up
-            mths[f'stat{sysyear}_down'] = stat_down
+    mths = rebin_dict(mths)
+    n = mths['central'].vals.sum()
+    common.logger.info(f'central integral: {n}')
+    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
+
+    model_str = osp.basename(json_file).replace(".json","")
+    outdir = f'plots_{strftime("%Y%m%d")}_{model_str}'
+    os.makedirs(outdir, exist_ok=True)
 
     for syst in systs:
         plot = Plot(meta)
         plot.plot_hist(central, label='Central')
-        plot.plot_hist(mths[f'{syst}_up'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} up')
-        plot.plot_hist(mths[f'{syst}_down'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} down')
+        plot.plot_hist(mths[f'{syst}_up'], central, f'{syst} up')
+        plot.plot_hist(mths[f'{syst}_down'], central, f'{syst} down')
         if yrange is not None:
             plot.bot.set_ylim(yrange[0],yrange[1])
         plot.save(f'{outdir}/{syst}.png')
@@ -791,13 +792,15 @@ def systematics_table():
     for skim in skims:
         with open(skim) as f:
             mths = json.load(f, cls=common.Decoder)
-        mths = rebin_dict(mths)
-        central = mths['central']
-        meta = central.metadata
-        central_yield = get_yield(central)
-        #common.logger.info(f'central metadata:\n{meta}')
+        meta = mths['central'].metadata
         year = meta['year']
         if not isinstance(year,str): year = str(int(year))
+
+        mths = make_stat_combined(mths,get_sysyear(year))
+        mths = rebin_dict(mths)
+        central = mths['central']
+        central_yield = get_yield(central)
+        #common.logger.info(f'central metadata:\n{meta}')
 
         passed = True
         for qf in qtyfilters:
