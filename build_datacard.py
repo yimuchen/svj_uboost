@@ -786,7 +786,7 @@ def systematics_table():
     })
 
     # indexing: [year][syst]
-    syst_effects = defaultdict(lambda: defaultdict(lambda: (0.0, 0.0)))
+    syst_effects = defaultdict(lambda: defaultdict(lambda: (1e10, 0.0)))
     def update_effect(year,syst,effect):
         syst_effects[year][syst] = (min(effect, syst_effects[year][syst][0]), max(effect, syst_effects[year][syst][1]))
     for skim in skims:
