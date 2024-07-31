@@ -687,9 +687,9 @@ def smooth_shapes():
                         mths_new[key].append(entry.cut(**cut_args))
                 else:
                     mths_new[key] = mths[key].cut(**cut_args)
-        outfile = outdir+'/'+osp.basename(json_file)
+        outfile = osp.basename(json_file).replace(".json","_smooth.json")
     elif save:
-        outfile = outdir+'/'+osp.basename(json_file).replace(".json","_{}.json".format(var))
+        outfile = osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
     if save_all or save:
         with open(outfile, 'w') as f:
             json.dump(mths_new, f, indent=4, cls=common.Encoder)
