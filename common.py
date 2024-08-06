@@ -2,7 +2,7 @@ import os, os.path as osp, logging, re, time, json, argparse, sys, math, shutil
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from contextlib import contextmanager
-import svj_ntuple_processing
+import svj_ntuple_processing as svj
 from scipy.ndimage import gaussian_filter
 import requests
 import numpy as np
@@ -151,6 +151,10 @@ def put_on_cmslabel(ax, text='Simulation Preliminary', year=2018):
         usetex=True,
         fontsize=fontsize
         )
+    # assume float means lumi, convert to fb-1
+    if isinstance(year,float):
+        year = "{:.1f} ".format(year/1000)
+        year = year+r"$\mathrm{fb}^{-1}$"
     ax.text(
         1.0, 1.005,
         '{} (13 TeV)'.format(year),
@@ -427,6 +431,75 @@ def filter_ht(cols, min_ht, bkg_type=None):
 #__________________________________________________
 # Histogram classes
 
+# in units of pb-1 (xsec units: pb)
+lumis = {
+    "2016": 36330,
+    "2017": 41530,
+    "2018PRE": 21090,
+    "2018POST": 38650,
+}
+lumis["2018"] = lumis["2018PRE"]+lumis["2018POST"] # 59740
+lumis["RUN2"] = lumis["2016"]+lumis["2017"]+lumis["2018"] # 137600
+
+# from madgraph, MADPT>300, jet matching efficiency included, for gq = 0.25
+signal_xsecs = {
+    200 : 7.412,
+    250 : 7.044,
+    300 : 6.781,
+    350 : 6.158,
+    400 : 5.566,
+    450 : 5.021,
+    500 : 4.439,
+    550 : 3.795,
+}
+
+def get_event_weight(obj,lumi=None):
+    if isinstance(obj,svj.Columns):
+        if lumi is None:
+            lumi = lumis[str(obj.metadata['year'])]
+
+        if obj.metadata["sample_type"]=="sig":
+            mz = obj.metadata["mz"]
+            br = 0.47 # branching fraction to dark
+            if mz in signal_xsecs:
+                xsec = signal_xsecs[mz]
+            else:
+                # uses interpolation
+                xsec = central.xs
+            nevents = obj.cutflow['raw']
+            event_weight = lumi*xsec*br/nevents
+            logger.info(f'Event weight: {lumi}*{br}*{xsec}/{nevents} = {event_weight}')
+            return event_weight
+        elif obj.metadata["sample_type"]=="bkg":
+            tree_weights = obj.to_numpy(['weight']).ravel()
+            if len(tree_weights)>0: logger.info(f'Event weight: {lumi}*{tree_weights[0]} = {lumi*tree_weights[0]}')
+            return lumi*tree_weights
+        else: # data
+            return 1.0
+
+    elif isinstance(obj,Histogram):
+        return obj.metadata.get('event_weight',1)
+
+    else:
+        raise RuntimeError(f'Unknown weight method for object of class {type(obj).__name__}')
+
+def get_single_event_weight(weights):
+    if isinstance(weights,float): return weights
+    elif len(weights)>0: return weights[0]
+    else: return 1.0
+
+def add_cutflows(*objs):
+    # add cutflows if present, accounting for weights
+    keys = [list(obj.cutflow.keys()) if hasattr(obj,'cutflow') else [] for obj in objs]
+    if keys and all(keys) and all(k == keys[0] for k in keys):
+        weights = [get_single_event_weight(get_event_weight(obj)) for obj in objs]
+        return OrderedDict((k, sum(obj.cutflow[k]*weight for obj,weight in zip(objs,weights))) for k in keys[0])
+    else:
+        if keys and all(keys):
+            keylist = '\n'.join(f'  {k}' for k in keys)
+            logger.warning(f'Unable to add cutflows with different keys:\n{keylist}')
+        return OrderedDict()
+
 class Histogram:
     """
     Histogram container class.
@@ -441,6 +514,8 @@ class Histogram:
         inst.vals = np.array(dict['vals'])
         inst.errs = np.array(dict['errs'])
         inst.metadata = dict['metadata'].copy()
+        if 'cutflow_keys' and 'cutflow_vals' in dict:
+            inst.cutflow = OrderedDict((k,v) for k,v in zip(dict['cutflow_keys'],dict['cutflow_vals']))
         return inst
 
     def __init__(self, binning, vals=None, errs=None):
@@ -448,6 +523,7 @@ class Histogram:
         self.vals = np.zeros(self.nbins) if vals is None else vals
         self.errs = np.sqrt(self.vals) if errs is None else errs
         self.metadata = {}
+        self.cutflow = OrderedDict()
 
     @property
     def nbins(self):
@@ -458,14 +534,16 @@ class Histogram:
         for k, v in self.metadata.items():
             try:
                 self.metadata[k] = float(v)
-            except ValueError:
+            except (ValueError,TypeError) as e:
                 pass
         return dict(
             type = 'Histogram',
             binning = list(self.binning),
             vals = list(self.vals),
             errs = list(self.errs),
-            metadata = self.metadata.copy()
+            metadata = self.metadata.copy(),
+            cutflow_keys = list(self.cutflow.keys()),
+            cutflow_vals = [v.item() if type(v).__module__=='numpy' else v for v in self.cutflow.values()], # convert from np int64 to serializable type
             )
 
     def __repr__(self):
@@ -480,24 +558,29 @@ class Histogram:
     def copy(self):
         the_copy = Histogram(self.binning.copy(), self.vals.copy(), self.errs.copy())
         the_copy.metadata = self.metadata.copy()
+        the_copy.cutflow = self.cutflow.copy()
         return the_copy
 
     def __add__(self, other):
         """Add another Histogram or a numpy array to this histogram. Returns new object."""
         ans = self.copy()
+
         if isinstance(other, Histogram):
             ans.vals = self.vals + other.vals
             ans.errs = np.sqrt(self.errs**2 + other.errs**2)
+            ans.cutflow = add_cutflows(self, other)
+
         elif hasattr(other, 'shape') and self.vals.shape == other.shape:
             # Add a simple np histogram on top of it
             ans.vals += other
             ans.errs = np.sqrt(self.errs**2 + other)
+
         return ans
 
     def __radd__(self, other):
         if other == 0:
             return self.copy()
-        raise NotImplemented
+        raise NotImplementedError
 
     def __mul__(self, factor):
         """Multiply by a constant"""
@@ -605,7 +688,7 @@ class Decoder(json.JSONDecoder):
 #__________________________________________________
 # Data pipeline
 
-class Columns(svj_ntuple_processing.Columns):
+class Columns(svj.Columns):
     """
     Data structure that contains all the training data (features)
     and information about the sample.
@@ -809,10 +892,80 @@ def ddt(mt, pt, rho, var, weight, percent):
     varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
     return varDDT
 
+def apply_hemveto(cols):
+    cols = cols.select(svj.veto_HEM(cols.arrays['ak4_subl_eta'],cols.arrays['ak4_subl_phi'],cols.arrays['ak4_subl_pt']))
+    cols.cutflow['hem_veto'] = len(cols)
+    return cols
 
-def mask_cutbased(col):
-    return ((col.arrays['rt'] > 1.18) & (col.arrays['ecfm2b1'] > 0.09))
+def apply_rt_signalregion(cols):
+    cols = cols.select(cols.arrays['rt'] > 1.18)
+    cols.cutflow['rt_signalregion'] = len(cols)
+    return cols
+
+def apply_cutbased(cols):
+    cols = apply_rt_signalregion(cols)
+    cols = cols.select(cols.arrays['ecfm2b1'] > 0.09)
+    cols.cutflow['cutbased'] = len(cols)
+    return cols
+
+# Relative path to the BDT
+# This specific BDT was chosen to be used during the L3 review
+bdt_model_file = '/uscms/home/bregnery/nobackup/SVJ_mass_bdt_studies/svj_uboost/models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
+# make sure bdt features match the choosen file
+bdt_features = [
+    'girth', 'ptd', 'axismajor', 'axisminor',
+    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
+    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef',
+]
+
+def split_bdt(sel):
+    parts = sel.split('=')
+    if len(parts)==2:
+        try:
+            bdt_cut = float(parts[1])
+        except ValueError:
+            # Handle the case where the number following 'bdt=' is not valid
+            print(f"Invalid number {parts[1]} following 'bdt='.")
+    else:
+        raise InvalidSelectionException(sel=selection)
+
+def apply_bdtbased(cols,wp,lumi):
+    import xgboost as xgb
+
+    cols = apply_rt_signalregion(cols)
+
+    # Grab the input features and weights
+    X = []
+    weight = []
+
+    # Get the features for the bkg samples
+    X = cols.to_numpy(bdt_features)
+    # Load the model and get the predictions
+    xgb_model = xgb.XGBClassifier()
+    xgb_model.load_model(bdt_model_file)
+    with time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
+        score = xgb_model.predict_proba(X)[:,1]
+    weight = (cols.xs / cols.cutflow['raw']) * lumi * cols.arrays['puweight']
+    print('weight length: ', len(weight), ' weight: ', weight)
+
+    # Obtain the efficiencies for the desired BDT working point
+    # bdt_cut is the user input bdt_cut
+    bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score))
+    bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
+    eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0])
+
+    # Apply the DDT
+    mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
+    pT = cols.to_numpy(['pt']).ravel()
+    rho = cols.to_numpy(['rho']).ravel()
+    bdt_ddt_score = ddt(mT, pT, rho, score, weight, eff*100)
+
+    # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
+    cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
+    cols.cutflow['ddt(bdt)'] = len(cols)
+    return cols
 
 class InvalidSelectionException(Exception):
-    def __init__(self, msg='selection argument should be "cutbased" or "bdt=X.XXX".', *args, **kwargs):
+    def __init__(self, msg='Unknown selection {}; choices are "preselection", "cutbased", or "bdt=X.XXX".', sel="", *args, **kwargs):
+        msg = msg.format(sel)
         super().__init__(msg, *args, **kwargs)

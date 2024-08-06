@@ -6,7 +6,7 @@ MAIN_DIR = osp.dirname(THIS_DIR)
 sys.path.append(MAIN_DIR)
 
 import common
-from common import mask_cutbased
+from common import apply_cutbased
 from produce_histograms import Histogram, repr_dict
 from cutflow_table import format_table
 
@@ -29,71 +29,7 @@ else:
 
 scripter = common.Scripter()
 
-
-def apply_jes(arrays, var, match_type='both'):
-    from jes_numba import calc_x_jes
-
-    if not var in ['up', 'down', 'central']:
-        raise Exception('var should be up, down, or central')
-    if var == 'central': return
-
-    try:
-        match_type = dict(both=3, partial=1, full=2)[match_type]
-    except KeyError:
-        common.logger.error('Possible choices for match_type are both, partial, or full')
-
-    arrays = arrays.copy()
-    a = arrays.array
-
-    # Before correcting, save the current pT and phi (needed for MET correction)
-    pt_before = a['Jets.fCoordinates.fPt']
-    eta_before = a['Jets.fCoordinates.fEta']
-    phi_before = a['Jets.fCoordinates.fPhi']
-    energy_before = a['Jets.fCoordinates.fE']
-
-    for conesize in [.4, .8, 1.5]:
-        conesizestr = '' if conesize == .4 else f'AK{10*conesize:.0f}'
-        x_jes = calc_x_jes(
-            a[f'Jets{conesizestr}.fCoordinates.fPt'],
-            a[f'Jets{conesizestr}.fCoordinates.fEta'],
-            a[f'Jets{conesizestr}.fCoordinates.fPhi'],
-            a[f'GenJets{conesizestr}.fCoordinates.fPt'],
-            a[f'GenJets{conesizestr}.fCoordinates.fEta'],
-            a[f'GenJets{conesizestr}.fCoordinates.fPhi'],
-            a['GenParticles.fCoordinates.fEta'],
-            a['GenParticles.fCoordinates.fPhi'],
-            a['GenParticles_PdgId'],
-            a['GenParticles_Status'],
-            do_match_type = match_type,
-            drsq_comp= conesize**2
-            )
-        
-        a[f'x_jes_{10*conesize:.0f}'] = x_jes
-        if var == 'up':
-            corr = 1+x_jes
-        elif var == 'down':
-            jes_down = 1-x_jes
-            corr = ak.where(jes_down<0., 0., jes_down)
-
-        a[f'Jets{conesizestr}.fCoordinates.fPt'] = corr * a[f'Jets{conesizestr}.fCoordinates.fPt']
-        a[f'Jets{conesizestr}.fCoordinates.fE'] = corr * a[f'Jets{conesizestr}.fCoordinates.fE']
-
-
-    # Correct MET
-    a['MET_precorr'] = a['MET']
-    a['METPhi_precorr'] = a['METPhi']
-    px_before = np.cos(phi_before) * pt_before
-    py_before = np.sin(phi_before) * pt_before
-    px_after = np.cos(a[f'Jets.fCoordinates.fPhi']) * a[f'Jets.fCoordinates.fPt']
-    py_after = np.sin(a[f'Jets.fCoordinates.fPhi']) * a[f'Jets.fCoordinates.fPt']
-    dpx = ak.sum(px_after - px_before, axis=-1)
-    dpy = ak.sum(py_after - py_before, axis=-1)
-    met_x = np.cos(a['METPhi']) * a['MET'] - dpx
-    met_y = np.sin(a['METPhi']) * a['MET'] - dpy
-    a['MET'] = np.sqrt(met_x**2 + met_y**2)
-    a['METPhi'] = np.arctan2(met_y, met_x) # Should be between -pi .. pi
-
-    return arrays
+from skim import apply_jes
 
 @scripter
 def skim_jes():
@@ -357,17 +293,17 @@ def produce_histograms():
     else:
         out = {}
 
-    sel = mask_cutbased(central) if selection=='cutbased' else None
-    central = MTHistogram(central.arrays['mt'][sel])
+    if selection=='cutbased': central = apply_cutbased(central)
+    central = MTHistogram(central.arrays['mt'])
 
     for c in all:
         if merge_into and 'both' not in c.metadata['name']: continue
-        sel = mask_cutbased(c) if selection=='cutbased' else None
-        h = MTHistogram(c.arrays['mt'][sel])
+        if selection=='cutbased': c = apply_cutbased(c)
+        h = MTHistogram(c.arrays['mt'])
         if NORMALIZE: h.vals /= central.norm
         h.metadata.update(c.metadata)
         out[c.metadata['name']] = h.json()
-    
+
     if merge_into:
         outfile = merge_into
     else:
@@ -413,10 +349,8 @@ def debug_plots():
 
     # Compute the selection mask (cutbased or bdt)
     for c in all:
-        c.sel = mask_cutbased(c) if selection=='cutbased' else None
-
-    if c.sel is None:
-        raise Exception
+        if selection=='cutbased': c = apply_cutbased(c)
+        else: raise Exception
 
     # MET histograms before and after correction
     fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2,3, figsize=(24,16))
@@ -429,8 +363,8 @@ def debug_plots():
         (ax5, full_down),
         (ax6, partial_down),
         ]:
-        met_before = c.arrays['MET_precorr'][c.sel]
-        met_after = c.arrays['met'][c.sel]
+        met_before = c.arrays['MET_precorr']
+        met_after = c.arrays['met']
         for label, met in [('before', met_before), ('after', met_after)]:
             vals = np.histogram(met, bins=bins)[0]
             ax.step(bins[:-1], vals, label=label)
@@ -450,8 +384,8 @@ def debug_plots():
         (ax5, full_down),
         (ax6, partial_down),
         ]:
-        met_before = c.arrays['METPhi_precorr'][c.sel]
-        met_after = c.arrays['metphi'][c.sel]
+        met_before = c.arrays['METPhi_precorr']
+        met_after = c.arrays['metphi']
         for label, met in [('before', met_before), ('after', met_after)]:
             vals = np.histogram(met, bins=bins)[0]
             ax.step(bins[:-1], vals, label=label)
@@ -471,8 +405,8 @@ def debug_plots():
         (ax5, full_down),
         (ax6, partial_down),
         ]:
-        pt_before = central.arrays['pt'][central.sel]
-        pt_after = c.arrays['pt'][c.sel]
+        pt_before = central.arrays['pt']
+        pt_after = c.arrays['pt']
         for label, pt in [('before', pt_before), ('after', pt_after)]:
             vals = np.histogram(pt, bins=bins)[0]
             ax.step(bins[:-1], vals, label=label)
@@ -491,11 +425,11 @@ def debug_plots():
             (ax2, 'full', full_up),
             (ax3, 'partial', partial_up),
             ]:
-            c.ptratio_1 = c.arrays['x_jes_1'][c.sel & (c.arrays['x_jes_1']!=0.)] + 1.
+            c.ptratio_1 = c.arrays['x_jes_1'][(c.arrays['x_jes_1']!=0.)] + 1.
             c.ptratio_1_hist = np.histogram(c.ptratio_1, bins)[0]
-            c.ptratio_2 = c.arrays['x_jes_2'][c.sel & (c.arrays['x_jes_2']!=0.)] + 1.
+            c.ptratio_2 = c.arrays['x_jes_2'][(c.arrays['x_jes_2']!=0.)] + 1.
             c.ptratio_2_hist = np.histogram(c.ptratio_2, bins)[0]
-            c.ptratio_3 = c.arrays['x_jes_3'][c.sel & (c.arrays['x_jes_3']!=0.) & (c.arrays['x_jes_3']!=-100.)] + 1.
+            c.ptratio_3 = c.arrays['x_jes_3'][(c.arrays['x_jes_3']!=0.) & (c.arrays['x_jes_3']!=-100.)] + 1.
             c.ptratio_3_hist = np.histogram(c.ptratio_3, bins)[0]
             c.pt_ratio = np.concatenate((c.ptratio_1, c.ptratio_2, c.ptratio_3))
             c.pt_ratio_hist = np.histogram(c.pt_ratio, bins)[0]

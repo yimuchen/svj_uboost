@@ -19,7 +19,9 @@ pip install matplotlib
 pip install tqdm
 pip install numba
 
-pip install git+ssh://git@github.com/boostedsvj/svj_ntuple_processing
+pip install git+https://github.com/boostedsvj/jdlfactory
+pip install git+https://github.com/boostedsvj/seutils
+pip install git+https://github.com/boostedsvj/svj_ntuple_processing
 pip install hep_ml
 
 git clone git@github.com:boostedsvj/svj_uboost
@@ -29,6 +31,41 @@ Alternatively, an editable `svj_ntuple_processing` can be installed for simultan
 ```
 git clone git@github.com:boostedsvj/svj_ntuple_processing
 pip install -e svj_ntuple_processing/
+```
+
+Optional additional packages to read files over xrootd directly instead of making local copies (may not work on all machines):
+```
+pip install xrootd
+pip install fsspec-xrootd
+```
+
+## Skims
+
+A minimal setup just to run the skims (avoiding the need for a heavy conda environment):
+```
+git clone git@github.com:boostedsvj/svj_uboost
+cd svj_uboost
+python3 -m venv venv
+source venv/bin/activate
+pip install git+https://github.com/boostedsvj/jdlfactory
+pip install git+https://github.com/boostedsvj/seutils
+pip install git+https://github.com/boostedsvj/svj_ntuple_processing
+```
+
+The skim code can be tested interactively:
+```
+python3 skim.py --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_test [filename]
+```
+
+To submit all skim jobs:
+```
+python3 submit_skim.py --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_[date] --go
+```
+(The argument `--keep X` can be included to select a random subset of signal events for statistical studies, where `X` is a float between 0 and 1.)
+
+Then hadd the skims to get one file per sample:
+```
+python3 hadd_skims.py --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_[date]_hadd "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_[date]/*/*"
 ```
 
 ## How to run a training
@@ -67,8 +104,7 @@ python training.py xgboost \
 Training with xgboost on the full background should take about 45 min.
 The script `hyperparameteroptimization.py` runs this command for various settings in parallel.
 
-
-## Evaluate
+### Evaluate
 
 ```bash
 python evaluate.py
@@ -76,69 +112,7 @@ python evaluate.py
 
 The paths to the model are currently hard-coded! Things are still too fluid for a good abstraction.
 
-
-## Produce histograms
-
-To produce the histograms needed for the limit setting, use:
-
-```bash
-python produce_histograms.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json
-```
-
-It creates a file called `histograms_%b%d.json`, which contains background and signal histograms for various BDT working points (currently 0.0 to 0.9).
-
-To make some quick debug plots for the histograms:
-
-```bash
-python plot_histograms.py histograms_Dec01.json
-```
-
-
-## Cutflow table
-
-```bash
-python cutflow_table.py
-```
-
-Creates the cutflow tables to inspect the preselection efficiencies. Two example tables (run the script for more):
-
-```
---------------------------------------------------------------------------------
-bkg_summary
-              qcd      ttjets   wjets    zjets    combined
-xs            1.11e+05 1.31e+03 3.32e+03 4.01e+02 1.16e+05
-raw           100.00%  100.00%  100.00%  100.00%  100.00%
-ak8jet.pt>500 0.99%    0.99%    0.15%    0.27%    0.96%
-triggers      0.93%    0.98%    0.15%    0.27%    0.91%
-n_ak15jets>=2 0.93%    0.98%    0.15%    0.26%    0.91%
-subl_eta<2.4  0.92%    0.98%    0.15%    0.25%    0.90%
-subl_ecf>0    0.90%    0.96%    0.12%    0.20%    0.87%
-rtx>1.1       0.09%    0.48%    0.06%    0.15%    0.10%
-nleptons=0    0.09%    0.20%    0.03%    0.15%    0.09%
-metfilter     0.09%    0.20%    0.03%    0.15%    0.09%
-preselection  0.09%    0.20%    0.03%    0.15%    0.09%
-stitch        0.09%    0.08%    0.03%    0.15%    0.09%
-n137          1.39e+07 3.52e+05 1.30e+05 8.28e+04 1.44e+07
---------------------------------------------------------------------------------
-signal
-              mz250_rinv0.1 mz250_rinv0.3 mz350_rinv0.1 mz350_rinv0.3 mz450_rinv0.1 mz450_rinv0.3
-xs            1.14e+02      1.14e+02      9.92e+01      9.92e+01      8.23e+01      8.23e+01     
-raw           100.00%       100.00%       100.00%       100.00%       100.00%       100.00%      
-ak8jet.pt>500 20.09%        19.06%        22.06%        21.02%        25.01%        23.40%       
-triggers      19.78%        18.84%        21.77%        20.80%        24.74%        23.23%       
-n_ak15jets>=2 19.78%        18.84%        21.77%        20.80%        24.74%        23.23%       
-subl_eta<2.4  19.68%        18.71%        21.68%        20.68%        24.64%        23.12%       
-subl_ecf>0    19.36%        18.28%        21.36%        20.22%        24.33%        22.66%       
-rtx>1.1       3.95%         10.30%        5.07%         12.52%        6.21%         14.59%       
-nleptons=0    3.81%         9.98%         4.87%         12.06%        5.94%         14.00%       
-metfilter     3.77%         9.86%         4.80%         11.91%        5.87%         13.83%       
-preselection  3.77%         9.86%         4.80%         11.91%        5.87%         13.83%       
-stitch        3.77%         9.86%         4.80%         11.91%        5.87%         13.83%       
-n137          5.89e+05      1.54e+06      6.53e+05      1.62e+06      6.63e+05      1.56e+06     
-```
-
-
-## Overfitting check: Kolmogorov-Smirnov test
+### Overfitting check: Kolmogorov-Smirnov test
 
 ```bash
 python overfitting.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.0_nest400.json
@@ -148,51 +122,46 @@ python overfitting.py models/svjbdt_Nov29_reweight_mt_lr0.05_mcw0.1_maxd6_subs1.
 
 With p-values close to 1.0, there is no reason to assume any overfitting.
 
+## Cutflow table
 
-## Scale uncertainties
-
-```
-mkdir data/scaleunc
-xrdcp root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/signal_madpt300_2023_scaleunc/BDTCOLS/madpt300_mz350_mdark10_rinv0.3_scaleunc.npz data/scaleunc/
-python study_scaleunc.py plot data/scaleunc/madpt300_mz350_mdark10_rinv0.3_scaleunc.npz models/svjbdt_Apr21_reweight_mt.json
+```bash
+python makeCutflowSVJ.py -o svj.tex -d skims_20240718_hadd -t rawrel -p 0 -k raw preselection 'n_ak4jets>=2' -l '180<mt<650' --compile
 ```
 
-![scale uncertainty plot](example_plots/scaleunc.png)
+Creates the cutflow tables in LaTeX format, along with a compiled pdf (`--compile` argument, requires that LaTeX is installed).
 
 ## Building Data Cards
 
-One of the key files in this repo is the `build_datacard.py` this is the magic file that makes everything come together. Here, datacards that can be fed into combine are built. The first step is to produce npz 'skims' of the signal files while applying the selection (either cutbased or bdt-based). This is done for individual signal samples to calculate all the necessary signal systematics. (The argument `--keep X` can be included to select a random subset of signal events for statistical studies, where `X` is a float between 0 and 1.)
+One of the key files in this repo is the `build_datacard.py` this is the magic file that makes everything come together. Here, datacards that can be fed into combine are built.
+
+Taking the skims as input (with the consistent preselection applied to all samples), output MT histograms are produced for a specified final selection (either cutbased or bdt=X for a working point X; DDT is applied).
+The final selection also includes the HEM veto for the 2018POST era.
+For signals, systematic variations are evaluated, and a wider mT range is used to facilitate smoothing of the shapes (using local regression).
 
 ```bash
-# For BDT based choose a bdt working point (the DDT is applied while running)
-python build_datacard.py skim bdt=0.5 /path/to/signal_file.root 
-# For the cut based
-python build_datacard.py skim cutbased /path/to/signal_file.root 
+# For the cut based: sig, bkg, data
+python3 build_datacard.py build_all_histograms --mtmin 130 --mtmax 700 --binw 10 cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Private3D*/*pythia8.npz"
+python3 build_datacard.py build_all_histograms --binw 10 cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Summer*/*.npz"
+python3 build_datacard.py build_all_histograms --binw 10 cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Run*/*.npz"
 ```
 
-The background estimation is done by creating function that fits well to background mc and then is applied to data, thus the only uncertainty in the background estimation are the parameters of the fit function. Therefore, no set of 'up and down' histograms are needed for the background mc files. Instead, the selection (bdt or cutbased) is applied to the background samples and a json file with the mT histograms (with user setbinwidth `binw`) is made with the command:
+After creating the histograms, merge across all data-taking years:
 ```bash
-python3 build_datacard.py build_bkg_histograms --binw 10 cutbased path/to/background/*.npz
-```
-This step is only done once and reused for all the different signal points.
-
-For signal, the mT histograms including all systematic variations for one signal point should be made with the following command:
-```bash
-python3 build_datacard.py build_sig_histograms --mtmin 130 --mtmax 700 --binw 10 cutbased path/to/signal/*.npz
+for CAT in bkg data sig; do
+	python3 build_datacard.py merge_histograms cutbased hists_20240718 --cat $CAT
+done
 ```
 
-A larger mT range than the final selection is used to facilitate smoothing of the signal shapes (using local regression), which is performed by:
+Smoothing is applied to the merged signal histograms:
 ```bash
-python build_datacard.py smooth_shapes --optimize 1000 --target central --mtmin 180 --mtmax 650 signal.json
+python build_datacard.py smooth_shapes --optimize 1000 --target central --mtmin 180 --mtmax 650 merged/signal.json
 ```
 The output histograms from this step are truncated to the final mT range. (`--target central` means that the optimization of the smoothing span via generalized cross-validation uses the central histogram, and then that optimized span value is applied to the systematic variations.)
 
-Finally, the signal and background histograms are combined to make the full input for a datacard:
-```bash
-python build_datacard.py build_histograms --binw 10 signal_smooth.json bkghist.json
-```
+These merged, smoothed json files are the inputs to the limit setting. The signal, background, and (optionally) data are supplied separately.
 The resulting merged file should use the signal name, the selection type, bin widths, and ranges: `signal_name_cutbased_or_bdt_smooth_with_bkg_binwXY_rangeXYZ-XYZ.json`.
-(The `build_histograms` function can also be used to perform the individual sig and bkg histogram steps, if it is given npz files instead of json files. In this case, the signal smoothing would have to be performed similarly.)
+
+## Extras
 
 An additional function for checking the histogram json files is `ls`. However, this is not the most easy to read it provides a quick way to check for mistakes during file creation.
 

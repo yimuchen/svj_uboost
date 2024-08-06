@@ -1,35 +1,19 @@
 import os, os.path as osp, sys, json, re, math
 from time import strftime
+from collections import defaultdict
 
-import tqdm
 import numpy as np
 import awkward as ak
 import matplotlib.pyplot as plt
 
 import svj_ntuple_processing as svj
 import common
-
-import xgboost as xgb
-from sklearn.metrics import confusion_matrix, roc_curve, roc_auc_score, auc
-
+from hadd_skims import expand_wildcards
 
 THIS_DIR = osp.dirname(osp.abspath(__file__))
-# MAIN_DIR = osp.dirname(THIS_DIR)
 sys.path.append(osp.join(THIS_DIR, 'systematics'))
 
 scripter = common.Scripter()
-DST = osp.join(THIS_DIR, 'skims')
-
-# Relative path to the BDT
-# This specific BDT was choosen to be used during the L3 review 
-bdt_model_file = '/uscms/home/bregnery/nobackup/SVJ_mass_bdt_studies/svj_uboost/models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
-# make sure bdt features match the choosen file
-bdt_features = [
-    'girth', 'ptd', 'axismajor', 'axisminor',
-    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
-    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef', 
-    ]
-
 
 def change_bin_width():
     """
@@ -46,6 +30,60 @@ def change_bin_width():
         common.MTHistogram.non_standard_binning = True
         common.logger.warning(f'Changing bin width to {binw}; MT binning: {common.MTHistogram.bins}')
 
+def check_rebin(hist,name):
+    if not common.MTHistogram.non_standard_binning:
+        return hist
+    msg = []
+    if hist.binning[0]>common.MTHistogram.bins[0]:
+        msg.append(f'left {hist.binning[0]}>{common.MTHistogram.bins[0]}')
+    if hist.binning[-1]<common.MTHistogram.bins[-1]:
+        msg.append(f'right {hist.binning[-1]}>{common.MTHistogram.bins[-1]}')
+    orig_width = int(hist.binning[1] - hist.binning[0])
+    new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
+    rebin_factor = int(new_width/orig_width)
+    rebin_mod = orig_width % new_width
+    if rebin_mod!=0:
+        msg.append(f'rebin {orig_width} % {new_width} = {rebin_mod}')
+    if len(msg)>0:
+        msg = ', '.join(msg)
+        common.logger.warning(f'Hist {name} inconsistent with requested binning ({msg})')
+    return hist.rebin(rebin_factor).cut(common.MTHistogram.bins[0],common.MTHistogram.bins[-1])
+
+def rebin_dict(hists):
+    if not common.MTHistogram.non_standard_binning:
+        return hists
+    for key in hists:
+        if isinstance(hists[key],list):
+            for i,entry in enumerate(hists[key]):
+                hists[key][i] = check_rebin(entry,f'{key}[{i}]')
+        elif isinstance(hists[key],dict):
+            for k,v in hists[key].items():
+                hists[key][k] = check_rebin(v,f'{key}[{k}]')
+        else:
+            hists[key] = check_rebin(hists[key],key)
+    return hists
+
+def rebin_name(outfile):
+    if common.MTHistogram.non_standard_binning:
+        binw = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
+        left = common.MTHistogram.bins[0]
+        right = common.MTHistogram.bins[-1]
+        outfile = outfile.replace(
+            '.json',
+            f'_binw{binw:02d}_range{left:.0f}-{right:.0f}.json'
+        )
+    return outfile
+
+def rebin_file(file):
+    file2 = rebin_name(file)
+    if file2==file:
+        return file
+    with open(file,'r') as f:
+        mths = json.load(f, cls=common.Decoder)
+    mths = rebin_dict(mths)
+    with open(file2,'w') as f:
+        json.dump(mths, f, cls=common.Encoder, indent=4)
+    return file2
 
 def basename(meta):
     """
@@ -55,544 +93,294 @@ def basename(meta):
         f'mz{meta["mz"]:.0f}_rinv{meta["rinv"]:.1f}_mdark{meta["mdark"]:.0f}'
         )
 
-
 @scripter
-def skim():
-    """
-    Produces a skim from TreeMaker Ntuples that is ready to be histogrammed
-    """
-    pbar = tqdm.tqdm(total=8)
-    svj.BRANCHES_GENONLY.extend([
-        'PDFweights', 'PSweights',
-        'puSysUp', 'puSysDown',
-        'GenJets.fCoordinates.fPt',
-        'GenJets.fCoordinates.fEta',
-        'GenJets.fCoordinates.fPhi',
-        'GenJets.fCoordinates.fE',
-        'GenJetsAK8.fCoordinates.fPt',
-        'GenJetsAK8.fCoordinates.fEta',
-        'GenJetsAK8.fCoordinates.fPhi',
-        'GenJetsAK8.fCoordinates.fE',
-        'GenJetsAK15.fCoordinates.fPt',
-        'GenJetsAK15.fCoordinates.fEta',
-        'GenJetsAK15.fCoordinates.fPhi',
-        'GenJetsAK15.fCoordinates.fE',
-        ])
-    outdir = common.pull_arg('-o', '--outdir', type=str, default=strftime('skims_%Y%m%d')).outdir
-    selection = common.pull_arg('selection', type=str).selection
-    full_selection = selection
-    common.logger.info(f'Selection: {selection}')
-    keep = common.pull_arg('-k', '--keep', type=float, default=None).keep
-    rootfile = common.pull_arg('rootfile', type=str).rootfile
-    array = svj.open_root(rootfile, load_gen=True, load_jerjec=True)
+def build_histogram(args=None):
+    if args is None:
+        change_bin_width()
+        # Read from sys.argv
+        selection = common.pull_arg('selection', type=str).selection
+        lumi = common.pull_arg('--lumi', type=float, default=None, help='Luminosity in pb-1 (overrides defaults)').lumi
+        year = common.pull_arg('--year', type=str, default=None, help='year (overrides metadata)').year
+        fullyear = common.pull_arg('--fullyear', action="store_true", help='treat 2018 as one year instead of splitting into pre and post').fullyear
+        skimfile = common.pull_arg('skimfile', type=str).skimfile
+    else:
+        # Use passed input
+        selection, lumi, year, fullyear, skimfile = args
 
-    def apply_keep(array, sel, keep):
-        if sel is None:
-            return array
-        array.array = array.array[sel]
-        scale = 1./keep
-        array.array["Weight"] = array.array["Weight"]*scale
-        array.cutflow['raw'] = len(array)
-        return array
+    def filter_bkg(cols):
+        bkgs = [cols]
+        # Filter empty backgrounds
+        bkgs = [c for c in bkgs if len(c)]
+        # Filter out QCD with pT<300
+        # Only singular events pass the preselection, which creates spikes in the final bkg dist
+        bkgs = common.filter_pt(bkgs, 300)
+        # Same story for wjets with HT<400
+        bkgs = common.filter_ht(bkgs, 400, 'wjets')
+        # Filter out wjets inclusive bin - it's practically the HT<100 bin,
+        # and it's giving problems
+        bkgs = [c for c in bkgs if not (c.metadata['bkg_type']=='wjets' and 'htbin' not in c.metadata)]
+        return bkgs[0] if len(bkgs)==1 else None
 
-    sel = None
-    if keep is not None:
-        common.logger.info(f'Keeping only fraction {keep} of total number of events for signal MC')
-        n_before = len(array)
-        sel = np.random.choice(len(array), int(keep * len(array)), replace=False)
-        common.logger.info(f'Downsampling from {n_before} -> {len(sel)}')
-        array = apply_keep(array, sel, keep)
-        full_selection += f'_keep{keep:.2f}'
+    def get_variation(var):
+        return skimfile.replace(".npz",f"_{var}.npz")
 
-    common.logger.info(f'Will save skims in outdir {outdir}')
-    common.logger.info(f'Found {len(array)} events in {rootfile}')
-    common.logger.info(f'Metadata for {rootfile}: {array.metadata}')
-    pbar.update()
-
-    # ______________________________
-    # Work before applying preselection
-
-    # PDF weights
-    common.logger.info('Calculating PDFweight norm factors')
-    pdf_weights = array.array['PDFweights'].to_numpy()
-    pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
-    # mu and sigma _per event_
-    mu = np.mean(pdf_weights, axis=1)
-    sigma = np.std(pdf_weights, axis=1)
-    # Normalization factors for the weights
-    pdfw_norm_up   = np.mean(mu+sigma)
-    pdfw_norm_down = np.mean(mu-sigma)
-
-    # Scale uncertainty
-    # Compute normalizations before applying cuts
-    scale_weight = array.array['ScaleWeights'].to_numpy()
-    scale_weight = scale_weight[:,np.array([0,1,2,3,4,6,8])] # Throw away the mur/muf .5/2 and 2/.5 variations
-    scale_norm_central = scale_weight[:,0].sum()
-    scale_norm_up = np.max(scale_weight, axis=-1).sum()
-    scale_norm_down = np.min(scale_weight, axis=-1).sum()
-    scale_factor_up = scale_norm_central / scale_norm_up
-    scale_factor_down = scale_norm_central / scale_norm_down
-    svj.logger.info(
-        'Scale unc:'
-        f'\n    norm_central = {scale_norm_central:.5f}'
-        f'\n    norm_up      = {scale_norm_up:.5f}'
-        f'\n    norm_down    = {scale_norm_down:.5f}'
-        f'\n    factor_up    = {scale_factor_up:.5f}'
-        f'\n    factor_down  = {scale_factor_down:.5f}'
-        )
-
-    # ______________________________
-    # Apply preselection and save needed vars
-
-    common.logger.info('Running preselection now')
-    central = svj.filter_preselection(array)
-    # Adjust the load_mc value as needed... don't understand if the skims are alway on mc for example
-    cols = svj.bdt_feature_columns(central, load_mc=True)
-    bdt_cols = svj.bdt_feature_columns(central, load_mc=True)
-
-    # Save scale weights
-    cols.arrays['scaleweights'] = central.array['ScaleWeights'].to_numpy()
-    cols.metadata['scale_norm_central'] = scale_norm_central
-    cols.metadata['scale_norm_up'] = scale_norm_up
-    cols.metadata['scale_norm_down'] = scale_norm_down
-    cols.metadata['scale_factor_up'] = scale_factor_up
-    cols.metadata['scale_factor_down'] = scale_factor_down
-
-    # Save PDF normalization and weights
-    cols.metadata['pdfw_norm_up'] = pdfw_norm_up
-    cols.metadata['pdfw_norm_down'] = pdfw_norm_down
-    cols.arrays['pdf_weights'] = central.array['PDFweights'].to_numpy()
-
-    # Save PS weights
-    ps_weights = central.array['PSweights'].to_numpy()
-    cols.arrays['ps_isr_up'] = ps_weights[:,6]
-    cols.arrays['ps_isr_down'] = ps_weights[:,8]
-    cols.arrays['ps_fsr_up'] = ps_weights[:,7]
-    cols.arrays['ps_fsr_down'] = ps_weights[:,9]
-
-    # Save PU weights
-    cols.arrays['pu_central'] = central.array['puWeight'].to_numpy()
-    cols.arrays['pu_sys_up'] = central.array['puSysUp'].to_numpy()
-    cols.arrays['pu_sys_down'] = central.array['puSysDown'].to_numpy()
-
-    def apply_selection(cols):
-        # Apply further selection now
-        if selection == 'cutbased':
-            common.logger.info('Applying cutbased selection')
-            cols = cols.select(common.mask_cutbased(cols))
-            cols.cutflow['cutbased'] = len(cols)
-        # Apply the BDT
+    # apply final selections
+    def apply_selection(cols,year):
+        metadata = cols.metadata
+        # HEM veto
+        startHEM = 319077
+        if year=="2018PRE":
+            if metadata["sample_type"]=="data":
+                cols = cols.select(cols.arrays['run']<startHEM)
+        elif year=="2018POST":
+            if metadata["sample_type"]=="data":
+                cols = cols.select(cols.arrays['run']>=startHEM)
+            cols = common.apply_hemveto(cols)
+        # signal region
+        if selection=='cutbased':
+            cols = common.apply_cutbased(cols)
         elif selection.startswith('bdt='):
-            common.logger.info('Applying bdt selection')
-
-            # Split the selection string by '=' to extract the number following 'bdt='
-            parts = selection.split('=')
-            
-            # Check if the second part of the split is a valid number
-            if len(parts) == 2:
-                try:
-                    bdt_cut = float(parts[1])
-                except ValueError:
-                    # Handle the case where the number following 'bdt=' is not valid
-                    print("Invalid number following 'bdt='.")
-            else:
-                # Handle the case where the number following 'bdt=' is not valid
-                raise ValueError("Invalid number {} following 'bdt='.".format(parts[1]))
-
-            # Grab the input features and weights
-            X = []
-            weight = []
-  
-            # Get the features for the bkg samples
-            X = cols.to_numpy(bdt_features)
-            # Load the model and get the predictions
-            xgb_model = xgb.XGBClassifier()
-            xgb_model.load_model(bdt_model_file)
-            with common.time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
-                score = xgb_model.predict_proba(X)[:,1]
-            weight = cols.arrays['puweight']*cols.arrays['weight']
-            print('weight length: ', len(weight), ' weight: ', weight)
-
-            # Obtain the efficiencies for the desired BDT working point
-            # bdt_cut is the user input bdt_cut
-            bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score)) 
-            bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
-            eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0]) 
-
-            # Apply the DDT
-            mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
-            pT = cols.to_numpy(['pt']).ravel()
-            rho = cols.to_numpy(['rho']).ravel()
-            bdt_ddt_score = common.ddt(mT, pT, rho, score, weight, eff*100)
-
-            # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
-            cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
-            cols.cutflow['ddt(bdt)'] = len(cols)
-
+            wp = split_bdt(selection)
+            cols = common.apply_bdtbased(cols,wp,lumi)
+        elif selection=='preselection':
+            pass
         else:
-            raise common.InvalidSelectionException()
+            raise common.InvalidSelectionException(sel=selection)
         return cols
 
-    cols = apply_selection(cols)
-    cols.metadata['selection'] = selection
-    cols.metadata['basename'] = basename(array.metadata)
-    cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_central.npz')
-    pbar.update()
-
-    # ______________________________
-    # JEC/JER
-
-    for var_name, appl in [
-        ('jer_up',   svj.apply_jer_up),
-        ('jer_down', svj.apply_jer_down),
-        ('jec_up',   svj.apply_jec_up),
-        ('jec_down', svj.apply_jec_down),
-        ]:
-        variation = appl(array)
-        variation = svj.filter_preselection(variation)
-        cols = svj.bdt_feature_columns(variation, load_mc=True)
-        cols = apply_selection(cols)
-        cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_{var_name}.npz')
-        pbar.update()
-
-    # ______________________________
-    # JES
-
-    from jes import apply_jes
-
-    for var in ['up', 'down']:
-        for match_type in ['both']: # other options are: 'full', 'partial'
-            common.logger.info(f'{var=}, {match_type=}')
-            variation = apply_jes(array, var, match_type)
-            common.logger.info(f'Done, applying presel')
-            variation = svj.filter_preselection(variation)
-            common.logger.info(f'Done, to columns')
-            cols = svj.bdt_feature_columns(variation, load_mc=True)
-            cols.arrays['x_jes_1'] = variation.array['x_jes_15'][:,0].to_numpy()
-            cols.arrays['x_jes_2'] = variation.array['x_jes_15'][:,1].to_numpy()
-            cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(variation.array['x_jes_15'][:,2:]), -100.).to_numpy()
-            cols.arrays['MET_precorr'] = variation.array['MET_precorr'].to_numpy()
-            cols.arrays['METPhi_precorr'] = variation.array['METPhi_precorr'].to_numpy()
-            cols = apply_selection(cols)
-            common.logger.info(f'Saving')
-            cols.save(f'{outdir}/{basename(array.metadata)}_{full_selection}_jes{var}_{match_type}.npz')
-            pbar.update()
-
-    pbar.close()
-
-
-@scripter
-def build_sig_histograms(args=None):
-    if args is None:
-        change_bin_width()
-        # Read from sys.argv
-        selection = common.pull_arg('selection', type=str).selection
-        lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
-        lumi *= 1e3 # Convert to nb-1, same unit as xs
-        common.logger.info(f'Selection: {selection}')
-        skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
-    else:
-        # Use passed input
-        selection, lumi, skim_files = args
-
-    def get_by_tag(tag):
-        return [s for s in skim_files if tag in s][0]
-
     mths = {}
-    central = svj.Columns.load(get_by_tag('central'))
+    central = svj.Columns.load(skimfile)
+    metadata = central.metadata
+    if metadata["sample_type"]=="bkg":
+        central = filter_bkg(central)
+        if central is None:
+            return [""]
 
-    mt = central.to_numpy(['mt']).ravel()
-    w = central.to_numpy(['puweight']).ravel()
-    w *= lumi * central.xs / central.cutflow['raw']
-    common.logger.info(f'Event weight: {lumi}*{central.xs}/{central.cutflow["raw"]} = {lumi*central.xs/central.cutflow["raw"]}')
-
-    # Scale
-    scale_weight = central.to_numpy(['scaleweights'])[:, np.array([0,1,2,3,4,6,8])]
-    weight_up = w * np.max(scale_weight, axis=-1) * central.metadata['scale_factor_up']
-    weight_down = w * np.min(scale_weight, axis=-1) * central.metadata['scale_factor_down']
-    mths['scale_up'] = common.MTHistogram(mt, weight_up)
-    mths['scale_down'] = common.MTHistogram(mt, weight_down)
-
-    # JEC/JER/JES
-    def mth_jerjecjes(tag):
-        col = svj.Columns.load(get_by_tag(tag))
-        mt = col.to_numpy(['mt']).flatten()
-        w = col.to_numpy(['puweight']).flatten()
-        w *= lumi * col.xs / col.cutflow['raw']
-        return common.MTHistogram(mt, w)
-    mths['jer_up'] = mth_jerjecjes('jer_up')
-    mths['jer_down'] = mth_jerjecjes('jer_down')
-    mths['jec_up'] = mth_jerjecjes('jec_up')
-    mths['jec_down'] = mth_jerjecjes('jec_down')
-    mths['jes_up'] = mth_jerjecjes('jesup_both')
-    mths['jes_down'] = mth_jerjecjes('jesdown_both')
-
-    # PS
-    ps_weights = w[:,None] * central.to_numpy(['ps_isr_up', 'ps_isr_down',
-                                       'ps_fsr_up', 'ps_fsr_down'])
-    mths['isr_up']   = common.MTHistogram(mt, ps_weights[:,0])
-    mths['isr_down'] = common.MTHistogram(mt, ps_weights[:,1])
-    mths['fsr_up']   = common.MTHistogram(mt, ps_weights[:,2])
-    mths['fsr_down'] = common.MTHistogram(mt, ps_weights[:,3])
-
-    # PU
-    pu_weights = central.to_numpy(['puweight', 'pu_sys_up', 'pu_sys_down'])
-    mths['pu_up'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,1])
-    mths['pu_down'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,2])
-
-    # PDF
-    pdf_weights = central.to_numpy(['pdf_weights'])
-    pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
-    mu_pdf = np.mean(pdf_weights, axis=1)
-    sigma_pdf = np.std(pdf_weights, axis=1)
-    pdfw_up = (mu_pdf+sigma_pdf) / central.metadata['pdfw_norm_up']
-    pdfw_down = (mu_pdf-sigma_pdf) / central.metadata['pdfw_norm_down']
-    mths['pdf_up'] = common.MTHistogram(mt, w*pdfw_up)
-    mths['pdf_down'] = common.MTHistogram(mt, w*pdfw_down)
-
-    # MC stats
-    mth_central = common.MTHistogram(mt, w)
-    mth_central.metadata.update(central.metadata)
-    mths['central'] = mth_central
-    mc_stat_err = np.sqrt(np.histogram(mt, bins=mth_central.binning, weights=w**2)[0])
-
-    for i in range(mth_central.nbins):
-        mth = mth_central.copy()
-        mth.vals[i] += mc_stat_err[i]
-        mths[f'mcstat{i}_up'] = mth
-        mth = mth_central.copy()
-        mth.vals[i] -= mc_stat_err[i]
-        mths[f'mcstat{i}_down'] = mth
-
-    meta = central.metadata
-    outfile = (
-        f'mz{meta["mz"]:.0f}_rinv{meta["rinv"]:.1f}_mdark{meta["mdark"]:.0f}'
-        f'_{selection}.json'
-        )
-    common.logger.info(f'Dumping histograms to {outfile}')
-    with open(outfile, 'w') as f:
-        json.dump(mths, f, cls=common.Encoder, indent=4)
-    return outfile
-
-
-@scripter
-def build_bkg_histograms(args=None):
-    if args is None:
-        change_bin_width()
-        # Read from sys.argv
-        selection = common.pull_arg('selection', type=str).selection
-        lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
-        lumi *= 1e3 # Convert to nb-1, same unit as xs
-        common.logger.info(f'Selection: {selection}')
-        skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
+    if year is None: year = str(metadata["year"])
     else:
-        # Use passed input
-        selection, lumi, skim_files = args
+        metadata["year"] = year
+        lumi = common.lumis[year]
 
-    mths = {
-        'qcd_individual' : [],
-        'ttjets_individual' : [],
-        'wjets_individual' : [],
-        'zjets_individual' : [],
-        'qcd' : common.MTHistogram.empty(),
-        'ttjets' : common.MTHistogram.empty(),
-        'wjets' : common.MTHistogram.empty(),
-        'zjets' : common.MTHistogram.empty(),
-        'bkg' : common.MTHistogram.empty(),
-        }
-    mths['bkg'].metadata['selection'] = selection
-    mths['bkg'].metadata['lumi'] = lumi
+    # process 2018 samples twice as PRE and POST
+    if year=="2018" and not fullyear:
+        outfiles1 = build_histogram((selection,None,"2018PRE",False,skimfile))
+        outfiles2 = build_histogram((selection,None,"2018POST",False,skimfile))
+        return outfiles1+outfiles2
 
-    for skim_file in tqdm.tqdm(skim_files):
-        process = osp.basename(skim_file)
+    common.logger.info(f'Selection: {selection}')
+    central = apply_selection(central,year)
+    mt = central.to_numpy(['mt']).ravel()
 
-        # Filter out a few things
-        if 'QCD_Pt' in process:
-            # Low pt QCD bins have very few events, which get absurd weights
-            left_pt_bound = int(re.match(r'QCD_Pt_(\d+)', process).group(1))
-            if left_pt_bound < 300.: continue
-        elif 'WJetsToLNu_HT' in process:
-            # Low HT WJets events have very few events, which get absurd weights
-            left_ht_bound = int(re.match(r'WJetsToLNu_HT-(\d+)', process).group(1))
-            if left_ht_bound < 400.: continue
-        elif 'WJetsToLNu_TuneCP5' in process:
-            # Inclusive WJets bin after the stitch filter is basically HT (0,70)
-            # Also too few events, too crazy weights
-            continue
+    if metadata["sample_type"]=="data":
+        w = None
+    else:
+        w = central.to_numpy(['puweight']).ravel()
+        event_weight = common.get_event_weight(central,lumi)
+        w *= event_weight
+        # save event weight
+        metadata['event_weight'] = common.get_single_event_weight(event_weight)
+    mth_central = common.MTHistogram(mt, w)
+    mth_central.metadata.update(metadata)
+    mths['central'] = mth_central
 
-        col = svj.Columns.load(skim_file)
+    if metadata["sample_type"]=="sig":
+        # Scale
+        good_scales = np.array([0,1,2,3,4,6,8])
+        scale_weight = central.to_numpy(['scaleweights'])
+        scale_weight = scale_weight[ak.num(scale_weight,axis=1)>np.max(good_scales)]
+        scale_weight = scale_weight[:, good_scales]
+        if len(scale_weight):
+            weight_up = w * np.max(scale_weight, axis=-1) * central.metadata['scale_factor_up']
+            weight_down = w * np.min(scale_weight, axis=-1) * central.metadata['scale_factor_down']
+            mths['scale_up'] = common.MTHistogram(mt, weight_up)
+            mths['scale_down'] = common.MTHistogram(mt, weight_down)
 
-        # Apply further selection: cutbased or bdt
-        if len(col) > 0:
-            if selection == 'cutbased':
-                col = col.select(common.mask_cutbased(col))
+        # JEC/JER/JES
+        def mth_jerjecjes(tag):
+            col = svj.Columns.load(get_variation(tag))
+            col = apply_selection(col,year)
+            mt = col.to_numpy(['mt']).flatten()
+            w = col.to_numpy(['puweight']).flatten()
+            event_weight = common.get_event_weight(col,lumi)
+            w *= event_weight
+            return common.MTHistogram(mt, w)
+        # JER, JEC treated as uncorrelated between years (but 2018PRE, 2018POST always correlated)
+        sysyear = get_sysyear(year)
+        mths[f'jer{sysyear}_up'] = mth_jerjecjes('jer_up')
+        mths[f'jer{sysyear}_down'] = mth_jerjecjes('jer_down')
+        mths[f'jec{sysyear}_up'] = mth_jerjecjes('jec_up')
+        mths[f'jec{sysyear}_down'] = mth_jerjecjes('jec_down')
+        mths['jes_up'] = mth_jerjecjes('jesup_both')
+        mths['jes_down'] = mth_jerjecjes('jesdown_both')
 
-            # Apply the BDT
-            elif selection.startswith('bdt='):
-                common.logger.info('Applying bdt selection')
-     
-                # Split the selection string by '=' to extract the number following 'bdt='
-                parts = selection.split('=')
-                
-                # Check if the second part of the split is a valid number
-                if len(parts) == 2:
-                    try:
-                        bdt_cut = float(parts[1])
-                    except ValueError:
-                        # Handle the case where the number following 'bdt=' is not valid
-                        print("Invalid number following 'bdt='.")
-                else:
-                    # Handle the case where the number following 'bdt=' is not valid
-                    raise ValueError("Invalid number {} following 'bdt='.".format(parts[1]))
-     
-                # Grab the input features and weights
-                X = []
-                weight = []
-     
-                # Get the features for the bkg samples
-                X = col.to_numpy(bdt_features)
-                xgb_model = xgb.XGBClassifier()
-                xgb_model.load_model(bdt_model_file)
-                with common.time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
-                    score = xgb_model.predict_proba(X)[:,1]
-                weight = col.arrays['puweight']*col.arrays['weight']
-                print('weight length: ', len(weight), ' weight: ', weight)
-     
-                # Obtain the efficiencies for the desired BDT working point
-                # bdt_cut is the user input bdt_cut
-                bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score)) 
-                bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
-                eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0]) 
-     
-                # Apply the DDT
-                mT = col.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
-                pT = col.to_numpy(['pt']).ravel()
-                rho = col.to_numpy(['rho']).ravel()
-                bdt_ddt_score = common.ddt(mT, pT, rho, score, weight, eff*100)
-     
-                # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
-                col = col.select(bdt_ddt_score > 0.0) # mask for the selection
-            else:
-                raise Exception(f'selection must be cutbased or bdt=X.XXX, found {selection}')
-        
-        if len(col) == 0:
-            # Skip this background if it had 0 events passing the preselection
-            common.logger.info(f'Skipping {skim_file} because no events passed the preselection')
-            continue
-    
-        array = col.to_numpy(['mt', 'weight'])
-        mth = common.MTHistogram(array[:,0], lumi*array[:,1])
-        mth.metadata['process'] = process
+        # PS
+        ps_weights = w[:,None] * central.to_numpy(['ps_isr_up', 'ps_isr_down', 'ps_fsr_up', 'ps_fsr_down'])
+        mths['isr_up']   = common.MTHistogram(mt, ps_weights[:,0])
+        mths['isr_down'] = common.MTHistogram(mt, ps_weights[:,1])
+        mths['fsr_up']   = common.MTHistogram(mt, ps_weights[:,2])
+        mths['fsr_down'] = common.MTHistogram(mt, ps_weights[:,3])
 
-        bkg = [b for b in ['QCD', 'TTJets', 'ZJets', 'WJets'] if b in process][0].lower()
-        mths[bkg+'_individual'].append(mth) # Save individual histogram
-        mths[bkg] += mth # Add up per background category (qcd/ttjet/...)
-        mths['bkg'] += mth # Add up all
+        # PU
+        # also uncorrelated between years
+        pu_weights = central.to_numpy(['puweight', 'pu_sys_up', 'pu_sys_down'])
+        mths[f'pu{sysyear}_up'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,1])
+        mths[f'pu{sysyear}_down'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,2])
 
-    outfile = f'bkghist_{strftime("%Y%m%d")}.json'
+        # PDF
+        pdf_weights = central.to_numpy(['pdf_weights'])
+        # set massive unphysical weights to physical max
+        pdf_max = np.max(pdf_weights, where=pdf_weights<100, initial=1)
+        pdf_weights = np.clip(pdf_weights,a_min=None,a_max=pdf_max)
+        pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
+        mu_pdf = np.mean(pdf_weights, axis=1)
+        sigma_pdf = np.std(pdf_weights, axis=1)
+        pdfw_up = (mu_pdf+sigma_pdf) / central.metadata['pdfw_norm_up']
+        pdfw_down = (mu_pdf-sigma_pdf) / central.metadata['pdfw_norm_down']
+        mths['pdf_up'] = common.MTHistogram(mt, w*pdfw_up)
+        mths['pdf_down'] = common.MTHistogram(mt, w*pdfw_down)
+
+        # MC stats
+        mc_stat_err = np.sqrt(np.histogram(mt, bins=mth_central.binning, weights=w**2)[0])
+        for i in range(mth_central.nbins):
+            mth = mth_central.copy()
+            mth.vals[i] += mc_stat_err[i]
+            mths[f'mcstat{i}_{sysyear}_up'] = mth
+            mth = mth_central.copy()
+            mth.vals[i] -= mc_stat_err[i]
+            mths[f'mcstat{i}_{sysyear}_down'] = mth
+
+    # save cutflow after applying final selection & after doing any copying (to avoid duplication)
+    mths['central'].cutflow = central.cutflow.copy()
+    outdir = f'hists_{strftime("%Y%m%d")}'
+    os.makedirs(outdir, exist_ok=True)
+    process = osp.basename(skimfile).replace(".npz","")
+    if metadata["sample_type"]=="data":
+        # keep data era info to avoid overwriting
+        process += '_'+osp.dirname(skimfile)
+    outfile = f'{outdir}/{process}_sel-{selection}_year-{year}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
         json.dump(mths, f, cls=common.Encoder, indent=4)
-    return outfile
-
+    return [outfile]
 
 @scripter
-def build_histograms():
-    """
-    Runs both build_sig_histograms and build_bkg_histograms.
-    """
+def build_all_histograms():
+    change_bin_width()
+    # Read from sys.argv
+    selection = common.pull_arg('selection', type=str).selection
+    fullyear = common.pull_arg('--fullyear', action="store_true", help='treat 2018 as one year instead of splitting into pre and post').fullyear
+    skimdir = common.pull_arg('skimdir', type=str).skimdir
+
+    skims = expand_wildcards(skimdir)
+    for skim in skims:
+        build_histogram((selection, None, None, fullyear, skim))
+
+@scripter
+def merge_histograms():
     change_bin_width()
     selection = common.pull_arg('selection', type=str).selection
-    lumi = common.pull_arg('--lumi', type=float, default=137.2, help='Luminosity (in fb-1)').lumi
-    lumi *= 1e3 # Convert to nb-1, same unit as xs
-    common.logger.info(f'Selection: {selection}')
-    skim_files = common.pull_arg('skimfiles', type=str, nargs='+').skimfiles
+    histdir = common.pull_arg('histdir', type=str).histdir
+    cat = common.pull_arg('--cat', type=str, required=True, choices=['sig','bkg','data']).cat
+    years = common.pull_arg('--years', type=str, default=["2016","2017","2018PRE","2018POST"], nargs='*').years
+    if histdir[-1]!='/': histdir += '/'
 
-    # Divide passed skim_files into signal or background
-    sig_outfile = None
-    bkg_outfile = None
-    sig_skim_files = []
-    bkg_skim_files = []
-    for skim_file in skim_files:
-        if skim_file.endswith('.json'):
-            if "bkghist" in skim_file:
-                bkg_outfile = skim_file
-            else:
-                sig_outfile = skim_file
+    def get_files(samples,years):
+        files = []
+        for year in years:
+            for sample in samples:
+                files += expand_wildcards(histdir+f'{sample}*_sel-{selection}_year-{year}.json')
+        return files
+
+    def get_hists(file):
+        with open(file,'r') as f:
+            return json.load(f, cls=common.Decoder)
+
+    def add_hists(hist,htmp):
+        if hist is None:
+            hist = htmp
         else:
-            for bkg_type in ['QCD', 'TTJets', 'WJets', 'ZJets']:
-                if bkg_type in skim_file:
-                    bkg_skim_files.append(skim_file)
-                    break
-            else:
-                sig_skim_files.append(skim_file)
+            # once two hists (& their cutflows) are added, event_weight no longer needed -> set to 1
+            hist += htmp
+            if 'event_weight' in hist.metadata:
+                hist.metadata['event_weight'] = 1.0
+        return hist
 
-    if sig_outfile is None:
-        common.logger.info(
-            'Using the following skim files for signal:\n'
-            + "\n".join(sig_skim_files)
-        )
-    else:
-        common.logger.info('Reusing {} for signal'.format(sig_outfile))
-    if bkg_outfile is None:
-        common.logger.info(
-            'Using the following skim files for background:\n'
-            + "\n".join(bkg_skim_files)
-        )
-    else:
-        common.logger.info('Reusing {} for background'.format(bkg_outfile))
+    outdir = histdir.replace("hists","merged")
+    os.makedirs(outdir, exist_ok=True)
+    def write(hists,proc):
+        if selection in proc:
+            outfile = f'{outdir}/{proc}.json'
+        else:
+            outfile = f'{outdir}/{proc}_sel-{selection}.json'
+        hists = rebin_dict(hists)
+        outfile = rebin_name(outfile)
+        common.logger.info(f'Dumping merged histograms to {outfile}')
+        with open(outfile, 'w') as f:
+            json.dump(hists, f, cls=common.Encoder, indent=4)
 
-    def check_rebin(hist,name):
-        msg = []
-        if hist.binning[0]>common.MTHistogram.bins[0]:
-            msg.append(f'left {hist.binning[0]}>{common.MTHistogram.bins[0]}')
-        if hist.binning[-1]<common.MTHistogram.bins[-1]:
-            msg.append(f'right {hist.binning[-1]}>{common.MTHistogram.bins[-1]}')
-        orig_width = int(hist.binning[1] - hist.binning[0])
-        new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
-        rebin_factor = int(new_width/orig_width)
-        rebin_mod = orig_width % new_width
-        if rebin_mod!=0:
-            msg.append(f'rebin {orig_width} % {new_width} = {rebin_mod}')
-        if len(msg)>0:
-            msg = ', '.join(msg)
-            common.logger.warning(f'Hist {name} inconsistent with requested binning ({msg})')
-        return hist.rebin(rebin_factor).cut(common.MTHistogram.bins[0],common.MTHistogram.bins[-1])
+    lumi_total = sum(common.lumis[year] for year in years)
+    def assign_metadata(hist):
+        hist.metadata['selection'] = selection
+        hist.metadata['year'] = years
+        hist.metadata['lumi'] = lumi_total
 
-    def rebin_outfile(outfile):
-        with open(outfile,'r') as f:
-            mths = json.load(f, cls=common.Decoder)
-        for key in mths:
-            if isinstance(mths[key],list):
-                for i,entry in enumerate(mths[key]):
-                    mths[key][i] = check_rebin(entry,f'{key}[{i}]')
-            else:
-                mths[key] = check_rebin(mths[key],key)
-        outfile2 = outfile.replace(".json","_tmp.json")
-        with open(outfile2,'w') as f:
-            json.dump(mths, f, cls=common.Encoder, indent=4)
-        return outfile2
+    samples = {
+        "data": ["JetHT", "HTMHT"],
+        "bkg": ['QCD', 'TTJets', 'ZJets', 'WJets'],
+        "sig": ['SVJ'],
+    }
+    files = get_files(samples[cat],years)
 
-    if sig_outfile is None:
-        sig_outfile = build_sig_histograms((selection, lumi, sig_skim_files))
-    else:
-        sig_outfile = rebin_outfile(sig_outfile)
-    if bkg_outfile is None:
-        bkg_outfile = build_bkg_histograms((selection, lumi, bkg_skim_files))
-    else:
-        bkg_outfile = rebin_outfile(bkg_outfile)
-    merged_outfile = sig_outfile.replace('_tmp.json','.json').replace('.json', '_with_bkg.json')
+    default = 'central'
+    if cat=="data":
+        # just add them all up
+        mths = {
+            cat : None,
+        }
+        for file in files:
+            mths[cat] = add_hist(mths[cat],get_hists(file)[default])
+        assign_metadata(mths[cat])
+        write(mths,cat)
 
-    if common.MTHistogram.non_standard_binning:
-        binw = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
-        left = common.MTHistogram.bins[0]
-        right = common.MTHistogram.bins[-1]
-        merged_outfile = merged_outfile.replace(
-            '.json',
-            f'_binw{binw:02d}_range{left:.0f}-{right:.0f}.json'
-            )
-    merge((merged_outfile, [sig_outfile, bkg_outfile]))
+    elif cat=="bkg":
+        # add up but keep components
+        mths = {
+            cat : None
+        }
+        for b in samples["bkg"]:
+            b = b.lower()
+            mths[b+'_individual'] = []
+            mths[b] = None
+        for file in files:
+            tmp = get_hists(file)[default]
+            bkg = next((b for b in samples["bkg"] if b in file)).lower()
+            mths[bkg+'_individual'].append(tmp) # Save individual histogram
+            mths[bkg] = add_hists(mths[bkg],tmp) # Add up per background category
+            mths[cat] = add_hists(mths[cat],tmp) # Add up all
+        assign_metadata(mths[cat])
+        write(mths,cat)
 
+    elif cat=="sig":
+        # just add years
+        signals = defaultdict(list)
+        for file in files:
+            signals['_'.join(file.split('/')[1].split('_')[:-1])].append(file)
+        for signal,sigfiles in signals.items():
+            sighists = {year: get_hists(next((f for f in sigfiles if year in f))) for year in years}
+            keys = list(sorted(set([key for y,h in sighists.items() for key in h])))
+            mths = {}
+            for key in keys:
+                mths[key] = None
+                # handle uncorrelated systematics (vary one year at a time)
+                if '20' in key:
+                    getter = lambda h: h.get(key,h[default])
+                # correlated systematics must be present in all years
+                else:
+                    getter = lambda h: h[key]
+                for year,sighist in sighists.items():
+                    mths[key] = add_hists(mths[key],getter(sighist))
+            assign_metadata(mths[default])
+            write(mths,signal)
 
 # __________________________________________
 # Plotting
@@ -605,11 +393,11 @@ def reorderLegend(ax,order,title):
     ax.legend(handles, labels, title=title)
 
 class Plot:
-    def __init__(self, selection):
-        self.selection = selection
+    def __init__(self, meta):
+        self.selection = meta['selection']
         self.fig, (self.top, self.bot) = plt.subplots(2,1, height_ratios=[3,1], figsize=(10,13))
         self.top.set_yscale('log')
-        common.put_on_cmslabel(self.top)
+        common.put_on_cmslabel(self.top, year = meta['lumi'] if 'lumi' in meta else meta['year'])
         self.top.set_ylabel('Event count')
         self.bot.set_ylabel('Ratio to central')
         self.bot.set_xlabel(r'$m_{T}$ (GeV)')
@@ -644,7 +432,21 @@ class Plot:
         plt.savefig(outfile.replace('.png', '.pdf'), bbox_inches="tight")
         common.imgcat(outfile)
 
-def get_systs(names=False):
+def get_sysyear(year):
+    return year[:4]
+
+def get_systs_uncorrelated():
+    uncorrelated = [
+        'jer',
+        'jec',
+        'pu',
+        'stat',
+    ]
+    return uncorrelated
+
+# years = None -> generic case (uncorrelated systs not expanded)
+def get_systs(names=False,years=["2016","2017","2018"],smooth=False):
+    uncorrelated = get_systs_uncorrelated()
     syst_names = {
         'scale': "Scales",
         'jer': "JER",
@@ -654,49 +456,75 @@ def get_systs(names=False):
         'fsr': "FSR (parton shower)",
         'pu': "Pileup reweighting",
         'pdf': "PDF",
-        'stat': "MC statistical",
     }
+    if smooth:
+        syst_names.update({
+            'stat': "MC statistical (fit)",
+        })
+        uncorrelated.pop('stat')
+    else:
+        syst_names.update({
+            'stat': "MC statistical",
+        })
+    # expand uncorrelated systs
+    if years is not None:
+        if not isinstance(years,list): years = [years]
+        # convert to sysyears
+        years = [get_sysyear(year) for year in years]
+        syst_names2 = {k:v for k,v in syst_names.items() if k not in uncorrelated}
+        for unc in uncorrelated:
+            for year in years:
+                syst_names2[unc+year] = syst_names[unc]+f' ({year})'
+        syst_names = syst_names2
     if names: return syst_names
     else: return list(syst_names.keys())
 
+# should always be run before any rebinning
+def make_stat_combined(mths,sysyear):
+    if f'stat{sysyear}_up' not in mths.keys():
+        stat_up = mths['central'].copy()
+        stat_down = mths['central'].copy()
+        i = 0
+        while f'mcstat{i}_{sysyear}_up' in mths.keys():
+            stat_up.vals[i] = mths[f'mcstat{i}_{sysyear}_up'].vals[i]
+            stat_down.vals[i] = mths[f'mcstat{i}_{sysyear}_down'].vals[i]
+            i += 1
+
+        mths[f'stat{sysyear}_up'] = stat_up
+        mths[f'stat{sysyear}_down'] = stat_down
+    return mths
+
 @scripter
 def plot_systematics():
-    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
-    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
-    rebin = common.pull_arg('--rebin', type=int, default=1).rebin
+    change_bin_width()
+    yrange = common.pull_arg('--yrange', type=float, nargs=2, default=None).yrange
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
+    meta = mths['central'].metadata
+    years = meta['year']
+    if not isinstance(years,list): years = [years]
+    systs = get_systs(years=years,smooth="smooth" in json_file)
+    for year in years:
+        sysyear = get_sysyear(year)
+        mths = make_stat_combined(mths,sysyear)
 
+    mths = rebin_dict(mths)
     n = mths['central'].vals.sum()
     common.logger.info(f'central integral: {n}')
     common.logger.info(f'central metadata:\n{mths["central"].metadata}')
-
-    central = mths['central'].rebin(rebin).cut(mtmin,mtmax)
-    meta = central.metadata
 
     model_str = osp.basename(json_file).replace(".json","")
     outdir = f'plots_{strftime("%Y%m%d")}_{model_str}'
     os.makedirs(outdir, exist_ok=True)
 
-    systs = get_systs()
-    if 'stat_up' not in mths.keys():
-        stat_up = mths['central'].copy()
-        stat_down = mths['central'].copy()
-        i = 0
-        while f'mcstat{i}_up' in mths.keys():
-            stat_up.vals[i] = mths[f'mcstat{i}_up'].vals[i]
-            stat_down.vals[i] = mths[f'mcstat{i}_down'].vals[i]
-            i += 1
-
-        mths['stat_up'] = stat_up
-        mths['stat_down'] = stat_down
-
     for syst in systs:
-        plot = Plot(meta['selection'])
+        plot = Plot(meta)
         plot.plot_hist(central, label='Central')
-        plot.plot_hist(mths[f'{syst}_up'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} up')
-        plot.plot_hist(mths[f'{syst}_down'].rebin(rebin).cut(mtmin,mtmax), central, f'{syst} down')
+        plot.plot_hist(mths[f'{syst}_up'], central, f'{syst} up')
+        plot.plot_hist(mths[f'{syst}_down'], central, f'{syst} down')
+        if yrange is not None:
+            plot.bot.set_ylim(yrange[0],yrange[1])
         plot.save(f'{outdir}/{syst}.png')
 
 @scripter
@@ -728,7 +556,7 @@ def plot_bkg():
                 sig = sig.rebin(rebin).cut(mtmin,mtmax)
                 ax.step(
                     sig.binning[:-1], sig.vals, '--k',
-                    where='post', label=sig.metadata['basename']
+                    where='post', label=basename(sig.metadata)
                     )
 
         ax.set_yscale('log')
@@ -784,8 +612,8 @@ def smooth_shapes():
     common.logger.info(f'central metadata:\n{mths["central"].metadata}')
 
     # loop over central and systematics
-    variations = get_systs()
-    variations.remove('stat')
+    variations = get_systs(years=mths["central"].metadata["year"])
+    variations = [v for v in variations if not v.startswith('stat')]
     variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
     variations = ['central']+variations
 
@@ -845,6 +673,8 @@ def smooth_shapes():
                 hstat.errs = np.zeros_like(hstat.vals)
                 mths_new[f'stat_{iname}'] = hstat
 
+    outdir = os.path.dirname(json_file).replace("hists","smooth").replace("merged","smooth")
+    os.makedirs(outdir, exist_ok=True)
     if save_all:
         # copy any other contents from original input
         # omitting mcstat uncertainties, which are replaced by overall confidence interval
@@ -896,9 +726,8 @@ def plot_smooth():
     os.makedirs(outdir, exist_ok=True)
 
     for var in vars:
-        plot = Plot("")
         meta = mths[0]['central'].metadata
-        plot.selection = meta['selection']
+        plot = Plot(meta)
         legend_order = []
         h_denom = None
 
@@ -931,12 +760,51 @@ def get_yield(hist):
 def pct_diff(central,syst):
     return abs(1-syst/central)*100
 
+def printSigFigs(num,fig,maxdec):
+    # use scientific notation to get sig figs, then convert back to regular notation
+    sci = "{0:>.{1}e}".format(num,fig-1)
+    val = sci.split('e')[0]
+    expo = int(sci.split('e')[1])
+    pindex = val.find('.')
+    if expo==0:
+        result = val
+    elif expo>0:
+        if pindex==-1:
+            result = val
+        else:
+            # move decimal point
+            rval = val.replace('.','')
+            pindex2 = pindex+expo
+            # trailing zeroes
+            if pindex2 >= len(rval): result = rval+'0'*(pindex2-len(rval))
+            else: result = rval[0:pindex2]+'.'+rval[pindex2:]
+    else: # expo<0
+        rval = val if pindex==-1 else val.replace('.','')
+        # add leading zeroes
+        result = "0."+'0'*(abs(expo)-1)+rval
+    # recursive truncation
+    if '.' in result and len(result.split('.')[1])>maxdec:
+        if fig==1:
+            rnum = round(num,abs(expo)-1)
+            if rnum==0.0: return "0.0"
+            else: return printSigFigs(rnum,fig,maxdec)
+        else: return printSigFigs(num,fig-1,maxdec)
+    else:
+        if set(result.replace('.',''))==set([0]): return "0.0"
+        else: return result
+
 @scripter
 def systematics_table():
-    json_file = common.pull_arg('jsonfile', type=str).jsonfile
-    with open(json_file) as f:
-        mths = json.load(f, cls=common.Decoder)
-    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
+    change_bin_width()
+    qtyrange = common.pull_arg('--qtyrange', metavar=("qty min max"), default=[], type=str, action='append', nargs=3).qtyrange
+    minimum = common.pull_arg('--minimum', type=float, default=0.01, help="minimum value to display, smaller values rounded to 0").minimum
+    skimdir = common.pull_arg('skimdir', type=str).skimdir
+    skims = expand_wildcards(skimdir)
+
+    # set up qty range limitations
+    qtyfilters = []
+    for iq,qr in enumerate(qtyrange):
+        qtyfilters.append(lambda md: float(qtyrange[iq][1])<=md[qtyrange[iq][0]] and md[qtyrange[iq][0]]<=float(qtyrange[iq][2]))
 
     # needs to be kept in sync w/ boostedsvj/svj_limits/boosted_fits.py:gen_datacard()
     flat_systs = {
@@ -945,33 +813,107 @@ def systematics_table():
         'trigger_sim': 2.1,
     }
 
-    central = mths["central"]
-    central_yield = get_yield(central)
-    systs = get_systs(names=True)
+    unc_systs = get_systs_uncorrelated()
+    systs = get_systs(names=True,years=None)
     systs.update({
         'lumi': "Luminosity",
         'trigger_cr': "Trigger (CR)",
         'trigger_sim': "Trigger (MC)",
     })
-    syst_yield_effects = {}
-    total = 0
-    for syst in sorted(systs.keys()):
-        if f'{syst}_up' in mths:
-            syst_up_yield = get_yield(mths[f'{syst}_up'])
-            syst_dn_yield = get_yield(mths[f'{syst}_down'])
-            syst_yield_effects[syst] = max(pct_diff(central_yield,syst_up_yield),pct_diff(central_yield,syst_dn_yield))
-        elif syst in flat_systs:
-            syst_yield_effects[syst] = flat_systs[syst]
-        else:
-            common.logger.warning(f'could not find systematic: {syst}')
-            continue
-        total += syst_yield_effects[syst]**2
-    total = np.sqrt(total)
 
-    for syst,effect in syst_yield_effects.items():
-        print("{} & {:.2f} \\\\".format(systs[syst],effect))
+    # indexing: [year][syst]
+    syst_effects = defaultdict(lambda: defaultdict(lambda: (1e10, 0.0)))
+    def update_effect(year,syst,effect):
+        syst_effects[year][syst] = (min(effect, syst_effects[year][syst][0]), max(effect, syst_effects[year][syst][1]))
+    for skim in skims:
+        with open(skim) as f:
+            mths = json.load(f, cls=common.Decoder)
+        meta = mths['central'].metadata
+        year = meta['year']
+        if not isinstance(year,str): year = str(int(year))
+
+        mths = make_stat_combined(mths,get_sysyear(year))
+        mths = rebin_dict(mths)
+        central = mths['central']
+        central_yield = get_yield(central)
+        #common.logger.info(f'central metadata:\n{meta}')
+
+        passed = True
+        for qf in qtyfilters:
+            if not qf(meta):
+                passed = False
+                break
+        if not passed:
+            continue
+
+        total = 0
+        for syst in sorted(systs.keys()):
+            syst_effect = 0
+            asyst = syst
+            # uncorrelated systs stored with sysyear naming (for datacard creation)
+            if syst in unc_systs: asyst += get_sysyear(year)
+            if f'{asyst}_up' in mths:
+                syst_up_yield = get_yield(mths[f'{asyst}_up'])
+                syst_dn_yield = get_yield(mths[f'{asyst}_down'])
+                syst_effect = max(pct_diff(central_yield,syst_up_yield),pct_diff(central_yield,syst_dn_yield))
+            elif syst in flat_systs:
+                syst_effect = flat_systs[syst]
+            else:
+                #common.logger.warning(f'could not find systematic: {syst}')
+                continue
+            update_effect(year,syst,syst_effect)
+            total += syst_effect**2
+        total = np.sqrt(total)
+        update_effect(year,"total",total)
+
+    # keep correct order
+    all_years = ["2016","2017","2018","2018PRE","2018POST"]
+    years = [y for y in all_years if y in list(syst_effects.keys())]
+    # add overall
+    if len(years)>1:
+        years.append("Overall")
+        for syst in list(systs.keys())+["total"]:
+            syst_effects["Overall"][syst] = (min([syst_effects[year][syst][0] for year in years]), max([syst_effects[year][syst][1] for year in years]))
+
+    # print settings
+    sigfig = 2
+    maxdec = int(abs(np.log10(minimum)))
+
+    print(" & ".join(["Systematic"]+years)+r" \\")
     print(r"\hline")
-    print("total & {:.2f} \\\\".format(total))
+    def print_syst_row(syst):
+        cols = [systs[syst]]
+        for year in years:
+            tmin = syst_effects[year][syst][0]
+            tmax = syst_effects[year][syst][1]
+            smin = printSigFigs(tmin,sigfig,maxdec)
+            smax = printSigFigs(tmax,sigfig,maxdec)
+            # don't bother to display a range if values are equal within precision
+            if abs(tmax-tmin)>minimum and smin != smax:
+                trange = smin+"--"+smax
+            else:
+                trange = smax
+            cols.append(trange)
+        print(" & ".join(cols)+r" \\")
+    for syst in sorted(systs):
+        print_syst_row(syst)
+    print(r"\hline")
+    systs["total"] = "total"
+    print_syst_row("total")
+
+@scripter
+def acc():
+    qty = common.pull_arg('--qty', type=str, required=True, help="signal qty").qty
+    skimdir = common.pull_arg('skimdir', type=str).skimdir
+    skims = expand_wildcards(skimdir)
+    def get_from_cutflow(cutflow,index):
+        return float(list(cutflow.items())[index][1])
+    for skim in skims:
+        with open(skim) as f:
+            mths = json.load(f, cls=common.Decoder)
+        meta = mths['central'].metadata
+        cutflow = mths['central'].cutflow
+        print(meta[qty],get_from_cutflow(cutflow,-1)/get_from_cutflow(cutflow,0)*100)
 
 @scripter
 def merge(args=None):

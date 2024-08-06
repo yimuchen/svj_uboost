@@ -1,0 +1,130 @@
+% ____________________________________________________
+% Utilities
+
+% in case someone wants to hardcode comments
+\newcommand{\tk}[1]{\textbf{\color{orange}  [#1 -- tk]}}
+\newcommand{\sn}[1]{\textbf{\color{blue}  [#1 -- sn]}}
+\newcommand{\kp}[1]{\textbf{\color{green}  [#1 -- kp]}}
+\newcommand{\br}[1]{\textbf{\color{cyan}  [#1 -- br]}}
+\newcommand{\vde}[1]{\textbf{\color{violet}  [#1 -- vde]}}
+
+%From S-channel note
+\renewcommand{\MET}{\ETslash}
+\newcommand{\met}{\MET}
+%\newcommand{\HT}{\ensuremath{H_{\mathrm{T}}}\xspace} % already defined?
+\newcommand{\mt}{\ensuremath{M_{\mathrm{T}}}\xspace}
+\newcommand{\mttwo}{\ensuremath{M_{\mathrm{T2}}}\xspace}
+\renewcommand{\mT}{\mt}
+\newcommand{\MT}{\mt}
+\newcommand{\mjj}{\ensuremath{M_{JJ}}\xspace}
+\newcommand{\metmt}{\ensuremath{R_{\mathrm{T}}}\xspace}
+\newcommand{\RT}{\metmt}
+\newcommand{\PZprime}{\ensuremath{{\PZ}^{\prime}}\xspace}
+\newcommand{\PZprimesup}[1]{\ensuremath{{\PZ}^{\prime#1}}\xspace}
+\newcommand{\mZprime}{\ensuremath{m_{\PZprime}}\xspace}
+\newcommand{\sigmaZprime}{\ensuremath{\sigma_{\PZprime}}\xspace}
+\newcommand{\wZprime}{\ensuremath{\Gamma_{\PZprime}}\xspace}
+\newcommand{\Bdark}{\ensuremath{\mathcal{B}_{\text{dark}}}\xspace}
+\newcommand{\Bqq}{\ensuremath{\mathcal{B}_{\cPq\cPaq}}\xspace}
+\newcommand{\mDark}{\ensuremath{m_{\mathrm{dark}}}\xspace}
+\newcommand{\mdark}{\mDark}
+\newcommand{\aDark}{\ensuremath{\alpha_{\mathrm{dark}}}\xspace}
+\newcommand{\lamDark}{\ensuremath{\Lambda_{\mathrm{dark}}}\xspace}
+\newcommand{\aDarkPeak}{\ensuremath{\aDark^{\text{peak}}}\xspace}
+\newcommand{\lamDarkPeak}{\ensuremath{\lamDark^{\text{peak}}}\xspace}
+\newcommand{\aDarkHigh}{\ensuremath{\aDark^{\text{high}}}\xspace}
+\newcommand{\aDarkLow}{\ensuremath{\aDark^{\text{low}}}\xspace}
+\newcommand{\rinv}{\ensuremath{r_{\mathrm{inv}}}\xspace}
+\newcommand{\Pqdark}{\ensuremath{\chi}\xspace}
+\newcommand{\mqdark}{\ensuremath{m_{\Pqdark}}\xspace}
+\newcommand{\Paqdark}{\ensuremath{\overline{\chi}}\xspace}
+\newcommand{\Pqdarki}{\ensuremath{\chi_{i}}\xspace}
+\newcommand{\PqdarkO}{\ensuremath{\chi_{1}}\xspace}
+\newcommand{\PqdarkT}{\ensuremath{\chi_{2}}\xspace}
+\newcommand{\mqdarkO}{\ensuremath{m_{\PqdarkO}}\xspace}
+\newcommand{\mqdarkT}{\ensuremath{m_{\PqdarkT}}\xspace}
+\newcommand{\mqdarki}{\ensuremath{m_{\Pqdarki}}\xspace}
+\newcommand{\Pgdark}{\ensuremath{\cPg_{\text{dark}}}\xspace}
+\newcommand{\Ppidark}{\ensuremath{\pi_{\text{dark}}}\xspace}
+\newcommand{\PpidarkDM}{\ensuremath{\Ppidark^{\text{DM}}}\xspace}
+\newcommand{\Prhodark}{\ensuremath{\rho_{\text{dark}}}\xspace}
+\newcommand{\PrhodarkDM}{\ensuremath{\Prhodark^{\text{DM}}}\xspace}
+\newcommand{\ZprimeToDark}{\ensuremath{\PZprime \to \Pqdark\Paqdark}\xspace}
+\newcommand{\ZprimeToQQ}{\ensuremath{\PZprime \to \cPq\cPaq}\xspace}
+\newcommand{\gq}{\ensuremath{g_{\cPq}}\xspace}
+\newcommand{\gqdark}{\ensuremath{g_{\Pqdark}}\xspace}
+\newcommand{\Nc}{\ensuremath{N_{c}}\xspace}
+\newcommand{\Nf}{\ensuremath{N_{f}}\xspace}
+\newcommand{\Ncdark}{\ensuremath{N_{c}^{\text{dark}}}\xspace}
+\newcommand{\Nfdark}{\ensuremath{N_{f}^{\text{dark}}}\xspace}
+\newcommand{\mb}{\ensuremath{m_{\cPqb}}\xspace}
+\newcommand{\mc}{\ensuremath{m_{\cPqc}}\xspace}
+\newcommand{\mq}{\ensuremath{m_{\cPq}}\xspace}
+\newcommand{\Nstable}{\ensuremath{N_{\text{stable}}}\xspace}
+\newcommand{\Nunstable}{\ensuremath{N_{\text{unstable}}}\xspace}
+\newcommand{\deta}{\ensuremath{\Delta\eta(J_{1},J_{2})}\xspace}
+\newcommand{\mindphi}{\ensuremath{\Delta\phi_{\mathrm{min}}(J_{1,2}, \met)}\xspace}
+\newcommand{\zjets}{{{\cPZ}+jets}\xspace}
+\newcommand{\wjets}{{{\PW}+jets}\xspace}
+\newcommand{\znnjets}{\ensuremath{{\cPZ}{(\to\Pgn\Pagn)\text{+jets}}}\xspace}
+\newcommand{\wlnjets}{\ensuremath{{\PW}{(\to\ell\Pgn)\text{+jets}}}\xspace}
+\newcommand{\nmuons}{\ensuremath{N_{\Pgm}}\xspace}
+\newcommand{\neles}{\ensuremath{N_{\Pe}}\xspace}
+\newcommand{\MADGRAPHFULL}{\MGvATNLO\,2.6.0}
+\newcommand{\FEYNRULES}{\textsc{FeynRules}}
+\newcommand{\widejet}{\ensuremath{\mathrm{J}}\xspace}\newcommand{\trigjet}{\ensuremath{\widejet^{\text{trig}}}\xspace}
+\newcommand{\narrowjet}{\ensuremath{\mathrm{j}}\xspace}
+\newcommand{\njet}{\ensuremath{N_{\widejet}}\xspace}
+\newcommand{\nnarrow}{\ensuremath{N_{\narrowjet}}\xspace}
+\newcommand{\Imini}{\ensuremath{I_{\text{mini}}}\xspace}
+\newcommand{\ptsub}[1]{\ensuremath{p_{\text{T}#1}}\xspace}
+\newcommand{\etsub}[1]{\ensuremath{E_{\text{T}#1}}\xspace}
+\newcommand{\ptvecsub}[1]{\ensuremath{{\vec p}_{\mathrm{T}#1}}\xspace}
+\newcommand{\phijjmiss}{\ensuremath{\phi_{JJ,\text{miss}}}\xspace}
+\newcommand{\nconst}{\ensuremath{n_{\text{const.}}}\xspace}
+\newcommand{\tauTO}{\ensuremath{\tau_{21}}\xspace}
+\newcommand{\tauTT}{\ensuremath{\tau_{32}}\xspace}
+\newcommand{\Ntwo}{\ensuremath{N_{2}^{(1)}}\xspace}
+\newcommand{\Nthree}{\ensuremath{N_{3}^{(1)}}\xspace}
+\newcommand{\msd}{\ensuremath{m_{\text{SD}}}\xspace}
+\newcommand{\axmajor}{\ensuremath{\sigma_{\text{major}}}\xspace}
+\newcommand{\axminor}{\ensuremath{\sigma_{\text{minor}}}\xspace}
+
+\newcommand{\ecfM}{\ensuremath{M_{2}\beta_{1}}\xspace}
+
+%\newcommand{\ecfm2b1}{\ensuremath{ecfM_{2}}\xspace}
+\newcommand{\ptD}{\ensuremath{p_{\text{T}}D}\xspace}
+\newcommand{\fmain}{\ensuremath{f_{N,D}(x)}\xspace}
+\newcommand{\falt}{\ensuremath{g_{E}(x)}\xspace}
+\newcommand{\fthird}{\ensuremath{h(x)}\xspace}
+\newcommand{\Ftest}{\ensuremath{F_{\text{test}}}\xspace}
+\newcommand{\nbins}{\ensuremath{n_{\text{bins}}}\xspace}
+\newcommand{\Fcrit}{\ensuremath{F_{\text{crit}}}\xspace}
+\newcommand{\acrit}{\ensuremath{\alpha_{\text{crit}}}\xspace}
+\newcommand{\Fdist}{\ensuremath{F_{\text{dist}}}\xspace}
+\newcommand{\rext}{\ensuremath{r_\text{ext}}\xspace}
+\newcommand{\rinj}{\ensuremath{r_\text{inj}}\xspace}
+\newcommand{\rexp}{\ensuremath{r_\text{exp}}\xspace}
+\newcommand{\rbestfit}{\ensuremath{r_\text{bestfit}}\xspace}
+\newcommand{\bkgrej}{\ensuremath{1/\varepsilon_{\text{bkg}}}\xspace}
+\newcommand{\sigeff}{\ensuremath{\varepsilon_{\text{sig}}}\xspace}
+\newcommand{\alphaEM}{\ensuremath{\alpha_{\text{EM}}}\xspace}
+\newcommand{\alphaS}{\ensuremath{\alpha_{\text{S}}}\xspace}
+
+%variables
+\newcommand{\RTx}{\ensuremath{R_{\mathrm{T,J_2}}}\xspace}
+\newcommand{\MTx}{\ensuremath{M_{\mathrm{T,J_2}}}\xspace}
+\newcommand{\PTx}{\ensuremath{p_{\mathrm{T,J_2}}}\xspace}
+\newcommand{\mz}{\ensuremath{m_{\mathrm{Z'}}}\xspace}
+
+\newcommand{\mur}{\ensuremath{\mu_{\mathrm{R}}}\xspace}
+\newcommand{\muf}{\ensuremath{\mu_{\mathrm{F}}}\xspace}
+
+\newcommand{\ceil}[1]{\left\lceil {#1} \right\rceil}
+
+%cutflow table
+\providecommand{\cmsTable}[1]{\resizebox{\textwidth}{!}{#1}}
+\newcolumntype{R}{@{\hphantom{33}}r}
+\newcolumntype{P}{@{$\,($}r@{$)$}}
+\newcommand{\twocolr}[1]{\multicolumn{2}{r}{#1}}
+\newcommand{\twocolc}[1]{\multicolumn{2}{c}{#1}}

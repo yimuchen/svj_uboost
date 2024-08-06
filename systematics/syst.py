@@ -6,7 +6,7 @@ MAIN_DIR = osp.dirname(THIS_DIR)
 sys.path.append(MAIN_DIR)
 
 import common
-from common import mask_cutbased, MTHistogram, Histogram
+from common import apply_cutbased, MTHistogram, Histogram
 from produce_histograms import repr_dict
 from cutflow_table import format_table
 
@@ -276,9 +276,9 @@ def produce():
     central_skim = get_by_tag('central')
 
     central = svj.Columns.load(central_skim)
-    sel = mask_cutbased(central) if selection=='cutbased' else None
-    mt = central.to_numpy(['mt']).ravel()[sel]
-    w = central.to_numpy(['puweight']).ravel()[sel]
+    if selection=='cutbased': central = apply_cutbased(central)
+    mt = central.to_numpy(['mt']).ravel()
+    w = central.to_numpy(['puweight']).ravel()
     w *= lumi * central.xs / central.cutflow['raw']
 
     # Scale
@@ -291,9 +291,9 @@ def produce():
     # JEC/JER/JES
     def mth_jerjecjes(tag):
         col = svj.Columns.load(get_by_tag(tag))
-        sel = mask_cutbased(col) if selection=='cutbased' else None
-        mt = col.to_numpy(['mt']).flatten()[sel]
-        w = col.to_numpy(['puweight']).flatten()[sel]
+        if selection=='cutbased': col = apply_cutbased(col)
+        mt = col.to_numpy(['mt']).flatten()
+        w = col.to_numpy(['puweight']).flatten()
         w *= lumi * col.xs / col.cutflow['raw']
         return MTHistogram(mt, w)
     jer_up = mth_jerjecjes('jer_up')
@@ -371,7 +371,7 @@ def produce_scale_hist(selection=None, skimfile=None):
         ]
     mur_muf_titles = [ rf'$\mu_{{R}}={mur:.1f}$ $\mu_{{F}}={muf:.1f}$' for mur, muf in mur_muf ]
     col = svj.Columns.load(skimfile)
-    sel = mask_cutbased(col) if selection=='cutbased' else None
+    if selection=='cutbased': col = apply_cutbased(col)
 
     mt = col.to_numpy(['mt']).ravel()
     scale_weight = col.to_numpy(['scaleweights'])
@@ -428,8 +428,8 @@ def produce_jecjer_hist(selection=None, skimfiles=None):
     out = {'selection': selection}
     for var, file in files.items():
         col = svj.Columns.load(file)
-        sel = mask_cutbased(col) if selection=='cutbased' else None
-        mt = col.to_numpy(['mt']).flatten()[sel]
+        if selection=='cutbased': col = apply_cutbased(col)
+        mt = col.to_numpy(['mt']).flatten()
         out[var] = MTHistogram(mt)
 
     for key in out:
@@ -464,9 +464,9 @@ def produce_hists(selection=None, skimfile=None):
         selection = common.pull_arg('selection', type=str, choices=['cutbased', 'bdt']).selection
         skimfile = common.pull_arg('skim', type=str).skim
     col = svj.Columns.load(skimfile)
-    sel = mask_cutbased(col) if selection=='cutbased' else None
+    if selection=='cutbased': col = apply_cutbased(col)
 
-    mt = col.to_numpy(['mt']).flatten()[sel]
+    mt = col.to_numpy(['mt']).flatten()
     central = MTHistogram(mt)
     central.metadata.update(col.metadata)
     out = {'selection' : selection, 'central' : central}
