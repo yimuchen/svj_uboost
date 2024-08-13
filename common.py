@@ -1012,7 +1012,8 @@ def apply_cutbased(cols):
 
 # Relative path to the BDT
 # This specific BDT was chosen to be used during the L3 review
-bdt_model_file = '/uscms/home/bregnery/nobackup/SVJ_mass_bdt_studies/svj_uboost/models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
+bdt_model_file = '/uscms/home/bregnery/nobackup/SVJ_boost_limits/svj_uboost/models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
+ddt_map_file = '/uscms/home/bregnery/nobackup/SVJ_boost_limits/svj_uboost/models/ddt_Feb28_lowmass_iterative_qcdonly_100p38.json'
 # make sure bdt features match the choosen file
 bdt_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',
@@ -1030,6 +1031,7 @@ def split_bdt(sel):
             print(f"Invalid number {parts[1]} following 'bdt='.")
     else:
         raise InvalidSelectionException(sel=selection)
+    return parts[1]
 
 def apply_bdtbased(cols,wp,lumi):
     import xgboost as xgb
@@ -1047,20 +1049,13 @@ def apply_bdtbased(cols,wp,lumi):
     xgb_model.load_model(bdt_model_file)
     with time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
         score = xgb_model.predict_proba(X)[:,1]
-    weight = (cols.xs / cols.cutflow['raw']) * lumi * cols.arrays['puweight']
-    print('weight length: ', len(weight), ' weight: ', weight)
-
-    # Obtain the efficiencies for the desired BDT working point
-    # bdt_cut is the user input bdt_cut
-    bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score))
-    bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
-    eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0])
+    weight = get_event_weight(cols, lumi)
 
     # Apply the DDT
     mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
     pT = cols.to_numpy(['pt']).ravel()
     rho = cols.to_numpy(['rho']).ravel()
-    bdt_ddt_score = ddt(mT, pT, rho, score, weight, eff*100)
+    bdt_ddt_score = calculate_varDDT(mT, pT, rho, score, weight, wp, ddt_map_file)
 
     # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
     cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
