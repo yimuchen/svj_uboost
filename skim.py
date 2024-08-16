@@ -326,7 +326,7 @@ def skim(rootfile, group_data):
         svj.logger.info(f'    Keeping only fraction {keep} of total number of events for signal MC')
         n_before = len(array)
         sel = np.random.choice(len(array), int(keep * len(array)), replace=False)
-        common.logger.info(f'    Downsampling from {n_before} -> {len(sel)}')
+        svj.logger.info(f'    Downsampling from {n_before} -> {len(sel)}')
         array = apply_keep(array, sel, keep)
 
     # ______________________________
