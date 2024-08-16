@@ -612,7 +612,9 @@ def smooth_shapes():
     common.logger.info(f'central metadata:\n{mths["central"].metadata}')
 
     # loop over central and systematics
-    variations = get_systs(years=mths["central"].metadata["year"])
+    year = mths["central"].metadata["year"]
+    if not isinstance(year,str): year = str(int(year))
+    variations = get_systs(years=year)
     variations = [v for v in variations if not v.startswith('stat')]
     variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
     variations = ['central']+variations
@@ -687,9 +689,9 @@ def smooth_shapes():
                         mths_new[key].append(entry.cut(**cut_args))
                 else:
                     mths_new[key] = mths[key].cut(**cut_args)
-        outfile = osp.basename(json_file).replace(".json","_smooth.json")
+        outfile = outdir+'/'+osp.basename(json_file).replace(".json","_smooth.json")
     elif save:
-        outfile = osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
+        outfile = outdir+'/'+osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
     if save_all or save:
         with open(outfile, 'w') as f:
             json.dump(mths_new, f, indent=4, cls=common.Encoder)
