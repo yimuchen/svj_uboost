@@ -126,6 +126,7 @@ def main():
     parser.add_argument('--missing', action='store_true', help="create jobs for missing outputs")
     parser.add_argument('--listmissing', action='store_true', help="just list missing outputs")
     parser.add_argument('--categories', type=str, default='all', nargs='*', choices=samples.keys(), help="categories to process")
+    parser.add_argument('--rootfiles', type=str, default=[], nargs='*', help="manual list of rootfiles")
     parser.add_argument('-k', '--keep', type=float, default=None, help="keep fraction of samples")
     parser.add_argument('--stageout', type=str, help='stageout directory', required=True)
     parser.add_argument('--branch', type=str, default=None, help='svj_ntuple_processing branch')
@@ -175,12 +176,14 @@ def main():
             # signals already aggregated during ntuple production
             n_per_job = 1
 
-        rootfiles = get_list_of_all_rootfiles(cat)
+        if len(args.rootfiles)>0: rootfiles = args.rootfiles
+        else: rootfiles = get_list_of_all_rootfiles(cat)
+
+        # suffs in dst
+        suffs = []
+        if args.keep: suffs.append(f'keep{args.keep:.2f}')
 
         if args.missing or args.listmissing:
-            # suffs in dst
-            suffs = []
-            if args.keep: suffs.append(f'keep{keep:.2f}')
             needed_dsts = [dst(f,args.stageout,suffs) for f in rootfiles]
             missing_dsts = set(needed_dsts) - set(existing_dsts)
 
