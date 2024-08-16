@@ -699,6 +699,7 @@ def plot_smooth():
     mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
     mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
     var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot (or 'all')").variation
+    noratio = common.pull_arg('--no-ratio', default=False, action="store_true", help="skip ratio").no_ratio
     names = common.pull_arg('--names', type=str, nargs='*', default=[], help="legend names for files").names
     json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
 
@@ -746,11 +747,12 @@ def plot_smooth():
             if 'smooth' in name:
                 plot.top.fill_between(x,ys_dn,ys_up,alpha=0.33,color=line.get_color())
 
-            if h_denom is None:
-                h_denom = y
-                plot.bot.set_ylabel('Ratio to {}'.format(name))
-            else:
-                plot.bot.plot(x,y/h_denom,color=line.get_color())
+            if not noratio:
+                if h_denom is None:
+                    h_denom = y
+                    plot.bot.set_ylabel('Ratio to {}'.format(name))
+                else:
+                    plot.bot.plot(x,y/h_denom,color=line.get_color())
 
         plot.save(f'{outdir}/{var}.png',legend_order=legend_order)
 
