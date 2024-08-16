@@ -613,7 +613,7 @@ def smooth_shapes():
 
     # loop over central and systematics
     year = mths["central"].metadata["year"]
-    if not isinstance(year,str): year = str(int(year))
+    if not isinstance(year,str) and not isinstance(year,list): year = str(int(year))
     variations = get_systs(years=year)
     variations = [v for v in variations if not v.startswith('stat')]
     variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
