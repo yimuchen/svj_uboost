@@ -430,7 +430,7 @@ def skim(rootfile, group_data):
             variation = svj.filter_preselection(variation)
             cols = svj.bdt_feature_columns(variation, load_mc=True)
             cols.metadata['selection'] = var_name
-            outfile = dst(rootfile,group_data.stageout,[var_name]+suffs)
+            outfile = dst(rootfile,group_data.stageout,suffs+[var_name])
             cols.save(outfile,force=True)
 
         # ______________________________
@@ -446,7 +446,7 @@ def skim(rootfile, group_data):
                 cols.arrays['x_jes_3'] = ak.fill_none(ak.firsts(variation.array['x_jes_15'][:,2:]), -100.).to_numpy()
                 cols.arrays['MET_precorr'] = variation.array['MET_precorr'].to_numpy()
                 cols.arrays['METPhi_precorr'] = variation.array['METPhi_precorr'].to_numpy()
-                outfile = dst(rootfile,group_data.stageout,[f'jes{var}_{match_type}']+suffs)
+                outfile = dst(rootfile,group_data.stageout,suffs+[f'jes{var}_{match_type}'])
                 cols.save(outfile,force=True)
 
 # loop over inputs
