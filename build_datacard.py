@@ -612,7 +612,9 @@ def smooth_shapes():
     common.logger.info(f'central metadata:\n{mths["central"].metadata}')
 
     # loop over central and systematics
-    variations = get_systs(years=mths["central"].metadata["year"])
+    year = mths["central"].metadata["year"]
+    if not isinstance(year,str) and not isinstance(year,list): year = str(int(year))
+    variations = get_systs(years=year)
     variations = [v for v in variations if not v.startswith('stat')]
     variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
     variations = ['central']+variations
@@ -687,9 +689,9 @@ def smooth_shapes():
                         mths_new[key].append(entry.cut(**cut_args))
                 else:
                     mths_new[key] = mths[key].cut(**cut_args)
-        outfile = osp.basename(json_file).replace(".json","_smooth.json")
+        outfile = outdir+'/'+osp.basename(json_file).replace(".json","_smooth.json")
     elif save:
-        outfile = osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
+        outfile = outdir+'/'+osp.basename(json_file).replace(".json","_smooth_{}.json".format(var))
     if save_all or save:
         with open(outfile, 'w') as f:
             json.dump(mths_new, f, indent=4, cls=common.Encoder)
@@ -699,6 +701,7 @@ def plot_smooth():
     mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
     mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
     var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot (or 'all')").variation
+    noratio = common.pull_arg('--no-ratio', default=False, action="store_true", help="skip ratio").no_ratio
     names = common.pull_arg('--names', type=str, nargs='*', default=[], help="legend names for files").names
     json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
 
@@ -746,11 +749,12 @@ def plot_smooth():
             if 'smooth' in name:
                 plot.top.fill_between(x,ys_dn,ys_up,alpha=0.33,color=line.get_color())
 
-            if h_denom is None:
-                h_denom = y
-                plot.bot.set_ylabel('Ratio to {}'.format(name))
-            else:
-                plot.bot.plot(x,y/h_denom,color=line.get_color())
+            if not noratio:
+                if h_denom is None:
+                    h_denom = y
+                    plot.bot.set_ylabel('Ratio to {}'.format(name))
+                else:
+                    plot.bot.plot(x,y/h_denom,color=line.get_color())
 
         plot.save(f'{outdir}/{var}.png',legend_order=legend_order)
 

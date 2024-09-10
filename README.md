@@ -49,6 +49,9 @@ python3 -m venv venv
 source venv/bin/activate
 pip install git+https://github.com/boostedsvj/jdlfactory
 pip install git+https://github.com/boostedsvj/seutils
+pip install --ignore-installed --no-cache "numpy<2"
+pip install --no-cache awkward
+pip install --no-cache numba
 pip install git+https://github.com/boostedsvj/svj_ntuple_processing
 ```
 
