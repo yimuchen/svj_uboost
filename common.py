@@ -441,16 +441,17 @@ lumis = {
 lumis["2018"] = lumis["2018PRE"]+lumis["2018POST"] # 59740
 lumis["RUN2"] = lumis["2016"]+lumis["2017"]+lumis["2018"] # 137600
 
-# from madgraph, MADPT>300, jet matching efficiency included, for gq = 0.25
+# from madgraph (BR to dark included), MADPT>300, jet matching efficiency included, for gq = 0.25
+# w/ Z-like k-factor 1.23
 signal_xsecs = {
-    200 : 7.412,
-    250 : 7.044,
-    300 : 6.781,
-    350 : 6.158,
-    400 : 5.566,
-    450 : 5.021,
-    500 : 4.439,
-    550 : 3.795,
+    200 : 9.143,
+    250 : 6.910,
+    300 : 5.279,
+    350 : 4.077,
+    400 : 3.073,
+    450 : 2.448,
+    500 : 1.924,
+    550 : 1.578,
 }
 
 def get_event_weight(obj,lumi=None):
@@ -460,15 +461,14 @@ def get_event_weight(obj,lumi=None):
 
         if obj.metadata["sample_type"]=="sig":
             mz = obj.metadata["mz"]
-            br = 0.47 # branching fraction to dark
             if mz in signal_xsecs:
                 xsec = signal_xsecs[mz]
             else:
                 # uses interpolation
                 xsec = central.xs
             nevents = obj.cutflow['raw']
-            event_weight = lumi*xsec*br/nevents
-            logger.info(f'Event weight: {lumi}*{br}*{xsec}/{nevents} = {event_weight}')
+            event_weight = lumi*xsec/nevents
+            logger.info(f'Event weight: {lumi}*{xsec}/{nevents} = {event_weight}')
             return event_weight
         elif obj.metadata["sample_type"]=="bkg":
             tree_weights = obj.to_numpy(['weight']).ravel()
