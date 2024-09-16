@@ -461,7 +461,7 @@ def get_systs(names=False,years=["2016","2017","2018"],smooth=False):
         syst_names.update({
             'stat': "MC statistical (fit)",
         })
-        uncorrelated.pop('stat')
+        uncorrelated.remove('stat')
     else:
         syst_names.update({
             'stat': "MC statistical",
@@ -520,9 +520,9 @@ def plot_systematics():
 
     for syst in systs:
         plot = Plot(meta)
-        plot.plot_hist(central, label='Central')
-        plot.plot_hist(mths[f'{syst}_up'], central, f'{syst} up')
-        plot.plot_hist(mths[f'{syst}_down'], central, f'{syst} down')
+        plot.plot_hist(mths['central'], label='Central')
+        plot.plot_hist(mths[f'{syst}_up'], mths['central'], f'{syst} up')
+        plot.plot_hist(mths[f'{syst}_down'], mths['central'], f'{syst} down')
         if yrange is not None:
             plot.bot.set_ylim(yrange[0],yrange[1])
         plot.save(f'{outdir}/{syst}.png')
