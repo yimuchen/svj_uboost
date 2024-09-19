@@ -1013,7 +1013,7 @@ def apply_cutbased(cols):
 # Relative path to the BDT
 # This specific BDT was chosen to be used during the L3 review
 bdt_model_file = '/uscms/home/bregnery/nobackup/SVJ_boost_limits/svj_uboost/models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
-ddt_map_file = '/uscms/home/bregnery/nobackup/SVJ_boost_limits/svj_uboost/models/ddt_Feb28_lowmass_iterative_qcdonly_100p38.json'
+ddt_map_file = '/uscms/home/bregnery/nobackup/SVJ_boost_limits/svj_uboost/models/ddt_Feb28_lowmass_iterative_qcdonly_fullrun2_100p38.json'
 # make sure bdt features match the choosen file
 bdt_features = [
     'girth', 'ptd', 'axismajor', 'axisminor',

@@ -24,6 +24,7 @@ import xgboost as xgb
 from scipy.ndimage import gaussian_filter
 import mplhep as hep
 hep.style.use("CMS") # CMS plot style
+import svj_ntuple_processing as svj
 
 #disable tex formating while having problems
 #plt.rcParams['text.usetex'] = False
@@ -45,14 +46,14 @@ training_features = [
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process some inputs.')
 
-    parser.add_argument('--bkg_data_files', default='data/bkg_20240515/Summer20UL18/*.npz', help='Background data files')
-    parser.add_argument('--sig_data_files', default='data/signal/*mDark-10_rinv-0p3*.npz', help='Signal data files')
+    parser.add_argument('--bkg_data_files', default='data/bkg_20240718/Summer20UL*/QCD*.npz', help='Background data files')
+    parser.add_argument('--sig_data_files', default='data/sig_20240718/sig_*/*.npz', help='Signal data files')
 
     # BDT and ddt model
     parser.add_argument('--bdt_file', default='models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json', help='BDT model file')
-    parser.add_argument('--ddt_map_file', default='models/ddt_Feb28_lowmass_iterative_qcdonly_100p38.json', help='DDT map file')
+    parser.add_argument('--ddt_map_file', default='models/ddt_Feb28_lowmass_iterative_qcdonly_fullrun2_100p38.json', help='DDT map file')
 
-    parser.add_argument('--lumi', type=float, default=21071.361, help='Luminosity')
+    parser.add_argument('--lumi', type=float, default=137600, help='Luminosity')
 
     parser.add_argument('--sig_bdt_cut', type=float, default=0.65, help='BDT cut for signal plotting')
 
@@ -60,7 +61,8 @@ def parse_arguments():
     # or that are in the DDT you are loading
     # another common set of cuts is
     # bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
-    parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], help='List of BDT cuts')
+    #parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], help='List of BDT cuts')
+    parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
 
     # Select the plots to make
     parser.add_argument('--plot_2D_DDT_map', action='store_true', help='Plot 2D DDT map')
@@ -210,7 +212,7 @@ def main():
  
             # Plot 2D map for rho-phi plane for each BDT cut
             plt.figure(figsize=(10, 8))
-            hep.cms.label(rlabel="2018 (13 TeV)")
+            hep.cms.label(rlabel="(13 TeV)")
             plt.imshow(var_map_smooth.T, extent=[RHO_edges[0], RHO_edges[-1], PT_edges[0], PT_edges[-1]], aspect='auto', origin='lower', cmap='viridis')
             plt.colorbar(label='DDT Map value')
             plt.xlabel('$ \\rho = \\ln(\\mathrm{m}^{2}/\\mathrm{p}_{\\mathrm{T}}^{2})$')
@@ -233,9 +235,9 @@ def main():
         print("Making background plots")
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)")
         for cuts, scores in zip(bdt_cuts, BKG_score_ddt):
-            if cuts != 0.7: alpha = 0.3
+            if cuts != 0.6: alpha = 0.3
             else: alpha = 1.0
             ax.hist(scores, bins=50, range=(-1.0, 1.0), alpha=alpha, histtype='step', label=f'BDT Cut {cuts}')
         #ax.set_title('DDT Score Distribution for Different Cuts')
@@ -249,7 +251,7 @@ def main():
         # Apply DDT > 0.0 for the different BDT score transformations
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)")
         for cuts, scores in zip(bdt_cuts, BKG_score_ddt):
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(mT[score_mask], bins=50, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})')
@@ -271,7 +273,7 @@ def main():
         # Do it again normalized to unit area
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)")
         for cuts, scores in zip(bdt_cuts, BKG_score_ddt):
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(mT[score_mask], bins=50, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})', density=True)
@@ -291,14 +293,27 @@ def main():
     # Create Significance Plots
     if plot_fom_significance == True :
 
-        # Grab the signal data
-        sig_cols = [Columns.load(f) for f in glob.glob(sig_data_files)]
+        # Group files by mass point
+        masses = ['mMed-200', 'mMed-250', 'mMed-300', 'mMed-350', 'mMed-400', 'mMed-450', 'mMed-500', 'mMed-550']
+        files_by_mass = {mass: [] for mass in masses}
+        for f in glob.glob(sig_data_files):
+            for mass in masses: 
+                if mass in f : files_by_mass[mass].append(f)
+        # Load and combine data for each mass point
+        sig_cols = []
+        for mass, files in files_by_mass.items():
+            mass_cols = []
+            for yr_file in files :
+                mass_cols.append(Columns.load(yr_file) )
+            sig_cols.append(svj.concat_columns(mass_cols))
+
+        print(sig_cols)
  
         # Prepare a figure
         fig = plt.figure(figsize=(10, 7))
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)") # full run 2
         ax = fig.gca()
-
+ 
         best_bdt_cuts = [] #store the best bdt values
         # Iterate over the variables in the 'con' dictionary
         for sig_col in sig_cols:
@@ -310,27 +325,27 @@ def main():
             # Grab the input features and weights
             sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs(sig_col, lumi, all_features)
             print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
-  
+        
             # _____________________________________________
             # Open the trained models and get the scores
-      
+        
             xgb_model = xgb.XGBClassifier()
             xgb_model.load_model(model_file)
             with time_and_log(f'Calculating xgboost scores for {model_file}...'):
                 sig_score = xgb_model.predict_proba(sig_X)[:,1]
-      
+        
             # _____________________________________________
             # Apply the DDT and calculate FOM
             bkg_score_ddt = []
             print("Applying the DDT and calculate FOM")
-
+ 
             # Iterate over the bdt cut values
             fom = [] # to store the figure of merit values
             for bdt_cut in bdt_cuts:
              
                 sig_score_ddt = calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, bdt_cut, ddt_map_file)
                 bkg_score_ddt = calculate_varDDT(mT, pT, rho, bkg_score, bkg_weight, bdt_cut, ddt_map_file)
-
+ 
                 # Apply ddt scores
                 sig_mT_ddt = sig_mT[sig_score_ddt > 0]
                 bkg_mT_ddt = mT[bkg_score_ddt > 0]
@@ -342,7 +357,7 @@ def main():
                 bkg_mT_ddt = bkg_mT_ddt[bkg_mT_mask]
                 wsig_bdt_mT_wind = sig_weight[sig_score_ddt > 0][sig_mT_mask]
                 wbkg_bdt_mT_wind = bkg_weight[bkg_score_ddt > 0][bkg_mT_mask]
- 
+  
                 # Calculate the figure of merit values for this bdt cut
                 S = sum(np.histogram(sig_mT_ddt, bins=50, weights=wsig_bdt_mT_wind)[0])
                 B = sum(np.histogram(bkg_mT_ddt, bins=50, weights=wbkg_bdt_mT_wind)[0])
@@ -363,7 +378,7 @@ def main():
             
         # grab labels that will go into the legend
         handles, labels = ax.get_legend_handles_labels()
- 
+  
         # Convert last part of labels to integers, handle errors if conversion is not possible
         masses = []
         for label in labels:
@@ -372,10 +387,10 @@ def main():
             except ValueError:
                 mass = float('inf')  # If conversion fails, assign a large number
             masses.append(mass)
-
+ 
         # Sort legend items by mass (in descending order)
         labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: masses[labels.index(t[0])], reverse=True))
-
+ 
         ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(1, 1))          
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('FoM')
@@ -387,23 +402,24 @@ def main():
         plt.savefig(outfile+".pdf", bbox_inches='tight')
         plt.savefig(outfile+".png", bbox_inches='tight')
         plt.close()
-
+ 
         # sort the best bdt cuts
         best_bdt_cuts = np.array(best_bdt_cuts)
         sort_indices = np.argsort(best_bdt_cuts[:,0]) #sort array to ascend by mz
         best_bdt_cuts = best_bdt_cuts[sort_indices]
-
+ 
         # Find optimal cut
         mask = (best_bdt_cuts[:,0] >= 200) & (best_bdt_cuts[:,0] <= 400)
         selected_values = best_bdt_cuts[mask, 1]
         average = np.mean(selected_values)
-
+        optimal_bdt_cut = min(bdt_cuts, key=lambda x: abs(x - average)) # Finding the nearest value in bdt_cuts to the calculated average
+ 
         # plot the best bdt cuts
         fig = plt.figure(figsize=(10, 7))
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)") # full run 2
         ax = fig.gca()
         ax.plot(best_bdt_cuts[:,0], best_bdt_cuts[:,1], marker='o')
-        ax.text(0.05, 0.10, f'Optimal Cut: {average:.2f}', transform=ax.transAxes, verticalalignment='top')
+        ax.text(0.05, 0.10, f'Optimal Cut: {optimal_bdt_cut:.2f}', transform=ax.transAxes, verticalalignment='top')
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('Best BDT Cut Value')
         ax.set_xlabel("m(Z')")
@@ -424,7 +440,7 @@ def main():
         # make plotting objects
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)")
  
         # Loop over the mZ values
         for sig_col in sig_cols:
@@ -486,7 +502,7 @@ def main():
         # make plotting objects
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)")
  
         mz = sig_col.metadata['mz']
         
@@ -512,7 +528,7 @@ def main():
         # Plot histograms for the DDT scores for different BDT cuts
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)")
         for cuts, scores in zip(bdt_cuts, sig_score_ddt):
             if cuts != 0.7: alpha = 0.3
             else: alpha = 1.0
@@ -529,7 +545,7 @@ def main():
         # Apply DDT > 0.0 for the different BDT score transformations
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)")
         for cuts, scores in zip(bdt_cuts, sig_score_ddt):
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(sig_mT[score_mask], weights=sig_weight[score_mask], bins=25, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})')
@@ -551,7 +567,7 @@ def main():
         # Do it again normalized to unit area
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
-        hep.cms.label(rlabel="2018 (13 TeV)")
+        hep.cms.label(rlabel="(13 TeV)")
         for cuts, scores in zip(bdt_cuts, sig_score_ddt):
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(sig_mT[score_mask], weights=sig_weight[score_mask], bins=25, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})', density=True)
