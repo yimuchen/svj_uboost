@@ -31,17 +31,13 @@ import svj_ntuple_processing as svj
 
 np.random.seed(1001)
 
-from common import logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy
+from common import read_traing_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy
 
 #------------------------------------------------------------------------------
 # Global variables and user input arguments -----------------------------------
 #------------------------------------------------------------------------------
 
-training_features = [
-    'girth', 'ptd', 'axismajor', 'axisminor',
-    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
-    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef', 
-    ]
+training_features = []
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process some inputs.')
@@ -151,6 +147,9 @@ def main():
     plot_one_sig_mt_many_bdt = args.plot_one_sig_mt_many_bdt
 
     set_mpl_fontsize(18, 22, 26)
+
+    # grab training features for specific input model
+    global training_features = read_training_features(model_file)
 
     # add ddt necessary variables in addition to the bdt input features
     all_features = training_features + ['pt', 'mt', 'rho', 'rt'] # rho is an important variable for applying the decorrelation

@@ -1015,11 +1015,7 @@ def apply_cutbased(cols):
 bdt_model_file = 'models/svjbdt_obj_rev_version.json'
 ddt_map_file = 'models/ddt_obj_rev_version.json'
 # make sure bdt features match the choosen file
-bdt_features = [
-    'girth', 'ptd', 'axismajor', 'axisminor',
-    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
-    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef',
-]
+bdt_features = read_training_features(bdt_model_file)
 
 def split_bdt(sel):
     parts = sel.split('=')
