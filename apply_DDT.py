@@ -46,12 +46,12 @@ training_features = [
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process some inputs.')
 
-    parser.add_argument('--bkg_data_files', default='data/bkg_20240718/Summer20UL*/QCD*.npz', help='Background data files')
-    parser.add_argument('--sig_data_files', default='data/sig_20240718/sig_*/*.npz', help='Signal data files')
+    parser.add_argument('--bkg-files', default='data/bkg_20240718/Summer20UL*/QCD*.npz', help='Background data files')
+    parser.add_argument('--sig-files', default='data/sig_20240718/sig_*/*.npz', help='Signal data files')
 
     # BDT and ddt model
-    parser.add_argument('--bdt_file', default='models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json', help='BDT model file')
-    parser.add_argument('--ddt_map_file', default='models/ddt_Feb28_lowmass_iterative_qcdonly_fullrun2_100p38.json', help='DDT map file')
+    parser.add_argument('--bdt_file', default='models/svjbdt_obj_rev_version.json', help='BDT model file')
+    parser.add_argument('--ddt_map_file', default='models/ddt_obj_rev_version.json', help='DDT map file')
 
     parser.add_argument('--lumi', type=float, default=137600, help='Luminosity')
 
@@ -61,7 +61,7 @@ def parse_arguments():
     # or that are in the DDT you are loading
     # another common set of cuts is
     # bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
-    #parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], help='List of BDT cuts')
+    # and another common set for plots is [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], help='List of BDT cuts')
     parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
 
     # Select the plots to make
@@ -137,8 +137,8 @@ def main():
     # Parse arguments and take the results
     args = parse_arguments()
 
-    bkg_data_files = args.bkg_data_files
-    sig_data_files = args.sig_data_files
+    bkg-files = args.bkg-files
+    sig-files = args.sig-files
     model_file = args.bdt_file
     ddt_map_file = args.ddt_map_file
     lumi = args.lumi
@@ -156,7 +156,7 @@ def main():
     all_features = training_features + ['pt', 'mt', 'rho', 'rt'] # rho is an important variable for applying the decorrelation
 
     # Grab the bkg data
-    bkg_cols = [Columns.load(f) for f in glob.glob(bkg_data_files)]
+    bkg_cols = [Columns.load(f) for f in glob.glob(bkg-files)]
     #bkg_cols = [Columns.load(f) for f in glob.glob(qcd_data_files)]
     #bkg_cols.extend(Columns.load(f) for f in glob.glob(tt_data_files))
     X, pT, mT, rho, bkg_weight = bdt_ddt_inputs(bkg_cols, lumi, all_features)
@@ -296,7 +296,7 @@ def main():
         # Group files by mass point
         masses = ['mMed-200', 'mMed-250', 'mMed-300', 'mMed-350', 'mMed-400', 'mMed-450', 'mMed-500', 'mMed-550']
         files_by_mass = {mass: [] for mass in masses}
-        for f in glob.glob(sig_data_files):
+        for f in glob.glob(sig-files):
             for mass in masses: 
                 if mass in f : files_by_mass[mass].append(f)
         # Load and combine data for each mass point
@@ -435,7 +435,7 @@ def main():
     if plot_sig_mt_single_BDT == True :
 
         # grab signal data
-        sig_cols = [Columns.load(f) for f in glob.glob(sig_data_files)]
+        sig_cols = [Columns.load(f) for f in glob.glob(sig-files)]
 
         # make plotting objects
         fig, ax = plt.subplots(figsize=(10, 8))
@@ -490,7 +490,7 @@ def main():
     if plot_one_sig_mt_many_bdt == True :
 
         # grab signal data
-        sig_cols = [Columns.load(f) for f in glob.glob(sig_data_files)]
+        sig_cols = [Columns.load(f) for f in glob.glob(sig-files)]
 
         # Loop over the mZ values and only grab the mZ = 300 value
         sig_col = None
