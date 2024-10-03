@@ -240,7 +240,6 @@ def main():
             if cuts != 0.6: alpha = 0.3
             else: alpha = 1.0
             ax.hist(scores, bins=50, range=(-1.0, 1.0), alpha=alpha, histtype='step', label=f'BDT Cut {cuts}')
-        #ax.set_title('DDT Score Distribution for Different Cuts')
         ax.set_xlabel('BKG_score_ddt')
         ax.set_ylabel('Events')
         ax.legend()
@@ -256,7 +255,6 @@ def main():
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(mT[score_mask], bins=50, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})')
  
-        #ax.set_title('mT for Different DDT(BDT) Thresholds')
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
@@ -278,7 +276,6 @@ def main():
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(mT[score_mask], bins=50, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})', density=True)
  
-        #ax.set_title('mT for Different DDT(BDT) Thresholds')
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
@@ -318,8 +315,6 @@ def main():
         # Iterate over the variables in the 'con' dictionary
         for sig_col in sig_cols:
             mz = sig_col.metadata['mz']
-            #if mz not in [300, 350, 450, 550]:
-            #  continue
             s = f'bsvj_{mz:d}_10_0.3'
          
             # Grab the input features and weights
@@ -371,7 +366,6 @@ def main():
             print(best_bdt_cuts)
              
             # Plot the histogram of the metric variable range
-            #arr = ax.hist(bdt_cut_values, bins=func.bin_cuts(bdt_cut_values), weights=fom, label=s, linewidth=2, histtype='step')
             if mz == 300: alpha = 1.0
             else: alpha = 0.3
             arr = ax.plot(bdt_cuts,fom, marker='o', label=f"m(Z') {mz}", alpha=alpha)  
@@ -469,7 +463,6 @@ def main():
             score_mask = sig_score_ddt > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(sig_mT[score_mask], weights=sig_weight[score_mask], bins=50, range=(180,650), histtype='step', label=f"m(Z')={mz}", alpha=alpha)
  
-        #ax.set_title('mT for Different DDT(BDT) Thresholds')
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
@@ -533,7 +526,6 @@ def main():
             if cuts != 0.7: alpha = 0.3
             else: alpha = 1.0
             ax.hist(scores, weights=sig_weight, bins=50, range=(-1.0, 1.0), alpha=alpha, histtype='step', label=f'BDT Cut {cuts}')
-        #ax.set_title('DDT Score Distribution for Different Cuts')
         ax.set_xlabel('DDT(BDT)')
         ax.set_ylabel('Events')
         ax.legend()
@@ -550,7 +542,6 @@ def main():
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(sig_mT[score_mask], weights=sig_weight[score_mask], bins=25, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})')
  
-        #ax.set_title('mT for Different DDT(BDT) Thresholds')
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
@@ -572,7 +563,6 @@ def main():
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(sig_mT[score_mask], weights=sig_weight[score_mask], bins=25, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})', density=True)
  
-        #ax.set_title('mT for Different DDT(BDT) Thresholds')
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
