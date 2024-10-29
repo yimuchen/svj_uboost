@@ -155,7 +155,7 @@ def main():
         pip_install_git_local(group,"boostedsvj","svj_ntuple_processing",args.branch)
 
         os_version = match("[^0-9]*([0-9]+).*","/etc/redhat-release")
-        group.htcondor['+REQUIRED_OS'] = "rhel"+os_version
+        group.htcondor['+REQUIRED_OS'] = '"rhel'+os_version+'"'
         group.htcondor['+DesiredOS'] = "REQUIRED_OS"
         group.htcondor['on_exit_hold'] = '(ExitBySignal == true) || (ExitCode != 0)'
         group.htcondor['on_exit_hold_reason'] = 'strcat("Job held by ON_EXIT_HOLD due to ",	ifThenElse((ExitBySignal == True), "exit by signal", strcat("exit code ",ExitCode)), ".")'
