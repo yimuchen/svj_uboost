@@ -41,7 +41,7 @@ def check_rebin(hist,name):
     orig_width = int(hist.binning[1] - hist.binning[0])
     new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
     rebin_factor = int(new_width/orig_width)
-    rebin_mod = orig_width % new_width
+    rebin_mod = new_width % orig_width
     if rebin_mod!=0:
         msg.append(f'rebin {orig_width} % {new_width} = {rebin_mod}')
     if len(msg)>0:
