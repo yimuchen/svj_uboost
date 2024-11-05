@@ -589,7 +589,10 @@ def do_loess(hist,span,do_gcv=False):
         if yy==0:
             errs[i] = 1
     # 1sigma interval
-    pred, conf_int, gcv = loess(x, y, errs, deg=2, alpha=0.683, span=span)
+    try:
+        pred, conf_int, gcv = loess(x, y, errs, deg=2, alpha=0.683, span=span)
+    except np.linalg.LinAlgError:
+        gcv = 1e10
     if do_gcv:
         return gcv
     else:
