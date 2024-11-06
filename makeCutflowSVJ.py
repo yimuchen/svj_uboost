@@ -20,6 +20,8 @@ namesDict = OrderedDict([
     ('nmuons=0', r'$N_{\Pgm}=0$'),
     ('nelectrons=0', r'$N_{\Pe}=0$'),
     ('metfilter', 'MET filters'),
+#    ('hffilter', 'HF noisy hit filter'),
+    ('hffilter', 'MET filters'), # to combine w/ prev
     ('n_ak4jets>=2', r'$\nnarrow\geq2$'),
     ('ecaldeadcells', 'Custom MET filter'),
     ('abs(metdphi)<1.5', r'$\Delta\phi(\MET,\widejet_2)<1.5$'),

@@ -41,7 +41,7 @@ def check_rebin(hist,name):
     orig_width = int(hist.binning[1] - hist.binning[0])
     new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
     rebin_factor = int(new_width/orig_width)
-    rebin_mod = orig_width % new_width
+    rebin_mod = new_width % orig_width
     if rebin_mod!=0:
         msg.append(f'rebin {orig_width} % {new_width} = {rebin_mod}')
     if len(msg)>0:
@@ -589,7 +589,10 @@ def do_loess(hist,span,do_gcv=False):
         if yy==0:
             errs[i] = 1
     # 1sigma interval
-    pred, conf_int, gcv = loess(x, y, errs, deg=2, alpha=0.683, span=span)
+    try:
+        pred, conf_int, gcv = loess(x, y, errs, deg=2, alpha=0.683, span=span)
+    except np.linalg.LinAlgError:
+        gcv = 1e10
     if do_gcv:
         return gcv
     else:
@@ -646,12 +649,14 @@ def smooth_shapes():
         if norm: hist = hist*(1./hyield)
 
         if do_opt>0 and (var==target or len(target)==0):
-            span_min = 0.1 # if span is too small, no points are included
+            span_min = 0.05 # if span is too small, no points are included
             spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
             gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
             span_val = spans[np.argmin(gcvs)]
             if debug: print('\n'.join(['{} {}'.format(span,gcv) for span,gcv in zip(spans,gcvs)]))
             print("Optimal span ({}): {}".format(var,span_val))
+            meta["span"] = span_val
+            meta["gcvs"] = list(gcvs)
 
         pred, conf = do_loess(hist,span=span_val)
 
@@ -674,6 +679,9 @@ def smooth_shapes():
                 hstat.vals = np.clip(ival,0,None)
                 hstat.errs = np.zeros_like(hstat.vals)
                 mths_new[f'stat_{iname}'] = hstat
+
+        # store updated metadata to avoid duplicating for stat variations
+        hsmooth.metadata = meta
 
     outdir = os.path.dirname(json_file).replace("hists","smooth").replace("merged","smooth")
     os.makedirs(outdir, exist_ok=True)
