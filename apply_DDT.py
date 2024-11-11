@@ -59,12 +59,13 @@ def parse_arguments():
     # and another common set for plots is [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
 
-    # Select the plots to make
-    parser.add_argument('--plot_2D_DDT_map', action='store_true', help='Plot 2D DDT map')
-    parser.add_argument('--plot_bkg_scores_mt', action='store_true', help='Plot background scores mt')
-    parser.add_argument('--plot_fom_significance', action='store_true', help='Plot FOM significance')
-    parser.add_argument('--plot_sig_mt_single_BDT', action='store_true', help='Plot signal mt single BDT')
-    parser.add_argument('--plot_one_sig_mt_many_bdt', action='store_true', help='Plot one signal mt many BDT')
+    # Allowed plots: 2D DDT maps, Background Scorves vs MT, FOM significance, 
+    #                Signal mt spectrums for one BDT working point,  one signal mt spectrum for many BDT working points
+    allowed_plots = ['2D_DDT_map', 'bkg_scores_mt', 'fom_significance', 'sig_mt_single_BDT', 'one_sig_mt_many_bdt']
+
+    # Create the parser and add the plot argument
+    parser = argparse.ArgumentParser(description="Plot selection")
+    parser.add_argument('--plot', nargs='*', type=str, default=[], choices=allowed_plots, help='Plots to make')
 
     return parser.parse_args()
 
@@ -138,11 +139,7 @@ def main():
     lumi = args.lumi
     sig_bdt_cut = args.sig_bdt_cut
     bdt_cuts = args.bdt_cuts
-    plot_2D_DDT_map = args.plot_2D_DDT_map
-    plot_bkg_scores_mt = args.plot_bkg_scores_mt
-    plot_fom_significance = args.plot_fom_significance
-    plot_sig_mt_single_BDT = args.plot_sig_mt_single_BDT
-    plot_one_sig_mt_many_bdt = args.plot_one_sig_mt_many_bdt
+    plots = args.plot
 
     set_mpl_fontsize(18, 22, 26)
 
@@ -193,7 +190,7 @@ def main():
     with open(ddt_map_file, 'r') as f:
         var_dict = json.load(f)
 
-    if plot_2D_DDT_map == True :
+    if '2D_DDT_map' in plots :
         for key in var_dict.keys() :
  
             print("Plotting the 2D DDT maps")
@@ -220,7 +217,7 @@ def main():
     # _____________________________________________
     # Apply the DDT to the background
 
-    if plot_bkg_scores_mt == True :
+    if 'bkg_scores_mt' in plots :
         print("Applying the DDT background")
         BKG_score_ddt = []
         for bdt_cut in bdt_cuts:
@@ -283,7 +280,7 @@ def main():
 
     # _____________________________________________
     # Create Significance Plots
-    if plot_fom_significance == True :
+    if 'fom_significance' in plots :
 
         # Group files by mass point
         masses = ['mMed-200', 'mMed-250', 'mMed-300', 'mMed-350', 'mMed-400', 'mMed-450', 'mMed-500', 'mMed-550']
@@ -421,7 +418,7 @@ def main():
     # _____________________________________________
     # Apply the DDT to different signals for one BDT cut value
 
-    if plot_sig_mt_single_BDT == True :
+    if 'sig_mt_single_BDT' in plots :
 
         # grab signal data
         sig_cols = [Columns.load(f) for f in glob.glob(sig-files)]
@@ -475,7 +472,7 @@ def main():
     # _____________________________________________
     # Apply the DDT to one signals for different BDT cut values
 
-    if plot_one_sig_mt_many_bdt == True :
+    if 'one_sig_mt_many_bdt' in plots :
 
         # grab signal data
         sig_cols = [Columns.load(f) for f in glob.glob(sig-files)]
