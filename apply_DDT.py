@@ -26,12 +26,9 @@ import mplhep as hep
 hep.style.use("CMS") # CMS plot style
 import svj_ntuple_processing as svj
 
-#disable tex formating while having problems
-#plt.rcParams['text.usetex'] = False
-
 np.random.seed(1001)
 
-from common import read_traing_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy
+from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion()
 
 #------------------------------------------------------------------------------
 # Global variables and user input arguments -----------------------------------
@@ -85,7 +82,11 @@ def bdt_ddt_inputs(col, lumi, all_features):
     # Storing column features
     X = []
     weight = []
-    
+
+    # Apply the signal region
+    # should work on multiple cols    
+    col = apply_rt_signalregion(col)
+
     # Test if more than one column
     if isinstance(col,list):
         for icol in col:  
@@ -100,14 +101,9 @@ def bdt_ddt_inputs(col, lumi, all_features):
         X = col.to_numpy(all_features)
         weight = col.xs / col.cutflow['raw'] * lumi * col.arrays['puweight']
   
-    # Apply the signal region
+    # grab rt
     rt = X[:,-1]
-    X = X[rt > 1.18]
-    weight = weight[rt > 1.18]
- 
-    # grab rt (after cut)
-    rt = rt[rt>1.18]
-    X = X[:,:-1]
+    X = X[:,:-1] # remove it from X so that eventually it can be used for BDT scores
   
     # grab rho
     rho = X[:,-1]
