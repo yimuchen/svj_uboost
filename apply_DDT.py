@@ -39,7 +39,7 @@ training_features = []
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process some inputs.')
 
-    parser.add_argument('--bkg-files', default='data/bkg_20240718/Summer20UL*/QCD*.npz', help='Background data files')
+    parser.add_argument('--bkg-files', default='data/bkg_20240718/Summer20UL*/QCD*.npz', help='Background data files (default is QCD only DDT)')
     parser.add_argument('--sig-files', default='data/sig_20240718/sig_*/*.npz', help='Signal data files')
 
     # BDT and ddt model
@@ -48,13 +48,15 @@ def parse_arguments():
 
     parser.add_argument('--lumi', type=float, default=137600, help='Luminosity')
 
-    parser.add_argument('--sig_bdt_cut', type=float, default=0.65, help='BDT cut for signal plotting')
+    # The default value of 0.65 was the optimal cut value determined. If the training or selection changes, 
+    # the value should be adapted accordingly
+    parser.add_argument('--sig_bdt_cut', type=float, default=0.65, help='BDT cut for signal plotting (current optimal cut is 0.65)')
 
     # Choose the BDT cut values that you want to make for the DDT
     # or that are in the DDT you are loading
     # another common set of cuts is
     # bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95] 
-    # and another common set for plots is [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], help='List of BDT cuts')
+    # and another common set for plots is [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
 
     # Select the plots to make
@@ -152,8 +154,6 @@ def main():
 
     # Grab the bkg data
     bkg_cols = [Columns.load(f) for f in glob.glob(bkg-files)]
-    #bkg_cols = [Columns.load(f) for f in glob.glob(qcd_data_files)]
-    #bkg_cols.extend(Columns.load(f) for f in glob.glob(tt_data_files))
     X, pT, mT, rho, bkg_weight = bdt_ddt_inputs(bkg_cols, lumi, all_features)
 
     # _____________________________________________
