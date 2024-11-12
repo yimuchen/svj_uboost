@@ -80,6 +80,14 @@ def FOM(s, b):
     FOM = np.sqrt(2*((s+b)*np.log(1+s/b)-s))
     return FOM
 
+def save_plot(plt, plt_name):
+    '''
+    Save the plots, save some lines of code
+    '''
+    plt.tight_layout()
+    plt.savefig(f'plots/{plt_name}.png')  
+    plt.savefig(f'plots/{plt_name}.pdf')  
+
 def bdt_ddt_inputs(col, lumi, all_features):
 
     # Storing column features
@@ -209,9 +217,7 @@ def main():
             plt.colorbar(label='DDT Map value')
             plt.xlabel('$ \\rho = \\ln(\\mathrm{m}^{2}/\\mathrm{p}_{\\mathrm{T}}^{2})$')
             plt.ylabel('$\\mathrm{p}_{\\mathrm{T}}$ [GeV]')
-            plt.tight_layout()
-            plt.savefig(f'plots/2D_map_cut_{bdt_cut}.png')  # Save the plot
-            plt.savefig(f'plots/2D_map_cut_{bdt_cut}.pdf')  # Save the plot
+            save_plot(plt,f'2D_map_cut_{bdt_cut}')
             plt.close()
 
     # _____________________________________________
@@ -235,9 +241,8 @@ def main():
         ax.set_xlabel('BKG_score_ddt')
         ax.set_ylabel('Events')
         ax.legend()
-        plt.tight_layout()
-        plt.savefig('plots/DDT_score.png')
-        plt.savefig('plots/DDT_score.pdf')
+        save_plot(plt,'DDT_score')
+        plt.close()
  
         # Apply DDT > 0.0 for the different BDT score transformations
         fig, ax = plt.subplots(figsize=(10, 8))
@@ -250,15 +255,11 @@ def main():
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
-        plt.tight_layout()
-        plt.savefig('plots/bkg_events_vs_mT.png')
-        plt.savefig('plots/bkg_events_vs_mT.pdf')
+        save_plot(plt,'bkg_events_vs_mT')
         
         # log scale it
         ax.set_yscale('log')
-        plt.tight_layout()
-        plt.savefig('plots/log_bkg_events_vs_mT.png')
-        plt.savefig('plots/log_bkg_events_vs_mT.pdf')
+        save_plot(plt,'log_bkg_events_vs_mT')
  
         # Do it again normalized to unit area
         fig, ax = plt.subplots(figsize=(10, 8))
@@ -271,9 +272,7 @@ def main():
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
-        plt.tight_layout()
-        plt.savefig('plots/norm_bkg_events_vs_mT.png')
-        plt.savefig('plots/norm_bkg_events_vs_mT.pdf')
+        save_plot(plt,'norm_bkg_events_vs_mT')
         plt.close()
  
         print(BKG_score_ddt) 
