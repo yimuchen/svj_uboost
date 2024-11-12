@@ -67,6 +67,9 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Plot selection")
     parser.add_argument('--plot', nargs='*', type=str, default=[], choices=allowed_plots, help='Plots to make')
 
+    # Add verbosity level argument
+    parser.add_argument('--verbosity', type=int, choices=[0, 1, 2], default=1, help="Set verbosity level: 0 (silent), 1 (default), 2 (detailed)")
+
     return parser.parse_args()
 
 #------------------------------------------------------------------------------
@@ -85,8 +88,8 @@ def save_plot(plt, plt_name):
     Save the plots, save some lines of code
     '''
     plt.tight_layout()
-    plt.savefig(f'plots/{plt_name}.png')  
-    plt.savefig(f'plots/{plt_name}.pdf')  
+    plt.savefig(f'plots/{plt_name}.png', bbox_inches='tight')  
+    plt.savefig(f'plots/{plt_name}.pdf', bbox_inches='tight')  
 
 def bdt_ddt_inputs(col, lumi, all_features):
 
@@ -148,6 +151,7 @@ def main():
     sig_bdt_cut = args.sig_bdt_cut
     bdt_cuts = args.bdt_cuts
     plots = args.plot
+    verbosity = args.verbosity
 
     set_mpl_fontsize(18, 22, 26)
 
@@ -174,7 +178,7 @@ def main():
     # _____________________________________________
     # Calculate bkg efficiencies for the DDT
 
-    print("Calculating bkg efficiencies for various bdt cut values")
+    if verbosity > 0 : print("Calculating bkg efficiencies for various bdt cut values")
     bkg_eff=[]
     bkg_percents=[]
     bkg_Hist={}
@@ -201,7 +205,7 @@ def main():
     if '2D_DDT_map' in plots :
         for key in var_dict.keys() :
  
-            print("Plotting the 2D DDT maps")
+            if verbosity > 0 : print("Plotting the 2D DDT maps")
  
             # Get the 2D DDT map and bin edges for the corresponding BDT cut (key)
             bdt_cut = key
@@ -224,13 +228,13 @@ def main():
     # Apply the DDT to the background
 
     if 'bkg_scores_mt' in plots :
-        print("Applying the DDT background")
+        if verbosity > 0 : print("Applying the DDT background")
         BKG_score_ddt = []
         for bdt_cut in bdt_cuts:
             BKG_score_ddt.append(calculate_varDDT(mT, pT, rho, bkg_score, bkg_weight, bdt_cut, ddt_map_file))
  
         # Plot histograms for the DDT scores for different BDT cuts
-        print("Making background plots")
+        if verbosity > 0 : print("Making background plots")
         fig, ax = plt.subplots(figsize=(10, 8))
         # Options to make the plot fancier 
         hep.cms.label(rlabel="(13 TeV)")
@@ -275,7 +279,7 @@ def main():
         save_plot(plt,'norm_bkg_events_vs_mT')
         plt.close()
  
-        print(BKG_score_ddt) 
+        if verbosity > 1 : print(BKG_score_ddt) 
 
     # _____________________________________________
     # Create Significance Plots
@@ -295,7 +299,7 @@ def main():
                 mass_cols.append(Columns.load(yr_file) )
             sig_cols.append(svj.concat_columns(mass_cols))
 
-        print(sig_cols)
+        if verbosity > 1 : print(sig_cols)
  
         # Prepare a figure
         fig = plt.figure(figsize=(10, 7))
@@ -310,7 +314,7 @@ def main():
          
             # Grab the input features and weights
             sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs(sig_col, lumi, all_features)
-            print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
+            if verbosity > 0 : print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
         
             # _____________________________________________
             # Open the trained models and get the scores
@@ -323,7 +327,7 @@ def main():
             # _____________________________________________
             # Apply the DDT and calculate FOM
             bkg_score_ddt = []
-            print("Applying the DDT and calculate FOM")
+            if verbosity > 0 : print("Applying the DDT and calculate FOM")
  
             # Iterate over the bdt cut values
             fom = [] # to store the figure of merit values
@@ -347,14 +351,14 @@ def main():
                 # Calculate the figure of merit values for this bdt cut
                 S = sum(np.histogram(sig_mT_ddt, bins=50, weights=wsig_bdt_mT_wind)[0])
                 B = sum(np.histogram(bkg_mT_ddt, bins=50, weights=wbkg_bdt_mT_wind)[0])
-                print("mZ': ", mz, " S: ", S, "B: ", B)
+                if verbosity > 0 : print("mZ': ", mz, " S: ", S, "B: ", B)
                 fom.append(FOM(S,B))
              
             # Find the cut value corresponding to the maximum figure of merit
             fom_array = np.array(fom)
             bdt_cuts_array = np.array(bdt_cuts)
             best_bdt_cuts.append([mz, bdt_cuts_array[np.where(fom_array == max(fom_array))[0]][0]])
-            print(best_bdt_cuts)
+            if verbosity > 1 : print(best_bdt_cuts)
              
             # Plot the histogram of the metric variable range
             if mz == 300: alpha = 1.0
@@ -380,12 +384,11 @@ def main():
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('FoM')
         ax.set_xlabel('BDT cut value')
-        outfile = f'plots/metrics_bdt_FOM'
-        print(outfile, ".pdf and .png")
+        outfile = f'metrics_bdt_FOM'
+        if verbosity > 0 : print(outfile, ".pdf and .png")
         
         # Save the plot as a PDF and png file
-        plt.savefig(outfile+".pdf", bbox_inches='tight')
-        plt.savefig(outfile+".png", bbox_inches='tight')
+        save_plot(plt,outfile)
         plt.close()
  
         # sort the best bdt cuts
@@ -408,8 +411,7 @@ def main():
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('Best BDT Cut Value')
         ax.set_xlabel("m(Z')")
-        plt.savefig("plots/best_bdt_cuts.pdf", bbox_inches='tight')
-        plt.savefig("plots/best_bdt_cuts.png", bbox_inches='tight')
+        save_plot(plt,"best_bdt_cuts")
         plt.close()
 
         
@@ -433,7 +435,7 @@ def main():
          
             # Signal Column 
             sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs(sig_col, lumi, all_features)
-            print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
+            if verbosity > 0 : print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
 
             # _____________________________________________
             # Open the trained models and get the scores
@@ -445,7 +447,7 @@ def main():
   
             # _____________________________________________
             # Apply the DDT  to the signal
-            print("Applying the DDT signal")
+            if verbosity > 0 : print("Applying the DDT signal")
             sig_score_ddt = calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, sig_bdt_cut, ddt_map_file)
  
             # Make mT distributions
@@ -457,15 +459,11 @@ def main():
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
-        plt.tight_layout()
-        plt.savefig('plots/sig_events_vs_mT.png')
-        plt.savefig('plots/sig_events_vs_mT.pdf')
+        save_plot(plt,'sig_events_vs_mT')
         
         # log scale it
         ax.set_yscale('log')
-        plt.tight_layout()
-        plt.savefig('plots/log_sig_events_vs_mT.png')
-        plt.savefig('plots/log_sig_events_vs_mT.pdf')
+        save_plot(plt,'log_sig_events_vs_mT')
         plt.close()
 
     # _____________________________________________
@@ -492,7 +490,7 @@ def main():
         
         # Signal Column 
         sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs(sig_col, lumi, all_features)
-        print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
+        if verbosity > 0 : print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
   
         # _____________________________________________
         # Open the trained models and get the scores
@@ -504,7 +502,7 @@ def main():
   
         # _____________________________________________
         # Apply the DDT  to the signal at all the cut values
-        print("Applying the DDT signal")
+        if verbosity > 0 : print("Applying the DDT signal")
         sig_score_ddt = []
         for bdt_cut in bdt_cuts :
             sig_score_ddt.append(calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, bdt_cut, ddt_map_file) )
@@ -520,9 +518,7 @@ def main():
         ax.set_xlabel('DDT(BDT)')
         ax.set_ylabel('Events')
         ax.legend()
-        plt.tight_layout()
-        plt.savefig('plots/DDT_sig_score_mz300.png')
-        plt.savefig('plots/DDT_sig_score_mz300.pdf')
+        save_plot(plt,'DDT_sig_score_mz300')
         plt.close()
  
         # Apply DDT > 0.0 for the different BDT score transformations
@@ -536,15 +532,11 @@ def main():
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
-        plt.tight_layout()
-        plt.savefig('plots/sig_mz300_events_vs_mT.png')
-        plt.savefig('plots/sig_mz300_events_vs_mT.pdf')
+        save_plot(plt,'sig_mz300_events_vs_mT')
         
         # log scale it
         ax.set_yscale('log')
-        plt.tight_layout()
-        plt.savefig('plots/log_sig_mz300_events_vs_mT.png')
-        plt.savefig('plots/log_sig_mz300_events_vs_mT.pdf')
+        save_plot(plt,'log_sig_mz300_events_vs_mT')
  
         # Do it again normalized to unit area
         fig, ax = plt.subplots(figsize=(10, 8))
@@ -557,9 +549,7 @@ def main():
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
         ax.legend()
-        plt.tight_layout()
-        plt.savefig('plots/norm_sig_mz300_events_vs_mT.png')
-        plt.savefig('plots/norm_sig_mz300_events_vs_mT.pdf')
+        save_plot(plt,'norm_sig_mz300_events_vs_mT')
         plt.close()
 
 if __name__ == '__main__':
