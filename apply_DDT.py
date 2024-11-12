@@ -28,7 +28,7 @@ import svj_ntuple_processing as svj
 
 np.random.seed(1001)
 
-from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion()
+from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion
 
 #------------------------------------------------------------------------------
 # Global variables and user input arguments -----------------------------------
@@ -39,8 +39,8 @@ training_features = []
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process some inputs.')
 
-    parser.add_argument('--bkg-files', default='data/bkg_20240718/Summer20UL*/QCD*.npz', help='Background data files (default is QCD only DDT)')
-    parser.add_argument('--sig-files', default='data/sig_20240718/sig_*/*.npz', help='Signal data files')
+    parser.add_argument('--bkg_files', default='data/bkg_20240718/Summer20UL*/QCD*.npz', help='Background data files (default is QCD only DDT)')
+    parser.add_argument('--sig_files', default='data/sig_20240718/sig_*/*.npz', help='Signal data files')
 
     # BDT and ddt model
     parser.add_argument('--bdt_file', default='models/svjbdt_obj_rev_version.json', help='BDT model file')
@@ -64,7 +64,6 @@ def parse_arguments():
     allowed_plots = ['2D_DDT_map', 'bkg_scores_mt', 'fom_significance', 'sig_mt_single_BDT', 'one_sig_mt_many_bdt']
 
     # Create the parser and add the plot argument
-    parser = argparse.ArgumentParser(description="Plot selection")
     parser.add_argument('--plot', nargs='*', type=str, default=[], choices=allowed_plots, help='Plots to make')
 
     # Add verbosity level argument
@@ -143,8 +142,8 @@ def main():
     # Parse arguments and take the results
     args = parse_arguments()
 
-    bkg-files = args.bkg-files
-    sig-files = args.sig-files
+    bkg_files = args.bkg_files
+    sig_files = args.sig_files
     model_file = args.bdt_file
     ddt_map_file = args.ddt_map_file
     lumi = args.lumi
@@ -156,13 +155,14 @@ def main():
     set_mpl_fontsize(18, 22, 26)
 
     # grab training features for specific input model
-    global training_features = read_training_features(model_file)
+    global training_features
+    training_features = read_training_features(model_file)
 
     # add ddt necessary variables in addition to the bdt input features
     all_features = training_features + ['pt', 'mt', 'rho', 'rt'] # rho is an important variable for applying the decorrelation
 
     # Grab the bkg data
-    bkg_cols = [Columns.load(f) for f in glob.glob(bkg-files)]
+    bkg_cols = [Columns.load(f) for f in glob.glob(bkg_files)]
     X, pT, mT, rho, bkg_weight = bdt_ddt_inputs(bkg_cols, lumi, all_features)
 
     # _____________________________________________
@@ -288,7 +288,7 @@ def main():
         # Group files by mass point
         masses = ['mMed-200', 'mMed-250', 'mMed-300', 'mMed-350', 'mMed-400', 'mMed-450', 'mMed-500', 'mMed-550']
         files_by_mass = {mass: [] for mass in masses}
-        for f in glob.glob(sig-files):
+        for f in glob.glob(sig_files):
             for mass in masses: 
                 if mass in f : files_by_mass[mass].append(f)
         # Load and combine data for each mass point
@@ -422,7 +422,7 @@ def main():
     if 'sig_mt_single_BDT' in plots :
 
         # grab signal data
-        sig_cols = [Columns.load(f) for f in glob.glob(sig-files)]
+        sig_cols = [Columns.load(f) for f in glob.glob(sig_files)]
 
         # make plotting objects
         fig, ax = plt.subplots(figsize=(10, 8))
@@ -472,7 +472,7 @@ def main():
     if 'one_sig_mt_many_bdt' in plots :
 
         # grab signal data
-        sig_cols = [Columns.load(f) for f in glob.glob(sig-files)]
+        sig_cols = [Columns.load(f) for f in glob.glob(sig_files)]
 
         # Loop over the mZ values and only grab the mZ = 300 value
         sig_col = None
