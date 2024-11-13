@@ -97,8 +97,10 @@ def bdt_ddt_inputs(col, lumi, all_features):
     weight = []
 
     # Apply the signal region
-    # should work on multiple cols    
-    col = apply_rt_signalregion(col)
+    if isinstance(col, list):
+        col = [apply_rt_signalregion(c) for c in col]
+    else:
+        col = apply_rt_signalregion(col)
 
     # Test if more than one column
     if isinstance(col,list):
