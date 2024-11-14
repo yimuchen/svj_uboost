@@ -39,12 +39,13 @@ training_features = []
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process some inputs.')
 
-    parser.add_argument('--bkg_files', default='data/bkg_20240718/Summer20UL*/QCD*.npz', help='Background data files (default is QCD only DDT)')
-    parser.add_argument('--sig_files', default='data/sig_20240718/sig_*/*.npz', help='Signal data files')
+    parser.add_argument('--bkg_files', default='data/bkg_20241030/Summer20UL*/QCD*.npz', help='Background data files (default is QCD only DDT)')
+    parser.add_argument('--sig_files', default='data/sig_20241030/sig_*/*.npz', help='Signal data files')
 
     # BDT and ddt model
     parser.add_argument('--bdt_file', default='models/svjbdt_obj_rev_version.json', help='BDT model file')
-    parser.add_argument('--ddt_map_file', default='models/ddt_obj_rev_version.json', help='DDT map file')
+    #parser.add_argument('--ddt_map_file', default='models/ddt_obj_rev_version.json', help='DDT map file')
+    parser.add_argument('--ddt_map_file', default='models/ddt_AN_v5.json', help='DDT map file')
 
     parser.add_argument('--lumi', type=float, default=137600, help='Luminosity')
 
@@ -87,8 +88,8 @@ def save_plot(plt, plt_name):
     Save the plots, save some lines of code
     '''
     plt.tight_layout()
-    plt.savefig(f'plots/{plt_name}.png', bbox_inches='tight')  
-    plt.savefig(f'plots/{plt_name}.pdf', bbox_inches='tight')  
+    plt.savefig(f'plots/{plt_name}.png')  
+    plt.savefig(f'plots/{plt_name}.pdf')  
 
 def bdt_ddt_inputs(col, lumi, all_features):
 
@@ -386,11 +387,13 @@ def main():
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('FoM')
         ax.set_xlabel('BDT cut value')
-        outfile = f'metrics_bdt_FOM'
+        outfile = f'plots/metrics_bdt_FOM'
         if verbosity > 0 : print(outfile, ".pdf and .png")
         
         # Save the plot as a PDF and png file
-        save_plot(plt,outfile)
+        # cannot use layout_tight, will cause saving errors
+        plt.savefig(outfile+".pdf", bbox_inches='tight')
+        plt.savefig(outfile+".png", bbox_inches='tight')
         plt.close()
  
         # sort the best bdt cuts
@@ -413,7 +416,9 @@ def main():
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('Best BDT Cut Value')
         ax.set_xlabel("m(Z')")
-        save_plot(plt,"best_bdt_cuts")
+        # cannot use layout_tight, will cause saving errors
+        plt.savefig("plots/best_bdt_cuts.pdf", bbox_inches='tight')
+        plt.savefig("plots/best_bdt_cuts.png", bbox_inches='tight')
         plt.close()
 
         
