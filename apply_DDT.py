@@ -44,7 +44,6 @@ def parse_arguments():
 
     # BDT and ddt model
     parser.add_argument('--bdt_file', default='models/svjbdt_obj_rev_version.json', help='BDT model file')
-    #parser.add_argument('--ddt_map_file', default='models/ddt_obj_rev_version.json', help='DDT map file')
     parser.add_argument('--ddt_map_file', default='models/ddt_AN_v5.json', help='DDT map file')
 
     parser.add_argument('--lumi', type=float, default=137600, help='Luminosity')
