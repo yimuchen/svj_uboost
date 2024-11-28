@@ -989,7 +989,7 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     rhobin = np.clip(1 + np.round(rhobin_float).astype(int), 0, nbins)
 
     # Calculate the DDT-transformed variable by subtracting the 
-    # decorelation function (smoothed variable map) from the original variable
+    # decorrelation function (smoothed variable map) from the original variable
     varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
     # Return the DDT-transformed variable
     return varDDT

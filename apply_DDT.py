@@ -59,7 +59,7 @@ def parse_arguments():
     # and another common set for plots is [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
 
-    # Allowed plots: 2D DDT maps, Background Scorves vs MT, FOM significance, 
+    # Allowed plots: 2D DDT maps, Background Scores vs MT, FOM significance, 
     #                Signal mt spectrums for one BDT working point,  one signal mt spectrum for many BDT working points
     allowed_plots = ['2D_DDT_map', 'bkg_scores_mt', 'fom_significance', 'sig_mt_single_BDT', 'one_sig_mt_many_bdt']
 
