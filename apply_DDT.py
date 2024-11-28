@@ -50,7 +50,7 @@ def parse_arguments():
 
     # The default value of 0.65 was the optimal cut value determined. If the training or selection changes, 
     # the value should be adapted accordingly
-    parser.add_argument('--sig_bdt_cut', type=float, default=0.65, help='BDT cut for signal plotting (current optimal cut is 0.65)')
+    parser.add_argument('--sig_bdt_cut', type=float, default=0.67, help='BDT cut for signal plotting (current optimal cut is 0.65)')
 
     # Choose the BDT cut values that you want to make for the DDT
     # or that are in the DDT you are loading
