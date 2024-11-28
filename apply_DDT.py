@@ -82,13 +82,13 @@ def FOM(s, b):
     FOM = np.sqrt(2*((s+b)*np.log(1+s/b)-s))
     return FOM
 
-def save_plot(plt, plt_name):
+def save_plot(plt, plt_name, flag_tight_layout=True, **kwargs):
     '''
     Save the plots, save some lines of code
     '''
-    plt.tight_layout()
-    plt.savefig(f'plots/{plt_name}.png')  
-    plt.savefig(f'plots/{plt_name}.pdf')  
+    if flag_tight_layout == True: plt.tight_layout()
+    plt.savefig(f'plots/{plt_name}.png', **kwargs)  
+    plt.savefig(f'plots/{plt_name}.pdf', **kwargs)  
 
 def bdt_ddt_inputs(col, lumi, all_features):
 
@@ -386,13 +386,11 @@ def main():
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('FoM')
         ax.set_xlabel('BDT cut value')
-        outfile = f'plots/metrics_bdt_FOM'
-        if verbosity > 0 : print(outfile, ".pdf and .png")
+        if verbosity > 0 : print("plotting the FOM for the BDT cuts")
         
         # Save the plot as a PDF and png file
         # cannot use layout_tight, will cause saving errors
-        plt.savefig(outfile+".pdf", bbox_inches='tight')
-        plt.savefig(outfile+".png", bbox_inches='tight')
+        save_plot(plt, 'metrics_bdt_FOM', flag_layout_tight=False, bbox_inches='tight')
         plt.close()
  
         # sort the best bdt cuts
@@ -416,8 +414,7 @@ def main():
         ax.set_ylabel('Best BDT Cut Value')
         ax.set_xlabel("m(Z')")
         # cannot use layout_tight, will cause saving errors
-        plt.savefig("plots/best_bdt_cuts.pdf", bbox_inches='tight')
-        plt.savefig("plots/best_bdt_cuts.png", bbox_inches='tight')
+        save_plot(plt, 'best_bdt_cuts', flag_layout_tight=False, bbox_inches='tight')
         plt.close()
 
         
