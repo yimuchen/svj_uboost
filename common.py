@@ -1029,7 +1029,7 @@ def split_bdt(sel):
         raise InvalidSelectionException(sel=selection)
     return parts[1]
 
-def calc_bdt_scores(X, model_file=bdt_model_file)
+def calc_bdt_scores(X, model_file=bdt_model_file):
     import xgboost as xgb
 
     # Load the model and get the predictions

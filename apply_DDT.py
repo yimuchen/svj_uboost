@@ -436,7 +436,7 @@ def main():
             # _____________________________________________
             # Open the trained models and get the scores
  
-            sig_score = calc_bdt_score(sig_X, model_file=model_file) 
+            sig_score = calc_bdt_scores(sig_X, model_file=model_file) 
   
             # _____________________________________________
             # Apply the DDT  to the signal
