@@ -1029,22 +1029,28 @@ def split_bdt(sel):
         raise InvalidSelectionException(sel=selection)
     return parts[1]
 
-def apply_bdtbased(cols,wp,lumi):
+def calc_bdt_scores(X, model_file=bdt_model_file)
     import xgboost as xgb
 
+    # Load the model and get the predictions
+    xgb_model = xgb.XGBClassifier()
+    xgb_model.load_model(model_file)
+    with time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
+        score = xgb_model.predict_proba(X)[:,1]
+    return score
+
+def apply_bdtbased(cols,wp,lumi):
     cols = apply_rt_signalregion(cols)
 
-    # Grab the input features and weights
+    # Grab the weights and scores
     X = []
+    score = {}
     weight = []
 
     # Get the features for the bkg samples
-    X = cols.to_numpy(bdt_features)
-    # Load the model and get the predictions
-    xgb_model = xgb.XGBClassifier()
-    xgb_model.load_model(bdt_model_file)
-    with time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
-        score = xgb_model.predict_proba(X)[:,1]
+    X = cols.to_numpy(training_features)
+    # Calculate bdt scores and event weights
+    score = calc_bdt_scores(X) 
     weight = get_event_weight(cols, lumi)
 
     # Apply the DDT

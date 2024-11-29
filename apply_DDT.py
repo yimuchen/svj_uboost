@@ -28,7 +28,7 @@ import svj_ntuple_processing as svj
 
 np.random.seed(1001)
 
-from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion
+from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion, calc_bdt_scores
 
 #------------------------------------------------------------------------------
 # Global variables and user input arguments -----------------------------------
@@ -171,11 +171,7 @@ def main():
     # Open the trained models and get the scores
 
     bkg_score = {}
-
-    xgb_model = xgb.XGBClassifier()
-    xgb_model.load_model(model_file)
-    with time_and_log(f'Calculating xgboost scores for {model_file}...'):
-        bkg_score = xgb_model.predict_proba(X)[:,1]
+    bkg_score = calc_bdt_scores(X, model_file=model_file)
 
     # _____________________________________________
     # Calculate bkg efficiencies for the DDT
@@ -320,11 +316,8 @@ def main():
         
             # _____________________________________________
             # Open the trained models and get the scores
-        
-            xgb_model = xgb.XGBClassifier()
-            xgb_model.load_model(model_file)
-            with time_and_log(f'Calculating xgboost scores for {model_file}...'):
-                sig_score = xgb_model.predict_proba(sig_X)[:,1]
+       
+            sig_score = calc_bdt_scores(sig_X, model_file=model_file) 
         
             # _____________________________________________
             # Apply the DDT and calculate FOM
@@ -442,11 +435,8 @@ def main():
 
             # _____________________________________________
             # Open the trained models and get the scores
-  
-            xgb_model = xgb.XGBClassifier()
-            xgb_model.load_model(model_file)
-            with time_and_log(f'Calculating xgboost scores for {model_file}...'):
-                sig_score = xgb_model.predict_proba(sig_X)[:,1]
+ 
+            sig_score = calc_bdt_score(sig_X, model_file=model_file) 
   
             # _____________________________________________
             # Apply the DDT  to the signal
@@ -497,11 +487,8 @@ def main():
   
         # _____________________________________________
         # Open the trained models and get the scores
-  
-        xgb_model = xgb.XGBClassifier()
-        xgb_model.load_model(model_file)
-        with time_and_log(f'Calculating xgboost scores for {model_file}...'):
-            sig_score = xgb_model.predict_proba(sig_X)[:,1]
+ 
+        sig_score = calc_bdt_scores(sig_X, model_file=model_file) 
   
         # _____________________________________________
         # Apply the DDT  to the signal at all the cut values
