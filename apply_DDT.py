@@ -472,7 +472,9 @@ def main():
         for col in sig_cols:
             mz = col.metadata['mz']
             if mz == 300 : sig_col = col
-        if sig_col == None : print("The mZ' 300 file doesn't exist, please make sure you provide it in order to make the one sig plots")
+        if sig_col == None :
+            raise FileNotFoundError("The mZ' 300 file doesn't exist. Please make sure you provide it in order to make the one sigma plots.")
+
 
         # make plotting objects
         fig, ax = plt.subplots(figsize=(10, 8))
