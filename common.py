@@ -1048,7 +1048,7 @@ def apply_bdtbased(cols,wp,lumi):
     weight = []
 
     # Get the features for the bkg samples
-    X = cols.to_numpy(training_features)
+    X = cols.to_numpy(bdt_features)
     # Calculate bdt scores and event weights
     score = calc_bdt_scores(X) 
     weight = get_event_weight(cols, lumi)
