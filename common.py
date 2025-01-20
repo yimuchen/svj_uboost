@@ -6,6 +6,9 @@ import svj_ntuple_processing as svj
 from scipy.ndimage import gaussian_filter
 import requests
 import numpy as np
+from datetime import datetime
+import json
+
 np.random.seed(1001)
 
 
@@ -855,41 +858,140 @@ def read_training_features(model_file):
         return model['features']
 
 def rhoddt_windowcuts(mt, pt, rho):
+    '''
+    Basically a tool to constantly check the kinematics during the DDT processes
+    '''
     cuts = (mt>180) & (mt<650) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
     return cuts
 
 def varmap(mt, pt, rho, var, weight, percent):
+    '''
+    2D map that basically is the DDT
+    It decorrelates var with respect to mt using a 2D in pt rho space for a given efficiency (percent)
+    '''
+    # Apply the rho-ddt window cuts to the data
     cuts = rhoddt_windowcuts(mt, pt, rho)
-    C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
-    w, h = 50, 50
-    VAR_map      = [[0 for x in range(w)] for y in range(h)]
-    VAR = var[cuts]
-    for i in range(len(RHO_edges)-1):
-       for j in range(len(PT_edges)-1):
-          CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
-          if len(VAR[CUT])==0: continue
-          if len(VAR[CUT])>0:
-             VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
 
+    # Create a 2D histogram of rho and pt, weighted by the event weights
+    C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
+
+    # Initialize a 2D map for the variable
+    w, h = 50, 50
+    VAR_map = [[0 for x in range(w)] for y in range(h)]
+
+    # Get the variable for the data that passed the cuts
+    VAR = var[cuts]
+
+    # Loop over the bins in rho and pt
+    for i in range(len(RHO_edges)-1):
+        for j in range(len(PT_edges)-1):
+            # Apply cuts to select data in the current rho and pt bin
+            CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
+
+            # If there is no data in this bin, skip it
+            if len(VAR[CUT])==0: continue
+
+            # If there is data in this bin, calculate the percentile of the variable
+            if len(VAR[CUT])>0:
+                VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
+
+    # Smooth the variable map using a Gaussian filter
     VAR_map_smooth = gaussian_filter(VAR_map,1)
+
+    # Return the smoothed variable map, along with the rho and pt edges
     return VAR_map_smooth, RHO_edges, PT_edges
 
-def ddt(mt, pt, rho, var, weight, percent):
+# Class that converts numpy arrays into list so they can be easily stored in json files
+class NumpyArrayEncoder(json.JSONEncoder):
+    """Custom encoder for numpy data types."""
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NumpyArrayEncoder, self).default(obj)
+
+def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
+    '''
+    This function creates the dictionary of DDT 2D maps for a range of
+        cut_vals at corresponding bkg efficiencies given as percents
+    The DDT 2D map at each cut_val contains: var_map_smooth, RHO_edges, and PT_edges, 
+        The inputs to the function are (mt, pt, rho, var, weight, percents, cut_vals, ddt_name).
+    In essense the DDT is a 2D function of rho and pt that
+        is calculated using the background data for the variable
+        that you want to decorrelate
+    '''
+
+    # Apply the rho-ddt window cuts to the data
     cuts = rhoddt_windowcuts(mt, pt, rho)
-    var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent)
+
+    # Initialize the dictionary
+    var_dict = {}
+
+    # Loop over the values in cut_vals and percents
+    for cut_val, percent in zip(cut_vals, percents):
+
+        print("Creating DDT 2D map for a cut value of ", cut_val, " and an efficiency (percent) of ", percent)
+
+        # Generate a smoothed variable map, along with the rho and pt edges
+        var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent)
+
+        # Store the results in the dictionary
+        var_dict[str(cut_val)] = (var_map_smooth, RHO_edges, PT_edges)
+
+    # Save the dictionary to an json file
+    if ddt_name is None:
+        ddt_name = 'ddt_' + str(var) + '_' + datetime.now().strftime('%Y%m%d') + '.json'
+    with open(ddt_name, 'w') as f:
+        json.dump(var_dict, f, cls=NumpyArrayEncoder)
+
+def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
+    '''
+    This is a function to apply a design decorrelated tagger 
+        it decorrelates 'var' with respect to mt using 
+        rho (a function of mass) and pt. At a given cut_val for
+        a given DDT map inside of an npz file with the name 'ddt_name'
+    The inputs to the function are (mt, pt, rho, var, weight, cut_val) 
+        where cut_val will refer to the value of the key inside of dictionary 
+        with the proper var_map_smooth, RHO_edges, and PT_edges to use.
+    '''
+
+    # Check if ddt_name exists
+    if not osp.exists(ddt_name):
+        raise FileNotFoundError(f"The file {ddt_name} does not exist.")
+
+    # Load the dictionary from the npz file
+    with open(ddt_name, 'r') as f:
+        var_dict = json.load(f)
+
+    # Check if cut_val exists in the dictionary
+    if str(cut_val) not in var_dict:
+        raise KeyError(f"The key {cut_val} does not exist in the dictionary.")
+
+    # Get the var_map_smooth, RHO_edges, and PT_edges for the given cut_val
+    var_map_smooth, RHO_edges, PT_edges = var_dict[str(cut_val)]
+    var_map_smooth = np.array(var_map_smooth)
+    RHO_edges = np.array(RHO_edges)
+    PT_edges = np.array(PT_edges)
+
+    # Apply the rho-ddt window cuts to the data
+    cuts = rhoddt_windowcuts(mt, pt, rho)
+
+    # Define the number of bins and the min/max values for pt and rho
     nbins = 49
     Pt_min, Pt_max = min(PT_edges), max(PT_edges)
     Rho_min, Rho_max = min(RHO_edges), max(RHO_edges)
 
+    # Calculate the floating point bin indices for pt and rho
     ptbin_float  = nbins*(pt-Pt_min)/(Pt_max-Pt_min) 
     rhobin_float = nbins*(rho-Rho_min)/(Rho_max-Rho_min)
 
-    #ptbin         = np.clip(1 + ptbin_float.astype(int),   0, nbins)
-    #rhobin        = np.clip(1 + rhobin_float.astype(int),  0, nbins)
+    # Convert the floating point bin indices to integer, and clip them to the range [0, nbins]
     ptbin  = np.clip(1 + np.round(ptbin_float).astype(int), 0, nbins)
     rhobin = np.clip(1 + np.round(rhobin_float).astype(int), 0, nbins)
 
+    # Calculate the DDT-transformed variable by subtracting the 
+    # decorrelation function (smoothed variable map) from the original variable
     varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
+    # Return the DDT-transformed variable
     return varDDT
 
 def apply_hemveto(cols):
@@ -910,13 +1012,10 @@ def apply_cutbased(cols):
 
 # Relative path to the BDT
 # This specific BDT was chosen to be used during the L3 review
-bdt_model_file = '/uscms/home/bregnery/nobackup/SVJ_mass_bdt_studies/svj_uboost/models/svjbdt_Feb28_lowmass_iterative_qcdtt_100p38.json'
+bdt_model_file = 'models/svjbdt_obj_rev_version.json'
+ddt_map_file = 'models/ddt_AN_v5.json'
 # make sure bdt features match the choosen file
-bdt_features = [
-    'girth', 'ptd', 'axismajor', 'axisminor',
-    'ecfm2b1', 'ecfd2b1', 'ecfc2b1', 'ecfn2b2', 'metdphi',
-    'ak15_chad_ef', 'ak15_nhad_ef', 'ak15_elect_ef', 'ak15_muon_ef', 'ak15_photon_ef',
-]
+bdt_features = read_training_features(bdt_model_file)
 
 def split_bdt(sel):
     parts = sel.split('=')
@@ -928,37 +1027,37 @@ def split_bdt(sel):
             print(f"Invalid number {parts[1]} following 'bdt='.")
     else:
         raise InvalidSelectionException(sel=selection)
+    return parts[1]
 
-def apply_bdtbased(cols,wp,lumi):
+def calc_bdt_scores(X, model_file=bdt_model_file):
     import xgboost as xgb
 
+    # Load the model and get the predictions
+    xgb_model = xgb.XGBClassifier()
+    xgb_model.load_model(model_file)
+    with time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
+        score = xgb_model.predict_proba(X)[:,1]
+    return score
+
+def apply_bdtbased(cols,wp,lumi):
     cols = apply_rt_signalregion(cols)
 
-    # Grab the input features and weights
+    # Grab the weights and scores
     X = []
+    score = {}
     weight = []
 
     # Get the features for the bkg samples
     X = cols.to_numpy(bdt_features)
-    # Load the model and get the predictions
-    xgb_model = xgb.XGBClassifier()
-    xgb_model.load_model(bdt_model_file)
-    with time_and_log(f'Calculating xgboost scores for {bdt_model_file}...'):
-        score = xgb_model.predict_proba(X)[:,1]
-    weight = (cols.xs / cols.cutflow['raw']) * lumi * cols.arrays['puweight']
-    print('weight length: ', len(weight), ' weight: ', weight)
-
-    # Obtain the efficiencies for the desired BDT working point
-    # bdt_cut is the user input bdt_cut
-    bdt_Hist=np.histogram(score[score>bdt_cut],weights=weight[score>bdt_cut]*len(score))
-    bdt_Hist_nom=np.histogram(score[score>0.0],weights=weight[score>0.0]*len(score))
-    eff = sum(bdt_Hist[0])/sum(bdt_Hist_nom[0])
+    # Calculate bdt scores and event weights
+    score = calc_bdt_scores(X) 
+    weight = get_event_weight(cols, lumi)
 
     # Apply the DDT
     mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
     pT = cols.to_numpy(['pt']).ravel()
     rho = cols.to_numpy(['rho']).ravel()
-    bdt_ddt_score = ddt(mT, pT, rho, score, weight, eff*100)
+    bdt_ddt_score = calculate_varDDT(mT, pT, rho, score, weight, wp, ddt_map_file)
 
     # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
     cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection

@@ -140,7 +140,7 @@ def build_histogram(args=None):
         if selection=='cutbased':
             cols = common.apply_cutbased(cols)
         elif selection.startswith('bdt='):
-            wp = split_bdt(selection)
+            wp = common.split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi)
         elif selection=='preselection':
             pass

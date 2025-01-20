@@ -115,6 +115,19 @@ python evaluate.py
 
 The paths to the model are currently hard-coded! Things are still too fluid for a good abstraction.
 
+### Create and apply a DDT
+
+The boosted search is using a DDT to decorrelate the BDT. This DDT can be created, evaluated, and studied using the following commands:
+
+```bash
+# Create the BDT on QCD background and plot 2D maps
+python apply_DDT.py --ddt_map_file models/<new_file_name>.json --plot 2D_DDT_map
+# Re create 2D plots and determine the optimal BDT working point using the full background
+python apply_DDT.py --ddt_map_file models/<new_file_name>.json --bkg_files "data/bkg_20241030/Summer20UL*/*.npz" --plot 2D_DDT_map fom_significance
+# Plot mt score comparisons for a select few bdt working points using the full bkg
+python apply_DDT.py --plot bkg_scores_mt sig_mt_single_BDT one_sig_mt_many_bdt --bkg_files "data/bkg_20241030/Summer20UL*/*.npz" --bdt_cuts 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
+```
+
 ### Overfitting check: Kolmogorov-Smirnov test
 
 ```bash
@@ -190,3 +203,4 @@ Currently, this function only handles one signal model at a time.
 It will be expanded to summarize across all signal models once the full scans are available.
 
 And that's it for this part. To use these histograms for fits and limit setting, see the [svj_limits](https://github.com/boostedsvj/svj_limits) repo.
+
