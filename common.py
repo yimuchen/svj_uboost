@@ -658,7 +658,8 @@ class MTHistogram(Histogram):
 
     def __init__(self, mt, weights=None):
         vals = np.histogram(mt, self.bins, weights=weights)[0].astype(float)
-        errs = np.sqrt(np.histogram(mt, self.bins, weights=weights**2)[0].astype(float))
+        weights2 = weights if weights is None else weights**2
+        errs = np.sqrt(np.histogram(mt, self.bins, weights=weights2)[0].astype(float))
         super().__init__(self.bins, vals, errs)
 
 
