@@ -142,6 +142,9 @@ def build_histogram(args=None):
         elif selection.startswith('bdt='):
             wp = common.split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi)
+        # control regions
+        elif selection=='cutbasedCR':
+            cols = common.apply_cutbasedCR(cols)
         elif selection=='preselection':
             pass
         else:
