@@ -487,7 +487,7 @@ def get_event_weight(obj,lumi=None):
         raise RuntimeError(f'Unknown weight method for object of class {type(obj).__name__}')
 
 def get_single_event_weight(weights):
-    if isinstance(weights,float): return weights
+    if isinstance(weights,float) or isinstance(weights,int): return weights
     elif len(weights)>0: return weights[0]
     else: return 1.0
 

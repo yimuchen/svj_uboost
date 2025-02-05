@@ -341,7 +341,7 @@ def merge_histograms():
             cat : None,
         }
         for file in files:
-            mths[cat] = add_hist(mths[cat],get_hists(file)[default])
+            mths[cat] = add_hists(mths[cat],get_hists(file)[default])
         assign_metadata(mths[cat])
         write(mths,cat)
 
