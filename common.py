@@ -1017,6 +1017,11 @@ def apply_cutbasedCR(cols):
     cols.cutflow['cutbasedCR'] = len(cols)
     return cols
 
+def apply_cutbasedCRloose(cols):
+    cols = cols.select(cols.arrays['ecfm2b1'] < 0.032)
+    cols.cutflow['cutbasedCRloose'] = len(cols)
+    return cols
+
 # Relative path to the BDT
 # This specific BDT was chosen to be used during the L3 review
 bdt_model_file = 'models/svjbdt_obj_rev_version.json'

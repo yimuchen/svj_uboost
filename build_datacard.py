@@ -145,6 +145,8 @@ def build_histogram(args=None):
         # control regions
         elif selection=='cutbasedCR':
             cols = common.apply_cutbasedCR(cols)
+        elif selection=='cutbasedCRloose':
+            cols = common.apply_cutbasedCRloose(cols)
         elif selection=='preselection':
             pass
         else:
