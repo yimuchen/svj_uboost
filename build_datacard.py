@@ -147,6 +147,10 @@ def build_histogram(args=None):
             cols = common.apply_cutbasedCR(cols)
         elif selection=='cutbasedCRloose':
             cols = common.apply_cutbasedCRloose(cols)
+        elif selection=='cutbasedAnti':
+            cols = common.apply_cutbasedAnti(cols)
+        elif selection=='cutbasedAntiloose':
+            cols = common.apply_cutbasedAntiloose(cols)
         elif selection=='preselection':
             pass
         else:
