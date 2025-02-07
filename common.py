@@ -1022,15 +1022,15 @@ def apply_cutbasedCRloose(cols):
     cols.cutflow['cutbasedCRloose'] = len(cols)
     return cols
 
-def apply_cutbasedAnti(cols):
+def apply_anticutbased(cols):
     cols = apply_rt_signalregion(cols)
     cols = cols.select(cols.arrays['ecfm2b1'] < 0.09)
-    cols.cutflow['cutbasedAnti'] = len(cols)
+    cols.cutflow['anticutbased'] = len(cols)
     return cols
 
-def apply_cutbasedAntiloose(cols):
+def apply_antiloosecutbased(cols):
     cols = cols.select(cols.arrays['ecfm2b1'] < 0.09)
-    cols.cutflow['cutbasedAntiloose'] = len(cols)
+    cols.cutflow['antiloosecutbased'] = len(cols)
     return cols
 
 # Relative path to the BDT
@@ -1062,7 +1062,7 @@ def calc_bdt_scores(X, model_file=bdt_model_file):
         score = xgb_model.predict_proba(X)[:,1]
     return score
 
-def apply_bdtbased(cols,wp,lumi):
+def apply_bdtbased(cols,wp,lumi,anti=False):
     cols = apply_rt_signalregion(cols)
 
     # Grab the weights and scores
@@ -1083,8 +1083,13 @@ def apply_bdtbased(cols,wp,lumi):
     bdt_ddt_score = calculate_varDDT(mT, pT, rho, score, weight, wp, ddt_map_file)
 
     # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
-    cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
-    cols.cutflow['ddt(bdt)'] = len(cols)
+    # or < 0.0 for anti-tag CR
+    if anti:
+        cols = cols.select(bdt_ddt_score < 0.0) # mask for the selection
+        cols.cutflow['ddt(antibdt)'] = len(cols)
+    else:
+        cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
+        cols.cutflow['ddt(bdt)'] = len(cols)
     return cols
 
 class InvalidSelectionException(Exception):
