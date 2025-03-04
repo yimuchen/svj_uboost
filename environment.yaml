@@ -1,0 +1,21 @@
+name: svj_uboost
+channels:
+   - conda-forge
+dependencies:
+  - python=3.10
+  - xgboost
+  - pandas
+  - requests
+  - numpy
+  - matplotlib
+  - mplhep
+  - tqdm
+  - numba
+  - hep_ml
+  - pip
+  - pip:
+    - jdlfactory@git+https://github.com/boostedsvj/jdlfactory
+    - seutils@git+https://github.com/boostedsvj/seutils
+    - svj_ntuple_processing@git+https://github.com/boostedsvj/svj_ntuple_processing
+
+
