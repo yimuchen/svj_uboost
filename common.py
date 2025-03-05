@@ -652,27 +652,30 @@ class VarArrHistogram(Histogram):
     It will also carry around the current and default binning information
     """
     default_binning = (10,0,100) # Width, min, max
-    bins = _create_binning(*default_binning) # List of bin values
+    bins = None # List of bin values
+    name = '' # Name of variable to use
 
     @property
     def non_standard_binning(self):
-        if len(self.bins) != self.create_default_binning():
+        if self.bins is None:
+            self.bins = self.create_binning(*self.default_binning)
+        if len(self.bins) != self.create_binning(*self.default_binning):
             return False
-        if all(np.isclose(self.bins, self.create_default_binning())):
+        if not all(np.isclose(self.bins, self.create_binning(*self.default_binning))):
             return False
         return True
 
-    @property
-    def default_binw(self):
-        return self.default_binning[0]
+    @classmethod
+    def default_binw(cls)->float:
+        return cls.default_binning[0]
 
-    @property
-    def default_binmin(self):
-        return self.default_binning[1]
+    @classmethod
+    def default_binmin(cls)->float:
+        return cls.default_binning[1]
 
-    @property
-    def default_binmax(self):
-        return self.default_binning[2]
+    @classmethod
+    def default_binmax(cls)->float:
+        return cls.default_binning[2]
 
     @classmethod
     def create_binning(cls, binw, left, right):
@@ -683,7 +686,10 @@ class VarArrHistogram(Histogram):
     def empty(cls):
         return Histogram(cls.bins)
 
-    def __init__(self, var_arr, weights=None):
+    def __init__(self, cols, weights=None):
+        if self.bins is None:
+            self.bins = self.create_binning(*self.default_binning)
+        var_arr = cols.to_numpy([self.name]).flatten()
         vals = np.histogram(var_arr, self.bins, weights=weights)[0].astype(float)
         weights2 = weights if weights is None else weights **2
         errs = np.sqrt(np.histogram(var_arr, self.bins, weights=weights2)[0].astype(float))
@@ -692,11 +698,31 @@ class VarArrHistogram(Histogram):
 
 # List of variables with defined binning
 class MTHistogram(VarArrHistogram):
+    name='mt'
     default_binning = (10, 130, 650)
 
+class ECFN2B2Histogram(VarArrHistogram):
+    name = 'ecfn2b2'
+    default_binning = (0.02, 0, 0.5)
+
+class ECFM2B1Histogram(VarArrHistogram):
+    name = 'ecfm2b1'
+    default_binning = (0.01,0,0.2)
+
+class RTHistogram(VarArrHistogram):
+    name = 'rt'
+    default_binning = (0.1, 1.0, 2.5)
+
+class METDPhiHistogram(VarArrHistogram):
+    name = 'metdphi'
+    default_binning = (0.1, 0, 3.1)
 
 registered_varhists = {
     'mt': MTHistogram,
+    "ecfn2b2": ECFN2B2Histogram,
+    "ecfm2b1": ECFM2B1Histogram,
+    'rt': RTHistogram,
+    'metdphi': METDPhiHistogram,
 }
 
 
