@@ -689,11 +689,16 @@ class VarArrHistogram(Histogram):
     def __init__(self, cols, weights=None):
         if self.bins is None:
             self.bins = self.create_binning(*self.default_binning)
-        var_arr = cols.to_numpy([self.name]).flatten()
+        var_arr = self._create_var_arry(cols)
         vals = np.histogram(var_arr, self.bins, weights=weights)[0].astype(float)
         weights2 = weights if weights is None else weights **2
         errs = np.sqrt(np.histogram(var_arr, self.bins, weights=weights2)[0].astype(float))
         super().__init__(self.bins, vals, errs)
+
+    def _create_var_arry(cols):
+        """Method for creating the values array used to fill the histogram"""
+        return cols.to_numpy([self.name]).flatten()
+
 
 
 # List of variables with defined binning
