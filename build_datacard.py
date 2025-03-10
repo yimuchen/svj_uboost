@@ -289,27 +289,28 @@ def build_histogram(args=None):
 
 @scripter
 def build_all_histograms():
-    change_bin_width()
     # Read from sys.argv
     selection = common.pull_arg('selection', type=str).selection
+    hist_var_list = common.pull_arg("--hist_var_list", type=str, nargs='+', default=['mt']).hist_var_list
     fullyear = common.pull_arg('--fullyear', action="store_true", help='treat 2018 as one year instead of splitting into pre and post').fullyear
     skimdir = common.pull_arg('skimdir', type=str).skimdir
 
     skims = expand_wildcards(skimdir)
     for skim in skims:
-        for hist_var in ['mt']:
+        for hist_var in hist_var_list:
+            change_bin_width(hist_var)
             build_histogram((selection, hist_var, None, None, fullyear, skim))
 
 @scripter
 def merge_histograms():
-    change_bin_width()
     selection = common.pull_arg('selection', type=str).selection
-    hist_var = common.pull_arg("hist_var", type=str,default='mt').hist_var
     histdir = common.pull_arg('histdir', type=str).histdir
+    hist_var = common.pull_arg("--hist_var", type=str,default='mt').hist_var
     cat = common.pull_arg('--cat', type=str, required=True, choices=['sig','bkg','data']).cat
     years = common.pull_arg('--years', type=str, default=["2016","2017","2018PRE","2018POST"], nargs='*').years
     if histdir[-1]!='/': histdir += '/'
 
+    change_bin_width(hist_var)
     def get_files(samples,years):
         files = []
         for year in years:
