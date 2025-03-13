@@ -659,11 +659,11 @@ class VarArrHistogram(Histogram):
     def non_standard_binning(self):
         if self.bins is None:
             self.bins = self.create_binning(*self.default_binning)
-        if len(self.bins) != self.create_binning(*self.default_binning):
-            return False
+        if len(self.bins) != len(self.create_binning(*self.default_binning)):
+            return True
         if not all(np.isclose(self.bins, self.create_binning(*self.default_binning))):
-            return False
-        return True
+            return True
+        return False
 
     @classmethod
     def default_binw(cls)->float:
@@ -695,7 +695,7 @@ class VarArrHistogram(Histogram):
         errs = np.sqrt(np.histogram(var_arr, self.bins, weights=weights2)[0].astype(float))
         super().__init__(self.bins, vals, errs)
 
-    def _create_var_arry(cols):
+    def _create_var_arry(self,cols):
         """Method for creating the values array used to fill the histogram"""
         return cols.to_numpy([self.name]).flatten()
 

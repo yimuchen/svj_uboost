@@ -52,8 +52,6 @@ def check_rebin(hist,name, hist_var):
 
 def rebin_dict(hists, hist_var):
     VarHistogram = common.registered_varhists[hist_var]
-    if not VarHistogram.non_standard_binning:
-        return hists
     for key in hists:
         if isinstance(hists[key],list):
             for i,entry in enumerate(hists[key]):
@@ -67,9 +65,7 @@ def rebin_dict(hists, hist_var):
 
 def rebin_name(outfile, hist_var):
     VarHistogram = common.registered_varhists[hist_var]
-    if not VarHistogram.non_standard_binning:
-        return hists
-    if VarHistogram.non_standard_binning:
+    if VarHistogram.non_standard_binning == True:
         binw = VarHistogram.bins[1] - VarHistogram.bins[0]
         left = VarHistogram.bins[0]
         right = VarHistogram.bins[-1]
@@ -162,12 +158,8 @@ def build_histogram(args=None):
             cols = common.apply_bdtbased(cols,wp,lumi,anti=True)
         elif selection=='preselection':
             pass
-        elif selection == "preselection_minus":
-            # TODO: Currently having a rough patch of existing logic
-            # Update to actually have this work properly
-            # cols = svj.filter_preselection(cols, skip_cut=[hist_var])
-            if hist_var != 'rt':
-                cols = common.apply_rt_signalregion(cols)
+        elif selection=="preselection_minus":
+            pass
         else:
             raise common.InvalidSelectionException(sel=selection)
         return cols
@@ -208,7 +200,7 @@ def build_histogram(args=None):
     hist_central.metadata.update(metadata)
     hist_variants['central'] = hist_central
 
-    if metadata["sample_type"]=="sig":
+    if metadata["sample_type"]=="sig" and selection!="preselection_minus":
         # Scale
         good_scales = np.array([0,1,2,3,4,6,8])
         scale_weight = cen_columns.to_numpy(['scaleweights'])
@@ -357,7 +349,6 @@ def merge_histograms():
         "sig": ['SVJ'],
     }
     files = get_files(samples[cat],years)
-
     default = 'central'
     if cat=="data":
         # just add them all up
