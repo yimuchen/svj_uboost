@@ -137,7 +137,8 @@ def build_histogram(args=None):
         elif year=="2018POST":
             if metadata["sample_type"]=="data":
                 cols = cols.select(cols.arrays['run']>=startHEM)
-            cols = common.apply_hemveto(cols)
+            if selection != "preselection_minus":
+                cols = common.apply_hemveto(cols)
         # signal region
         if selection=='cutbased':
             cols = common.apply_cutbased(cols)
