@@ -487,7 +487,7 @@ def get_event_weight(obj,lumi=None):
         raise RuntimeError(f'Unknown weight method for object of class {type(obj).__name__}')
 
 def get_single_event_weight(weights):
-    if isinstance(weights,float): return weights
+    if isinstance(weights,float) or isinstance(weights,int): return weights
     elif len(weights)>0: return weights[0]
     else: return 1.0
 
@@ -658,7 +658,8 @@ class MTHistogram(Histogram):
 
     def __init__(self, mt, weights=None):
         vals = np.histogram(mt, self.bins, weights=weights)[0].astype(float)
-        errs = np.sqrt(np.histogram(mt, self.bins, weights=weights**2)[0].astype(float))
+        weights2 = weights if weights is None else weights**2
+        errs = np.sqrt(np.histogram(mt, self.bins, weights=weights2)[0].astype(float))
         super().__init__(self.bins, vals, errs)
 
 
@@ -1010,6 +1011,28 @@ def apply_cutbased(cols):
     cols.cutflow['cutbased'] = len(cols)
     return cols
 
+def apply_cutbasedCR(cols):
+    cols = apply_rt_signalregion(cols)
+    cols = cols.select(cols.arrays['ecfm2b1'] < 0.032)
+    cols.cutflow['cutbasedCR'] = len(cols)
+    return cols
+
+def apply_cutbasedCRloose(cols):
+    cols = cols.select(cols.arrays['ecfm2b1'] < 0.032)
+    cols.cutflow['cutbasedCRloose'] = len(cols)
+    return cols
+
+def apply_anticutbased(cols):
+    cols = apply_rt_signalregion(cols)
+    cols = cols.select(cols.arrays['ecfm2b1'] < 0.09)
+    cols.cutflow['anticutbased'] = len(cols)
+    return cols
+
+def apply_antiloosecutbased(cols):
+    cols = cols.select(cols.arrays['ecfm2b1'] < 0.09)
+    cols.cutflow['antiloosecutbased'] = len(cols)
+    return cols
+
 # Relative path to the BDT
 # This specific BDT was chosen to be used during the L3 review
 bdt_model_file = 'models/svjbdt_obj_rev_version.json'
@@ -1039,7 +1062,7 @@ def calc_bdt_scores(X, model_file=bdt_model_file):
         score = xgb_model.predict_proba(X)[:,1]
     return score
 
-def apply_bdtbased(cols,wp,lumi):
+def apply_bdtbased(cols,wp,lumi,anti=False):
     cols = apply_rt_signalregion(cols)
 
     # Grab the weights and scores
@@ -1060,8 +1083,13 @@ def apply_bdtbased(cols,wp,lumi):
     bdt_ddt_score = calculate_varDDT(mT, pT, rho, score, weight, wp, ddt_map_file)
 
     # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
-    cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
-    cols.cutflow['ddt(bdt)'] = len(cols)
+    # or < 0.0 for anti-tag CR
+    if anti:
+        cols = cols.select(bdt_ddt_score < 0.0) # mask for the selection
+        cols.cutflow['ddt(antibdt)'] = len(cols)
+    else:
+        cols = cols.select(bdt_ddt_score > 0.0) # mask for the selection
+        cols.cutflow['ddt(bdt)'] = len(cols)
     return cols
 
 class InvalidSelectionException(Exception):

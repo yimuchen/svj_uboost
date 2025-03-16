@@ -142,6 +142,18 @@ def build_histogram(args=None):
         elif selection.startswith('bdt='):
             wp = common.split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi)
+        # control regions
+        elif selection=='cutbasedCR':
+            cols = common.apply_cutbasedCR(cols)
+        elif selection=='cutbasedCRloose':
+            cols = common.apply_cutbasedCRloose(cols)
+        elif selection=='anticutbased':
+            cols = common.apply_anticutbased(cols)
+        elif selection=='antiloosecutbased':
+            cols = common.apply_antiloosecutbased(cols)
+        elif selection.startswith('antibdt='):
+            wp = common.split_bdt(selection)
+            cols = common.apply_bdtbased(cols,wp,lumi,anti=True)
         elif selection=='preselection':
             pass
         else:
@@ -256,7 +268,7 @@ def build_histogram(args=None):
     process = osp.basename(skimfile).replace(".npz","")
     if metadata["sample_type"]=="data":
         # keep data era info to avoid overwriting
-        process += '_'+osp.dirname(skimfile)
+        process += '_'+osp.basename(osp.dirname(skimfile))
     outfile = f'{outdir}/{process}_sel-{selection}_year-{year}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
@@ -338,7 +350,7 @@ def merge_histograms():
             cat : None,
         }
         for file in files:
-            mths[cat] = add_hist(mths[cat],get_hists(file)[default])
+            mths[cat] = add_hists(mths[cat],get_hists(file)[default])
         assign_metadata(mths[cat])
         write(mths,cat)
 
