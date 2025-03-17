@@ -708,19 +708,19 @@ class MTHistogram(VarArrHistogram):
 
 class ECFN2B2Histogram(VarArrHistogram):
     name = 'ecfn2b2'
-    default_binning = (0.02, 0, 0.5)
+    default_binning = (0.01, 0, 0.5)
 
 class ECFM2B1Histogram(VarArrHistogram):
     name = 'ecfm2b1'
-    default_binning = (0.01,0,0.2)
+    default_binning = (0.005,0,0.2)
 
 class RTHistogram(VarArrHistogram):
     name = 'rt'
-    default_binning = (0.1, 1.0, 2.5)
+    default_binning = (0.05, 1.0, 2.5)
 
 class METDPhiHistogram(VarArrHistogram):
     name = 'metdphi'
-    default_binning = (0.1, 0, 3.1)
+    default_binning = (0.08, 0, 3.2)
 
 registered_varhists = {
     'mt': MTHistogram,
