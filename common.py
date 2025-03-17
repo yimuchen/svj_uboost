@@ -1005,7 +1005,21 @@ def apply_rt_signalregion(cols):
     cols.cutflow['rt_signalregion'] = len(cols)
     return cols
 
-def apply_cutbased(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json') :
+def check_if_model_exists(model_file, xrootd_url) :
+    # Check if the file exists locally
+    if not os.path.exists(model_file):
+        print(f"File {model_file} not found. Downloading from {xrootd_url}...")
+        try:
+            os.makedirs(os.path.dirname(model_file), exist_ok=True)  # Ensure directory exists
+            subprocess.run(["xrdcp", xrootd_url, model_file], check=True)
+            print(f"Downloaded {model_file} successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error downloading {model_file}: {e}")
+            return None
+
+def apply_cutbased(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+
+    check_if_model_exists(ddt_map_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
     cols = cols.select(cols.arrays['ecfm2b1'] > 0.09)
     cols.cutflow['cutbased'] = len(cols)
@@ -1075,7 +1089,9 @@ def calc_bdt_scores(X, model_file=bdt_model_file):
         score = xgb_model.predict_proba(X)[:,1]
     return score
 
-def apply_bdtbased(cols,wp,lumi,anti=False):
+def apply_bdtbased(cols,wp,lumi,anti=False,xrootd_url='root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/BDT_based/'):
+
+    check_if_model_exists(ddt_map_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
 
     # Grab the weights and scores
