@@ -469,7 +469,7 @@ if __name__=="__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument('--stageout', type=str, help='stageout directory', required=True)
         parser.add_argument('-k', '--keep', type=float, default=None)
-        parser.add_argument("--skip_cut", type=str, help="Specify a selection to skip", choices=["rt", "muon_veto", "electron_veto", "metdphi", "highpt_muon_veto"])
+        parser.add_argument("--skip_cut", type=str, help="Specify a selection to skip", choices=["rt", "muon_veto", "electron_veto", "metdphi"])
         parser.add_argument('--impl', dest='storage_implementation', type=str, help='storage implementation', default='xrd', choices=['xrd', 'gfal'])
         parser.add_argument('rootfiles', type=str, nargs='+')
         group_data = parser.parse_args()
