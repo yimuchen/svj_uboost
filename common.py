@@ -716,7 +716,7 @@ class ECFM2B1Histogram(VarArrHistogram):
 
 class RTHistogram(VarArrHistogram):
     name = 'rt'
-    default_binning = (0.05, 1.0, 2.5)
+    default_binning = (0.03, 1.0, 2.5)
 
 class METDPhiHistogram(VarArrHistogram):
     name = 'metdphi'
