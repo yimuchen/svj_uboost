@@ -257,7 +257,7 @@ def build_histogram(args=None):
         hist_variants['pdf_down'] = VarHistogram(cen_columns, w*pdfw_down)
 
         # MC stats
-        mc_stat_err = np.sqrt(np.histogram(cen_columns, bins=hist_central.binning, weights=w**2)[0])
+        mc_stat_err = np.sqrt(np.histogram(VarHistogram._create_var_array(cen_columns), bins=hist_central.binning, weights=w**2)[0])
         for i in range(hist_central.nbins):
             cen_copy = hist_central.copy()
             cen_copy.vals[i] += mc_stat_err[i]
@@ -357,13 +357,13 @@ def merge_histograms():
     default = 'central'
     if cat=="data":
         # just add them all up
-        hist_varients = {
+        hist_variants = {
             cat : None,
         }
         for file in files:
-            hist_varients[cat] = add_hists(hist_varients[cat],get_hists(file)[default])
-        assign_metadata(hist_varients[cat])
-        write(hist_varients,cat)
+            hist_variants[cat] = add_hists(hist_variants[cat],get_hists(file)[default])
+        assign_metadata(hist_variants[cat])
+        write(hist_variants,cat)
 
     elif cat=="sig":
         # just add years
@@ -376,9 +376,9 @@ def merge_histograms():
                   print("Missing file!!", signal, year)
             sighists = {year: get_hists([f for f in sigfiles if year in f][0]) for year in years}
             keys = list(sorted(set([key for y,h in sighists.items() for key in h])))
-            hist_varients = {}
+            hist_variants = {}
             for key in keys:
-                hist_varients[key] = None
+                hist_variants[key] = None
                 # handle uncorrelated systematics (vary one year at a time)
                 if '20' in key:
                     getter = lambda h: h.get(key,h[default])
@@ -386,26 +386,26 @@ def merge_histograms():
                 else:
                     getter = lambda h: h[key]
                 for year,sighist in sighists.items():
-                    hist_varients[key] = add_hists(hist_varients[key],getter(sighist))
-            assign_metadata(hist_varients[default])
-            write(hist_varients,signal)
+                    hist_variants[key] = add_hists(hist_variants[key],getter(sighist))
+            assign_metadata(hist_variants[default])
+            write(hist_variants,signal)
     elif cat=="bkg":
         # add up but keep components
-        hist_varients = {
+        hist_variants = {
             cat : None
         }
         for b in samples["bkg"]:
             b = b.lower()
-            hist_varients[b+'_individual'] = []
-            hist_varients[b] = None
+            hist_variants[b+'_individual'] = []
+            hist_variants[b] = None
         for file in files:
             tmp = get_hists(file)[default]
             bkg = next((b for b in samples["bkg"] if b in file)).lower()
-            hist_varients[bkg+'_individual'].append(tmp) # Save individual histogram
-            hist_varients[bkg] = add_hists(hist_varients[bkg],tmp) # Add up per background category
-            hist_varients[cat] = add_hists(hist_varients[cat],tmp) # Add up all
-        assign_metadata(hist_varients[cat])
-        write(hist_varients,cat)
+            hist_variants[bkg+'_individual'].append(tmp) # Save individual histogram
+            hist_variants[bkg] = add_hists(hist_variants[bkg],tmp) # Add up per background category
+            hist_variants[cat] = add_hists(hist_variants[cat],tmp) # Add up all
+        assign_metadata(hist_variants[cat])
+        write(hist_variants,cat)
 
 
 # __________________________________________
