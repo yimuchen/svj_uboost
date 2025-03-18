@@ -372,8 +372,8 @@ def merge_histograms():
             signals['_'.join(file.split('/')[1].split('_')[:-2])].append(file)
         for signal,sigfiles in signals.items():
             for year in years:
-              if len([f for f in sigfiles if years[0] in f]) == 0:
-                print(signal, year)
+              if len([f for f in sigfiles if year in f]) == 0:
+                  print("Missing file!!", signal, year)
             sighists = {year: get_hists([f for f in sigfiles if year in f][0]) for year in years}
             keys = list(sorted(set([key for y,h in sighists.items() for key in h])))
             hist_varients = {}
