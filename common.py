@@ -1017,7 +1017,13 @@ def check_if_model_exists(model_file, xrootd_url) :
             print(f"Error downloading {model_file}: {e}")
             return None
 
-def apply_cutbased(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+def apply_cutbased(cols):
+    cols = apply_rt_signalregion(cols)
+    cols = cols.select(cols.arrays['ecfm2b1'] > 0.09)
+    cols.cutflow['cutbased'] = len(cols)
+    return cols
+
+def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
 
     check_if_model_exists(ddt_map_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
