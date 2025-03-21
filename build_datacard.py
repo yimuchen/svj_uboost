@@ -138,7 +138,9 @@ def build_histogram(args=None):
             cols = common.apply_hemveto(cols)
         # signal region
         if selection=='cutbased':
-            cols = common.apply_cutbased(cols,lumi)
+            cols = common.apply_cutbased(cols)
+        elif selection=='cutbased_ddt':
+            cols = common.apply_cutbased_ddt(cols,lumi)
         elif selection.startswith('bdt='):
             wp = common.split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi)
