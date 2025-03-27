@@ -273,11 +273,10 @@ def build_histogram(args=None):
     if metadata["sample_type"]=="data":
         # keep data era info to avoid overwriting
         process += '_'+osp.basename(osp.dirname(skimfile))
-    outfile = f'{outdir}/{process}_sel-{selection}_year-{year}_{hist_var}.json'
     if selection == "preselection_minus":
-        proc, skip_cut = process.split("_skip_cut-")
-        print(proc,skip_cut)
-        outfile = f"{outdir}/{proc}_sel-{selection}-{skip_cut}_year-{year}_{hist_var}.json"
+        _, skip_cut = process.split("_skip_cut-")
+        selection += "-" + skip_cut
+    outfile = f'{outdir}/{process}_sel-{selection}_year-{year}_{hist_var}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
         json.dump(hist_variants, f, cls=common.Encoder, indent=4)
@@ -372,7 +371,7 @@ def merge_histograms():
         for signal,sigfiles in signals.items():
             for year in years:
               if len([f for f in sigfiles if year in f]) == 0:
-                  print("Missing file!!", signal, year)
+                  common.logger.warning(f"Missing files for signal/year: {signal}/{year}")
             sighists = {year: get_hists([f for f in sigfiles if year in f][0]) for year in years}
             keys = list(sorted(set([key for y,h in sighists.items() for key in h])))
             hist_variants = {}
