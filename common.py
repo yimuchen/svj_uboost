@@ -652,13 +652,21 @@ class VarArrHistogram(Histogram):
     It will also carry around the current and default binning information
     """
     default_binning = (10,0,100) # Width, min, max
-    bins = None # List of bin values
+    _bins = None # List of bin values
     name = '' # Name of variable to use
 
     @property
+    def bins(self):
+        if self._bins is None:
+            self._bins = self.create_binning(*self.default_binning)
+        return self._bins
+
+    @bins.setter
+    def bins(self, val):
+        self._bins = val
+
+    @property
     def non_standard_binning(self):
-        if self.bins is None:
-            self.bins = self.create_binning(*self.default_binning)
         if len(self.bins) != len(self.create_binning(*self.default_binning)):
             return True
         if not all(np.isclose(self.bins, self.create_binning(*self.default_binning))):
@@ -687,8 +695,6 @@ class VarArrHistogram(Histogram):
         return Histogram(cls.bins)
 
     def __init__(self, cols, weights=None):
-        if self.bins is None:
-            self.bins = self.create_binning(*self.default_binning)
         var_arr = self._create_var_array(cols)
         vals = np.histogram(var_arr, self.bins, weights=weights)[0].astype(float)
         weights2 = weights if weights is None else weights **2
@@ -723,13 +729,7 @@ class METDPhiHistogram(VarArrHistogram):
     name = 'metdphi'
     default_binning = (0.08, 0, 3.2)
 
-registered_varhists = {
-    'mt': MTHistogram,
-    "ecfn2b2": ECFN2B2Histogram,
-    "ecfm2b1": ECFM2B1Histogram,
-    'rt': RTHistogram,
-    'metdphi': METDPhiHistogram,
-}
+registered_varhists = { subcl.name: subcl for subcl in VarArrHistogram.__subclasses__() }
 
 
 
