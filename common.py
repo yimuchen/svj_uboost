@@ -644,7 +644,10 @@ class Histogram:
         return h
 
 def _create_binning(binw, left, right):
-    return left + binw * np.arange(math.ceil((right-left)/binw)+1)
+    bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
+    # Force casting to python floats, as numpy values causes issues with JSON serialization
+    return [float(x) for x in bins]
+
 
 class VarArrHistogram(Histogram):
     """
@@ -688,7 +691,6 @@ class VarArrHistogram(Histogram):
     @classmethod
     def create_binning(cls, binw, left, right):
         return _create_binning(binw, left, right)
-
 
     @classmethod
     def empty(cls):
