@@ -136,9 +136,9 @@ The boosted search is using a DDT to decorrelate the BDT. This DDT can be create
 
 ```bash
 # Create the BDT on QCD background and plot 2D maps
-python apply_DDT.py --ddt_map_file models/ --plot 2D_DDT_map <new_file_name>.json
+python apply_DDT.py --ddt_map_file models/<new_file_name>.json --plot 2D_DDT_map
 # Re create 2D plots and determine the optimal BDT working point using the full background
-python apply_DDT.py --ddt_map_file models/ --bkg_files "data/bkg_20241030/Summer20UL*/*.npz" --plot 2D_DDT_map fom_significance <new_file_name>.json
+python apply_DDT.py --ddt_map_file models/<new_file_name>.json --bkg_files "data/bkg_20241030/Summer20UL*/*.npz" --plot 2D_DDT_map fom_significance
 # Plot mt score comparisons for a select few bdt working points using the full bkg
 python apply_DDT.py --plot bkg_scores_mt sig_mt_single_BDT one_sig_mt_many_bdt --bkg_files "data/bkg_20241030/Summer20UL*/*.npz" --bdt_cuts 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9
 ```
