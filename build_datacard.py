@@ -274,7 +274,7 @@ def build_histogram(args=None):
         # keep data era info to avoid overwriting
         process += '_'+osp.basename(osp.dirname(skimfile))
     if selection == "preselection_minus":
-        _, skip_cut = process.split("_skip_cut-")
+        process, skip_cut = process.split("_skip_cut-")
         selection += "-" + skip_cut
     outfile = f'{outdir}/{process}_sel-{selection}_year-{year}_{hist_var}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
