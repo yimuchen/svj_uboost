@@ -11,7 +11,7 @@ Assuming you have `conda` install, create the environment with the following com
 ```bash
 git clone git@github.com:boostedsvj/svj_uboost
 cd svj_uboost
-conda env create -f environment.yml
+conda env create -f environment.yaml
 ```
 
 Then activate the environment with the command:
@@ -72,13 +72,15 @@ For the n-minus-one skims, you can run the skims interactively:
 ```
 python3 skim.py --skip_cut=rt --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_test [filename]
 ```
-Or to submit all n-minus-one skims:
+Or to submit n-minus-one skims for all file skipping a specific cut:
 ```
 python3 submit_skim.py --skip_cut=rt --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_n_minus_one_[date] --go
 ```
 
-The currently allowed values for the `--skip_cut` arguments are `"rt"`, `"muon_veto"`, `"electron_veto"` and `"metdphi"`
-Notice that this flag is not needed when creating the hadd-ed skim files, as we just need to change the input and output directories
+The currently allowed values for the `--skip_cut` arguments are `"rt"`,
+`"muon_veto"`, `"electron_veto"` and `"metdphi"`. Notice that the `--skip_cut`
+flag is not needed when creating the hadd-ed skim files, we just need to
+change the input and output directories:
 ```
 python3 hadd_skims.py --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_n_minus_one_[date]_hadd "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_n_minus_one_[date]/*/*"
 ```
@@ -192,7 +194,8 @@ The resulting merged file should use the signal name, the selection type, bin wi
 
 ## Creating the n-minus-one and preselection distribution histograms
 
-The `build_datacard.py` script can also be used to create the histogram JSON files for the distribution of other variables in the preselection region:
+The `build_datacard.py` script can also be used to create the histogram JSON
+files for the distribution of other variables in the preselection region:
 ```bash
 # Creating the "preselection" distribution of vairables ecfm2b1 and mt for background MC samples
 python3 build_datacard.py build_all_histograms preselection "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Summer*/*.npz" --hist_var_list ecfm2b1 mt
