@@ -128,7 +128,7 @@ def main():
     parser.add_argument('--categories', type=str, default='all', nargs='*', choices=samples.keys(), help="categories to process")
     parser.add_argument('--rootfiles', type=str, default=[], nargs='*', help="manual list of rootfiles")
     parser.add_argument('-k', '--keep', type=float, default=None, help="keep fraction of samples")
-    parser.add_argument("--skip_cut", type=str, help="Specify a selection to skip", choices=["rt", "muon_veto", "electron_veto", "metdphi", "highpt_muon_veto"])
+    parser.add_argument("--skip_cut", type=str, help="Specify a selection to skip", choices=["rt", "muon_veto", "electron_veto", "metdphi"])
     parser.add_argument('--stageout', type=str, help='stageout directory', required=True)
     parser.add_argument('--branch', type=str, default=None, help='svj_ntuple_processing branch')
     parser.add_argument('--impl', type=str, help='storage implementation', default='xrd', choices=['xrd', 'gfal'])
