@@ -1069,9 +1069,7 @@ def apply_antiloosecutbased(cols):
 # Relative path to the BDT
 # This specific BDT was chosen to be used during the L3 review
 bdt_model_file = 'models/svjbdt_obj_rev_version.json'
-ddt_map_file = 'models/ddt_AN_v5.json'
-# make sure bdt features match the choosen file
-bdt_features = read_training_features(bdt_model_file)
+#ddt_map_file = 'models/ddt_AN_v5.json'
 
 def split_bdt(sel):
     parts = sel.split('=')
@@ -1095,10 +1093,14 @@ def calc_bdt_scores(X, model_file=bdt_model_file):
         score = xgb_model.predict_proba(X)[:,1]
     return score
 
-def apply_bdtbased(cols,wp,lumi,anti=False,xrootd_url='root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/BDT_based/'):
+def apply_bdtbased(cols,wp,lumi,anti=False,model_file = bdt_model_file,ddt_map_file = 'models/ddt_AN_v5.json',
+                   xrootd_url='root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/BDT_based/'):
 
     check_if_model_exists(ddt_map_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
+
+    # make sure bdt features match the choosen file
+    bdt_features = read_training_features(model_file)
 
     # Grab the weights and scores
     X = []
