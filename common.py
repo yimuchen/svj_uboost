@@ -1027,7 +1027,6 @@ def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.
 
     check_if_model_exists(ddt_map_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
-    cols = cols.select(cols.arrays['ecfm2b1'] > 0.09)
     cols.cutflow['cutbased'] = len(cols)
    
     # Get features necessary to apply the DDT
