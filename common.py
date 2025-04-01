@@ -1027,7 +1027,6 @@ def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.
 
     check_if_model_exists(ddt_map_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
-    cols.cutflow['cutbased'] = len(cols)
    
     # Get features necessary to apply the DDT
     mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
@@ -1040,7 +1039,7 @@ def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.
 
     # Now cut on the DDT above 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val > 0.0) # mask for the selection
-    cols.cutflow['ddt(ecfm2b1)'] = len(cols)
+    cols.cutflow['cutbased_ddt'] = len(cols)
     return cols
 
 def apply_cutbasedCR(cols):
@@ -1054,10 +1053,47 @@ def apply_cutbasedCRloose(cols):
     cols.cutflow['cutbasedCRloose'] = len(cols)
     return cols
 
+def apply_anticutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+
+    check_if_model_exists(ddt_map_file, xrootd_url)
+    cols = apply_rt_signalregion(cols)
+   
+    # Get features necessary to apply the DDT
+    mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
+    pT = cols.to_numpy(['pt']).ravel()
+    rho = cols.to_numpy(['rho']).ravel()
+    ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
+    weight = get_event_weight(cols, lumi)
+
+    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, 0.09, ddt_map_file)
+
+    # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
+    cols = cols.select(ddt_val < 0.0) # mask for the selection
+    cols.cutflow['anticutbased_ddt'] = len(cols)
+    return cols
+
 def apply_anticutbased(cols):
     cols = apply_rt_signalregion(cols)
     cols = cols.select(cols.arrays['ecfm2b1'] < 0.09)
     cols.cutflow['anticutbased'] = len(cols)
+    return cols
+
+def apply_antiloosecutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+
+    check_if_model_exists(ddt_map_file, xrootd_url)
+   
+    # Get features necessary to apply the DDT
+    mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
+    pT = cols.to_numpy(['pt']).ravel()
+    rho = cols.to_numpy(['rho']).ravel()
+    ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
+    weight = get_event_weight(cols, lumi)
+
+    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, 0.09, ddt_map_file)
+
+    # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
+    cols = cols.select(ddt_val < 0.0) # mask for the selection
+    cols.cutflow['anticutbased_ddt'] = len(cols)
     return cols
 
 def apply_antiloosecutbased(cols):
