@@ -300,11 +300,12 @@ def skim(rootfile, group_data):
     seutils.set_preferred_implementation(group_data.storage_implementation)
 
     suffs = []
-    keep = None
-    if hasattr(group_data,"keep"):
-        keep = group_data.keep
+    keep = getattr(group_data, "keep", None)
+    skip_cut = getattr(group_data, "skip_cut", None)
     if keep is not None:
         suffs.append(f'keep{keep:.2f}')
+    if skip_cut is not None:
+        suffs.append(f"skip_cut-{skip_cut}")
     outfile = dst(rootfile,group_data.stageout,suffs)
     if seutils.isfile(outfile):
         svj.logger.info('    File %s exists, skipping', outfile)
@@ -378,11 +379,17 @@ def skim(rootfile, group_data):
     svj.logger.info('Running preselection now')
     if array.metadata["sample_type"]=="bkg":
         array = svj.filter_stitch(array)
-    central = svj.filter_preselection(array)
-    # Adjust the load_mc value as needed...
-    cols = svj.bdt_feature_columns(central, load_mc=array.metadata["sample_type"]!="data")
 
-    if array.metadata["sample_type"]=="sig":
+
+    if skip_cut is None:
+        central = svj.filter_preselection(array)
+        cols = svj.bdt_feature_columns(central, load_mc=array.metadata["sample_type"]!="data")
+    else:
+        central = svj.filter_preselection_minus_one(skip_cut)(array)
+        cols = svj.nminus_one_columns(central, skip_cut=skip_cut, load_mc=array.metadata["sample_type"]!="data")
+    # Adjust the load_mc value as needed...
+
+    if array.metadata["sample_type"]=="sig" and skip_cut is None:
         # Save scale weights
         cols.arrays['scaleweights'] = central.array['ScaleWeights'].to_numpy()
         cols.metadata['scale_norm_central'] = scale_norm_central
@@ -408,15 +415,18 @@ def skim(rootfile, group_data):
         cols.arrays['pu_sys_up'] = central.array['puSysUp'].to_numpy()
         cols.arrays['pu_sys_down'] = central.array['puSysDown'].to_numpy()
 
-    cols.metadata['selection'] = 'preselection'
+    if skip_cut is None:
+        cols.metadata['selection'] = 'preselection'
+    else:
+        cols.metadata["selection"] = f'preselection_minus_{skip_cut}'
     # Check again, to avoid race conditions
     if seutils.isfile(outfile):
         svj.logger.info('    File %s exists now, not staging out', outfile)
     else:
         cols.save(outfile,force=True)
 
-    # systematic variations
-    if array.metadata["sample_type"]=="sig":
+    # systematic variations, only apply if not skipping cuts
+    if array.metadata["sample_type"]=="sig" and skip_cut is None:
         # ______________________________
         # JEC/JER
 
@@ -459,6 +469,7 @@ if __name__=="__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument('--stageout', type=str, help='stageout directory', required=True)
         parser.add_argument('-k', '--keep', type=float, default=None)
+        parser.add_argument("--skip_cut", type=str, help="Specify a selection to skip", choices=["rt", "muon_veto", "electron_veto", "metdphi"])
         parser.add_argument('--impl', dest='storage_implementation', type=str, help='storage implementation', default='xrd', choices=['xrd', 'gfal'])
         parser.add_argument('rootfiles', type=str, nargs='+')
         group_data = parser.parse_args()

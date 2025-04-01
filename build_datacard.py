@@ -15,31 +15,32 @@ sys.path.append(osp.join(THIS_DIR, 'systematics'))
 
 scripter = common.Scripter()
 
-def change_bin_width():
+def change_bin_width(hist_var):
     """
     Changes MT binning based on command line options
     """
-    binw = common.pull_arg('--binw', type=float).binw
-    mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
-    mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
+    VarHistogram = common.registered_varhists[hist_var]
+    binw = common.pull_arg(f'--{hist_var}binw', type=float, default=VarHistogram.default_binw()).__dict__[f"{hist_var}binw"]
+    binmin = common.pull_arg(f'--{hist_var}min', type=float, default=VarHistogram.default_binmin()).__dict__[f"{hist_var}min"]
+    binmax = common.pull_arg(f'--{hist_var}max', type=float, default=VarHistogram.default_binmax()).__dict__[f"{hist_var}max"]
     if binw is not None:
         # Testing different bin widths
-        left = mtmin
-        right = mtmax
-        common.MTHistogram.bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
-        common.MTHistogram.non_standard_binning = True
-        common.logger.warning(f'Changing bin width to {binw}; MT binning: {common.MTHistogram.bins}')
+        VarHistogram.bins = VarHistogram.create_binning(binw, binmin, binmax)
+        common.logger.warning(f'Changing bin width to {binw}; new binning: {VarHistogram.bins}')
 
-def check_rebin(hist,name):
-    if not common.MTHistogram.non_standard_binning:
+def check_rebin(hist,name, hist_var):
+    VarHistogram = common.registered_varhists[hist_var]
+    if VarHistogram.bins is None:
+        VarHistogram.bins = VarHistogram.create_binning(*VarHistogram.default_binning)
+    if not VarHistogram.non_standard_binning:
         return hist
     msg = []
-    if hist.binning[0]>common.MTHistogram.bins[0]:
-        msg.append(f'left {hist.binning[0]}>{common.MTHistogram.bins[0]}')
-    if hist.binning[-1]<common.MTHistogram.bins[-1]:
-        msg.append(f'right {hist.binning[-1]}>{common.MTHistogram.bins[-1]}')
-    orig_width = int(hist.binning[1] - hist.binning[0])
-    new_width = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
+    if hist.binning[0]>VarHistogram.bins[0]:
+        msg.append(f'left {hist.binning[0]}>{VarHistogram.bins[0]}')
+    if hist.binning[-1]<VarHistogram.bins[-1]:
+        msg.append(f'right {hist.binning[-1]}>{VarHistogram.bins[-1]}')
+    orig_width = hist.binning[1] - hist.binning[0]
+    new_width = VarHistogram.bins[1] - VarHistogram.bins[0]
     rebin_factor = int(new_width/orig_width)
     rebin_mod = new_width % orig_width
     if rebin_mod!=0:
@@ -47,40 +48,40 @@ def check_rebin(hist,name):
     if len(msg)>0:
         msg = ', '.join(msg)
         common.logger.warning(f'Hist {name} inconsistent with requested binning ({msg})')
-    return hist.rebin(rebin_factor).cut(common.MTHistogram.bins[0],common.MTHistogram.bins[-1])
+    return hist.rebin(rebin_factor).cut(VarHistogram.bins[0],VarHistogram.bins[-1])
 
-def rebin_dict(hists):
-    if not common.MTHistogram.non_standard_binning:
-        return hists
+def rebin_dict(hists, hist_var):
+    VarHistogram = common.registered_varhists[hist_var]
     for key in hists:
         if isinstance(hists[key],list):
             for i,entry in enumerate(hists[key]):
-                hists[key][i] = check_rebin(entry,f'{key}[{i}]')
+                hists[key][i] = check_rebin(entry,f'{key}[{i}]', hist_var)
         elif isinstance(hists[key],dict):
             for k,v in hists[key].items():
-                hists[key][k] = check_rebin(v,f'{key}[{k}]')
+                hists[key][k] = check_rebin(v,f'{key}[{k}]', hist_var)
         else:
-            hists[key] = check_rebin(hists[key],key)
+            hists[key] = check_rebin(hists[key],key, hist_var)
     return hists
 
-def rebin_name(outfile):
-    if common.MTHistogram.non_standard_binning:
-        binw = int(common.MTHistogram.bins[1] - common.MTHistogram.bins[0])
-        left = common.MTHistogram.bins[0]
-        right = common.MTHistogram.bins[-1]
+def rebin_name(outfile, hist_var):
+    VarHistogram = common.registered_varhists[hist_var]
+    if VarHistogram.non_standard_binning == True:
+        binw = VarHistogram.bins[1] - VarHistogram.bins[0]
+        left = VarHistogram.bins[0]
+        right = VarHistogram.bins[-1]
         outfile = outfile.replace(
             '.json',
-            f'_binw{binw:02d}_range{left:.0f}-{right:.0f}.json'
+            f'_binw{binw:0.2f}_range{left:.1f}-{right:.1f}.json'
         )
     return outfile
 
-def rebin_file(file):
-    file2 = rebin_name(file)
+def rebin_file(file, hist_var):
+    file2 = rebin_name(file, hist_var)
     if file2==file:
         return file
     with open(file,'r') as f:
         mths = json.load(f, cls=common.Decoder)
-    mths = rebin_dict(mths)
+    mths = rebin_dict(mths, hist_var)
     with open(file2,'w') as f:
         json.dump(mths, f, cls=common.Encoder, indent=4)
     return file2
@@ -96,16 +97,17 @@ def basename(meta):
 @scripter
 def build_histogram(args=None):
     if args is None:
-        change_bin_width()
         # Read from sys.argv
         selection = common.pull_arg('selection', type=str).selection
+        hist_var = common.pull_arg("hist_var", type=str, default='mt').hist_var
         lumi = common.pull_arg('--lumi', type=float, default=None, help='Luminosity in pb-1 (overrides defaults)').lumi
         year = common.pull_arg('--year', type=str, default=None, help='year (overrides metadata)').year
         fullyear = common.pull_arg('--fullyear', action="store_true", help='treat 2018 as one year instead of splitting into pre and post').fullyear
         skimfile = common.pull_arg('skimfile', type=str).skimfile
+        change_bin_width(hist_var)
     else:
         # Use passed input
-        selection, lumi, year, fullyear, skimfile = args
+        selection, hist_var, lumi, year, fullyear, skimfile = args
 
     def filter_bkg(cols):
         bkgs = [cols]
@@ -156,16 +158,18 @@ def build_histogram(args=None):
             cols = common.apply_bdtbased(cols,wp,lumi,anti=True)
         elif selection=='preselection':
             pass
+        elif selection=="preselection_minus":
+            pass
         else:
             raise common.InvalidSelectionException(sel=selection)
         return cols
 
-    mths = {}
-    central = svj.Columns.load(skimfile)
-    metadata = central.metadata
+    hist_variants = {}
+    cen_columns = svj.Columns.load(skimfile)
+    metadata = cen_columns.metadata
     if metadata["sample_type"]=="bkg":
-        central = filter_bkg(central)
-        if central is None:
+        cen_columns = filter_bkg(cen_columns)
+        if cen_columns is None:
             return [""]
 
     if year is None: year = str(metadata["year"])
@@ -175,132 +179,138 @@ def build_histogram(args=None):
 
     # process 2018 samples twice as PRE and POST
     if year=="2018" and not fullyear:
-        outfiles1 = build_histogram((selection,None,"2018PRE",False,skimfile))
-        outfiles2 = build_histogram((selection,None,"2018POST",False,skimfile))
+        outfiles1 = build_histogram((selection,hist_var, None,"2018PRE",False,skimfile))
+        outfiles2 = build_histogram((selection,hist_var, None,"2018POST",False,skimfile))
         return outfiles1+outfiles2
 
     common.logger.info(f'Selection: {selection}')
-    central = apply_selection(central,year)
-    mt = central.to_numpy(['mt']).ravel()
-
-    if metadata["sample_type"]=="data":
-        w = None
-    else:
-        w = central.to_numpy(['puweight']).ravel()
-        event_weight = common.get_event_weight(central,lumi)
+    cen_columns = apply_selection(cen_columns,year)
+    w = None
+    if metadata["sample_type"] != "data":
+        w = cen_columns.to_numpy(['puweight']).ravel()
+        event_weight = common.get_event_weight(cen_columns,lumi)
         w *= event_weight
         # save event weight
         metadata['event_weight'] = common.get_single_event_weight(event_weight)
-    mth_central = common.MTHistogram(mt, w)
-    mth_central.metadata.update(metadata)
-    mths['central'] = mth_central
 
-    if metadata["sample_type"]=="sig":
+    # Defining the histogram type to use
+    VarHistogram = common.registered_varhists[hist_var]
+
+    hist_central = VarHistogram(cen_columns, w)
+    hist_central.metadata.update(metadata)
+    hist_variants['central'] = hist_central
+
+    if metadata["sample_type"]=="sig" and selection!="preselection_minus":
         # Scale
         good_scales = np.array([0,1,2,3,4,6,8])
-        scale_weight = central.to_numpy(['scaleweights'])
+        scale_weight = cen_columns.to_numpy(['scaleweights'])
         scale_weight = scale_weight[ak.num(scale_weight,axis=1)>np.max(good_scales)]
         scale_weight = scale_weight[:, good_scales]
         if len(scale_weight):
-            weight_up = w * np.max(scale_weight, axis=-1) * central.metadata['scale_factor_up']
-            weight_down = w * np.min(scale_weight, axis=-1) * central.metadata['scale_factor_down']
-            mths['scale_up'] = common.MTHistogram(mt, weight_up)
-            mths['scale_down'] = common.MTHistogram(mt, weight_down)
+            weight_up = w * np.max(scale_weight, axis=-1) * cen_columns.metadata['scale_factor_up']
+            weight_down = w * np.min(scale_weight, axis=-1) * cen_columns.metadata['scale_factor_down']
+            hist_variants['scale_up'] = VarHistogram(cen_columns, weight_up)
+            hist_variants['scale_down'] = VarHistogram(cen_columns, weight_down)
 
         # JEC/JER/JES
         def mth_jerjecjes(tag):
             col = svj.Columns.load(get_variation(tag))
             col = apply_selection(col,year)
-            mt = col.to_numpy(['mt']).flatten()
             w = col.to_numpy(['puweight']).flatten()
             event_weight = common.get_event_weight(col,lumi)
             w *= event_weight
-            return common.MTHistogram(mt, w)
+            return VarHistogram(col, w)
         # JER, JEC treated as uncorrelated between years (but 2018PRE, 2018POST always correlated)
         sysyear = get_sysyear(year)
-        mths[f'jer{sysyear}_up'] = mth_jerjecjes('jer_up')
-        mths[f'jer{sysyear}_down'] = mth_jerjecjes('jer_down')
-        mths[f'jec{sysyear}_up'] = mth_jerjecjes('jec_up')
-        mths[f'jec{sysyear}_down'] = mth_jerjecjes('jec_down')
-        mths['jes_up'] = mth_jerjecjes('jesup_both')
-        mths['jes_down'] = mth_jerjecjes('jesdown_both')
+        hist_variants[f'jer{sysyear}_up'] = mth_jerjecjes('jer_up')
+        hist_variants[f'jer{sysyear}_down'] = mth_jerjecjes('jer_down')
+        hist_variants[f'jec{sysyear}_up'] = mth_jerjecjes('jec_up')
+        hist_variants[f'jec{sysyear}_down'] = mth_jerjecjes('jec_down')
+        hist_variants['jes_up'] = mth_jerjecjes('jesup_both')
+        hist_variants['jes_down'] = mth_jerjecjes('jesdown_both')
 
         # PS
-        ps_weights = w[:,None] * central.to_numpy(['ps_isr_up', 'ps_isr_down', 'ps_fsr_up', 'ps_fsr_down'])
-        mths['isr_up']   = common.MTHistogram(mt, ps_weights[:,0])
-        mths['isr_down'] = common.MTHistogram(mt, ps_weights[:,1])
-        mths['fsr_up']   = common.MTHistogram(mt, ps_weights[:,2])
-        mths['fsr_down'] = common.MTHistogram(mt, ps_weights[:,3])
+        ps_weights = w[:,None] * cen_columns.to_numpy(['ps_isr_up', 'ps_isr_down', 'ps_fsr_up', 'ps_fsr_down'])
+        hist_variants['isr_up']   = VarHistogram(cen_columns, ps_weights[:,0])
+        hist_variants['isr_down'] = VarHistogram(cen_columns, ps_weights[:,1])
+        hist_variants['fsr_up']   = VarHistogram(cen_columns, ps_weights[:,2])
+        hist_variants['fsr_down'] = VarHistogram(cen_columns, ps_weights[:,3])
 
         # PU
         # also uncorrelated between years
-        pu_weights = central.to_numpy(['puweight', 'pu_sys_up', 'pu_sys_down'])
-        mths[f'pu{sysyear}_up'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,1])
-        mths[f'pu{sysyear}_down'] = common.MTHistogram(mt, w / pu_weights[:,0] * pu_weights[:,2])
+        pu_weights = cen_columns.to_numpy(['puweight', 'pu_sys_up', 'pu_sys_down'])
+        hist_variants[f'pu{sysyear}_up'] = VarHistogram(cen_columns, w / pu_weights[:,0] * pu_weights[:,1])
+        hist_variants[f'pu{sysyear}_down'] = VarHistogram(cen_columns, w / pu_weights[:,0] * pu_weights[:,2])
 
         # PDF
-        pdf_weights = central.to_numpy(['pdf_weights'])
+        pdf_weights = cen_columns.to_numpy(['pdf_weights'])
         # set massive unphysical weights to physical max
         pdf_max = np.max(pdf_weights, where=pdf_weights<100, initial=1)
         pdf_weights = np.clip(pdf_weights,a_min=None,a_max=pdf_max)
         pdf_weights /= pdf_weights[:,:1] # Divide by first pdf
         mu_pdf = np.mean(pdf_weights, axis=1)
         sigma_pdf = np.std(pdf_weights, axis=1)
-        pdfw_up = (mu_pdf+sigma_pdf) / central.metadata['pdfw_norm_up']
-        pdfw_down = (mu_pdf-sigma_pdf) / central.metadata['pdfw_norm_down']
-        mths['pdf_up'] = common.MTHistogram(mt, w*pdfw_up)
-        mths['pdf_down'] = common.MTHistogram(mt, w*pdfw_down)
+        pdfw_up = (mu_pdf+sigma_pdf) / cen_columns.metadata['pdfw_norm_up']
+        pdfw_down = (mu_pdf-sigma_pdf) / cen_columns.metadata['pdfw_norm_down']
+        hist_variants['pdf_up'] = VarHistogram(cen_columns, w*pdfw_up)
+        hist_variants['pdf_down'] = VarHistogram(cen_columns, w*pdfw_down)
 
         # MC stats
-        mc_stat_err = np.sqrt(np.histogram(mt, bins=mth_central.binning, weights=w**2)[0])
-        for i in range(mth_central.nbins):
-            mth = mth_central.copy()
-            mth.vals[i] += mc_stat_err[i]
-            mths[f'mcstat{i}_{sysyear}_up'] = mth
-            mth = mth_central.copy()
-            mth.vals[i] -= mc_stat_err[i]
-            mths[f'mcstat{i}_{sysyear}_down'] = mth
+        mc_stat_err = np.sqrt(np.histogram(VarHistogram._create_var_array(cen_columns), bins=hist_central.binning, weights=w**2)[0])
+        for i in range(hist_central.nbins):
+            cen_copy = hist_central.copy()
+            cen_copy.vals[i] += mc_stat_err[i]
+            hist_variants[f'mcstat{i}_{sysyear}_up'] = cen_copy
+            cen_copy = hist_central.copy()
+            cen_copy.vals[i] -= mc_stat_err[i]
+            hist_variants[f'mcstat{i}_{sysyear}_down'] = cen_copy
 
     # save cutflow after applying final selection & after doing any copying (to avoid duplication)
-    mths['central'].cutflow = central.cutflow.copy()
+    hist_variants['central'].cutflow = cen_columns.cutflow.copy()
     outdir = f'hists_{strftime("%Y%m%d")}'
     os.makedirs(outdir, exist_ok=True)
     process = osp.basename(skimfile).replace(".npz","")
     if metadata["sample_type"]=="data":
         # keep data era info to avoid overwriting
         process += '_'+osp.basename(osp.dirname(skimfile))
-    outfile = f'{outdir}/{process}_sel-{selection}_year-{year}.json'
+    if selection == "preselection_minus":
+        process, skip_cut = process.split("_skip_cut-")
+        selection += "-" + skip_cut
+    outfile = f'{outdir}/{process}_sel-{selection}_year-{year}_{hist_var}.json'
     common.logger.info(f'Dumping histograms to {outfile}')
     with open(outfile, 'w') as f:
-        json.dump(mths, f, cls=common.Encoder, indent=4)
+        json.dump(hist_variants, f, cls=common.Encoder, indent=4)
     return [outfile]
 
 @scripter
 def build_all_histograms():
-    change_bin_width()
     # Read from sys.argv
     selection = common.pull_arg('selection', type=str).selection
+    hist_var_list = common.pull_arg("--hist_var_list", type=str, nargs='+', default=['mt']).hist_var_list
     fullyear = common.pull_arg('--fullyear', action="store_true", help='treat 2018 as one year instead of splitting into pre and post').fullyear
     skimdir = common.pull_arg('skimdir', type=str).skimdir
 
     skims = expand_wildcards(skimdir)
     for skim in skims:
-        build_histogram((selection, None, None, fullyear, skim))
+        for hist_var in hist_var_list:
+            change_bin_width(hist_var)
+            build_histogram((selection, hist_var, None, None, fullyear, skim))
 
 @scripter
 def merge_histograms():
-    change_bin_width()
     selection = common.pull_arg('selection', type=str).selection
     histdir = common.pull_arg('histdir', type=str).histdir
+    hist_var = common.pull_arg("--hist_var", type=str,default='mt').hist_var
     cat = common.pull_arg('--cat', type=str, required=True, choices=['sig','bkg','data']).cat
     years = common.pull_arg('--years', type=str, default=["2016","2017","2018PRE","2018POST"], nargs='*').years
     if histdir[-1]!='/': histdir += '/'
 
+    change_bin_width(hist_var)
     def get_files(samples,years):
         files = []
         for year in years:
             for sample in samples:
-                files += expand_wildcards(histdir+f'{sample}*_sel-{selection}_year-{year}.json')
+                files += expand_wildcards(histdir+f'{sample}*_sel-{selection}_year-{year}_{hist_var}.json')
         return files
 
     def get_hists(file):
@@ -321,11 +331,11 @@ def merge_histograms():
     os.makedirs(outdir, exist_ok=True)
     def write(hists,proc):
         if selection in proc:
-            outfile = f'{outdir}/{proc}.json'
+            outfile = f'{outdir}/{proc}_{hist_var}.json'
         else:
-            outfile = f'{outdir}/{proc}_sel-{selection}.json'
-        hists = rebin_dict(hists)
-        outfile = rebin_name(outfile)
+            outfile = f'{outdir}/{proc}_sel-{selection}_{hist_var}.json'
+        hists = rebin_dict(hists, hist_var)
+        outfile = rebin_name(outfile, hist_var)
         common.logger.info(f'Dumping merged histograms to {outfile}')
         with open(outfile, 'w') as f:
             json.dump(hists, f, cls=common.Encoder, indent=4)
@@ -342,47 +352,31 @@ def merge_histograms():
         "sig": ['SVJ'],
     }
     files = get_files(samples[cat],years)
-
     default = 'central'
     if cat=="data":
         # just add them all up
-        mths = {
+        hist_variants = {
             cat : None,
         }
         for file in files:
-            mths[cat] = add_hists(mths[cat],get_hists(file)[default])
-        assign_metadata(mths[cat])
-        write(mths,cat)
-
-    elif cat=="bkg":
-        # add up but keep components
-        mths = {
-            cat : None
-        }
-        for b in samples["bkg"]:
-            b = b.lower()
-            mths[b+'_individual'] = []
-            mths[b] = None
-        for file in files:
-            tmp = get_hists(file)[default]
-            bkg = next((b for b in samples["bkg"] if b in file)).lower()
-            mths[bkg+'_individual'].append(tmp) # Save individual histogram
-            mths[bkg] = add_hists(mths[bkg],tmp) # Add up per background category
-            mths[cat] = add_hists(mths[cat],tmp) # Add up all
-        assign_metadata(mths[cat])
-        write(mths,cat)
+            hist_variants[cat] = add_hists(hist_variants[cat],get_hists(file)[default])
+        assign_metadata(hist_variants[cat])
+        write(hist_variants,cat)
 
     elif cat=="sig":
         # just add years
         signals = defaultdict(list)
         for file in files:
-            signals['_'.join(file.split('/')[1].split('_')[:-1])].append(file)
+            signals['_'.join(file.split('/')[1].split('_')[:-2])].append(file)
         for signal,sigfiles in signals.items():
-            sighists = {year: get_hists(next((f for f in sigfiles if year in f))) for year in years}
+            for year in years:
+              if len([f for f in sigfiles if year in f]) == 0:
+                  common.logger.warning(f"Missing files for signal/year: {signal}/{year}")
+            sighists = {year: get_hists([f for f in sigfiles if year in f][0]) for year in years}
             keys = list(sorted(set([key for y,h in sighists.items() for key in h])))
-            mths = {}
+            hist_variants = {}
             for key in keys:
-                mths[key] = None
+                hist_variants[key] = None
                 # handle uncorrelated systematics (vary one year at a time)
                 if '20' in key:
                     getter = lambda h: h.get(key,h[default])
@@ -390,9 +384,27 @@ def merge_histograms():
                 else:
                     getter = lambda h: h[key]
                 for year,sighist in sighists.items():
-                    mths[key] = add_hists(mths[key],getter(sighist))
-            assign_metadata(mths[default])
-            write(mths,signal)
+                    hist_variants[key] = add_hists(hist_variants[key],getter(sighist))
+            assign_metadata(hist_variants[default])
+            write(hist_variants,signal)
+    elif cat=="bkg":
+        # add up but keep components
+        hist_variants = {
+            cat : None
+        }
+        for b in samples["bkg"]:
+            b = b.lower()
+            hist_variants[b+'_individual'] = []
+            hist_variants[b] = None
+        for file in files:
+            tmp = get_hists(file)[default]
+            bkg = next((b for b in samples["bkg"] if b in file)).lower()
+            hist_variants[bkg+'_individual'].append(tmp) # Save individual histogram
+            hist_variants[bkg] = add_hists(hist_variants[bkg],tmp) # Add up per background category
+            hist_variants[cat] = add_hists(hist_variants[cat],tmp) # Add up all
+        assign_metadata(hist_variants[cat])
+        write(hist_variants,cat)
+
 
 # __________________________________________
 # Plotting
@@ -508,9 +520,10 @@ def make_stat_combined(mths,sysyear):
 
 @scripter
 def plot_systematics():
-    change_bin_width()
+    yrange = common.pull_arg('--hist_var', type=str, default='mt').hist_var
     yrange = common.pull_arg('--yrange', type=float, nargs=2, default=None).yrange
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
+    change_bin_width(hist_var)
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
     meta = mths['central'].metadata
@@ -521,7 +534,7 @@ def plot_systematics():
         sysyear = get_sysyear(year)
         mths = make_stat_combined(mths,sysyear)
 
-    mths = rebin_dict(mths)
+    mths = rebin_dict(mths, hist_var)
     n = mths['central'].vals.sum()
     common.logger.info(f'central integral: {n}')
     common.logger.info(f'central metadata:\n{mths["central"].metadata}')
@@ -820,6 +833,7 @@ def printSigFigs(num,fig,maxdec):
 @scripter
 def systematics_table():
     change_bin_width()
+    hist_var = common.pull_arg('--hist_var', type=str, default='mt').hist_var
     qtyrange = common.pull_arg('--qtyrange', metavar=("qty min max"), default=[], type=str, action='append', nargs=3).qtyrange
     minimum = common.pull_arg('--minimum', type=float, default=0.01, help="minimum value to display, smaller values rounded to 0").minimum
     skimdir = common.pull_arg('skimdir', type=str).skimdir
@@ -857,7 +871,7 @@ def systematics_table():
         if not isinstance(year,str): year = str(int(year))
 
         mths = make_stat_combined(mths,get_sysyear(year))
-        mths = rebin_dict(mths)
+        mths = rebin_dict(mths, hist_var )
         central = mths['central']
         central_yield = get_yield(central)
         #common.logger.info(f'central metadata:\n{meta}')
@@ -953,7 +967,7 @@ def merge(args=None):
         with open(json_file) as f:
             mths = json.load(f, cls=common.Decoder)
             d.update(mths)
-    
+
     if not outfile:
         for f in json_files:
             f = osp.abspath(f)
@@ -973,7 +987,7 @@ def ls():
     infile = common.pull_arg('infile', type=str).infile
     if infile.endswith('.json'):
         with open(infile, 'r') as f:
-            d = json.load(f, cls=common.Decoder)    
+            d = json.load(f, cls=common.Decoder)
         from pprint import pprint
         pprint(d)
     elif infile.endswith('.root'):

@@ -6,35 +6,32 @@ It uses as much training data as it can, by using the precalculated TreeMaker We
 
 ## Setup
 
-```
-conda create -n bdtenv python=3.10
-conda activate bdtenv  # Needed every time
+Assuming you have `conda` installed, create the environment with the following command:
 
-conda install xgboost
-
-pip install pandas
-pip install requests
-pip install numpy
-pip install matplotlib
-pip install tqdm
-pip install numba
-
-pip install git+https://github.com/boostedsvj/jdlfactory
-pip install git+https://github.com/boostedsvj/seutils
-pip install git+https://github.com/boostedsvj/svj_ntuple_processing
-pip install hep_ml
-
+```bash
 git clone git@github.com:boostedsvj/svj_uboost
+cd svj_uboost
+conda env create -f environment.yaml
+```
+
+Then activate the environment with the command:
+
+```bash
+conda activate svj_uboost
 ```
 
 Alternatively, an editable `svj_ntuple_processing` can be installed for simultaneous developments:
-```
+
+```bash
 git clone git@github.com:boostedsvj/svj_ntuple_processing
+# Run in conda environment
 pip install -e svj_ntuple_processing/
 ```
 
 Optional additional packages to read files over xrootd directly instead of making local copies (may not work on all machines):
-```
+
+```bash
+# Run in conda environment
 pip install xrootd
 pip install fsspec-xrootd
 ```
@@ -71,6 +68,24 @@ Then hadd the skims to get one file per sample:
 python3 hadd_skims.py --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_[date]_hadd "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_[date]/*/*"
 ```
 
+For the n-minus-one skims, you can run the skims interactively:
+```
+python3 skim.py --skip_cut=rt --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_test [filename]
+```
+Or to submit n-minus-one skims for all file skipping a specific cut:
+```
+python3 submit_skim.py --skip_cut=rt --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_n_minus_one_[date] --go
+```
+
+The currently allowed values for the `--skip_cut` arguments are `"rt"`,
+`"muon_veto"`, `"electron_veto"` and `"metdphi"`. Notice that the `--skip_cut`
+flag is not needed when creating the hadd-ed skim files, we just need to
+change the input and output directories:
+```
+python3 hadd_skims.py --stageout root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_n_minus_one_[date]_hadd "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_n_minus_one_[date]/*/*"
+```
+
+
 ## How to run a training
 
 First download the training data (~4.7 Gb), and split it up into a training and test sample:
@@ -96,12 +111,12 @@ Then launch the training script:
 
 ```bash
 python training.py xgboost \
-    --reweight mt --ref data/train_signal/madpt300_mz350_mdark10_rinv0.3.npz \
-    --lr .05 \
-    --minchildweight .1 \
-    --maxdepth 6 \
-    --subsample 1. \
-    --nest 400
+  --reweight mt --ref data/train_signal/madpt300_mz350_mdark10_rinv0.3.npz \
+  --lr .05 \
+  --minchildweight .1 \
+  --maxdepth 6 \
+  --subsample 1. \
+  --nest 400
 ```
 
 Training with xgboost on the full background should take about 45 min.
@@ -164,7 +179,7 @@ python3 build_datacard.py build_all_histograms --binw 10 cutbased "root://cmseos
 After creating the histograms, merge across all data-taking years:
 ```bash
 for CAT in bkg data sig; do
-	python3 build_datacard.py merge_histograms cutbased hists_20240718 --cat $CAT
+  python3 build_datacard.py merge_histograms cutbased hists_20240718 --cat $CAT
 done
 ```
 
@@ -176,6 +191,31 @@ The output histograms from this step are truncated to the final mT range. (`--ta
 
 These merged, smoothed json files are the inputs to the limit setting. The signal, background, and (optionally) data are supplied separately.
 The resulting merged file should use the signal name, the selection type, bin widths, and ranges: `signal_name_cutbased_or_bdt_smooth_with_bkg_binwXY_rangeXYZ-XYZ.json`.
+
+## Creating the n-minus-one and preselection distribution histograms
+
+The `build_datacard.py` script can also be used to create the histogram JSON
+files for the distribution of other variables in the preselection region:
+```bash
+# Creating the "preselection" distribution of vairables ecfm2b1 and mt for background MC samples
+python3 build_datacard.py build_all_histograms preselection "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Summer*/*.npz" --hist_var_list ecfm2b1 mt
+# Histogram merging needs to be done separately as rebinning needs to be done on a per vairable basis
+python3 build_datacard.py merge_histograms preselection hists_[date] --cat bkg --hist_var ecfm2b1
+python3 build_datacard.py merge_histograms preselection hists_[date] --cat bkg --hist_var mt
+```
+The script can also be used for histograms used the n-minus-one plots. Notice
+that the cut that was skipped in the production of n-minus-one skims are stored
+as part of the dataset name, so adjust your input wildcard to reflect this.
+Also, because that n-minus-one skims does not store all variables to reduce
+file size, not all variables can be plotted with all n-minus-one variants. The
+following example is used for the n-minus-one histograms of the RT variable
+using signal samples.
+```bash
+# Notice the wildcard postfix for the input files
+python3 build_datacard.py build_all_histograms preselection_minus "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skim_n_minus_one_[date]/Private3D*/*pythia8*skip_cut-rt.npz" --hist_var_list rt --fullyear
+# The merge instructions also needs to be slightly adjusted
+python3 build_datacard.py merge_histograms preselection_minus-rt hists_[date] --cat sig --hist_var rt --years 2016 2017 2018
+```
 
 ## Extras
 

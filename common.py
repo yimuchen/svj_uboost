@@ -68,7 +68,7 @@ def debug(flag: bool = True) -> None:
 cms_style = {
     "font.sans-serif": ["TeX Gyre Heros", "Helvetica", "Arial"],
     "font.family": "sans-serif",
-    # 
+    #
     "mathtext.fontset": "custom",
     "mathtext.rm": "helvetica",
     "mathtext.bf": "helvetica:bold",
@@ -76,7 +76,7 @@ cms_style = {
     "mathtext.it": "helvetica:italic",
     "mathtext.tt": "helvetica",
     "mathtext.cal": "helvetica",
-    # 
+    #
     "figure.figsize": (10.0, 10.0),
     "font.size": 26,
     "axes.labelsize": "medium",
@@ -112,7 +112,7 @@ cms_style = {
     "savefig.transparent": False,
     "xaxis.labellocation": "right",
     "yaxis.labellocation": "top",
-    'text.usetex' : True,    
+    'text.usetex' : True,
     }
 
 def set_mpl_fontsize(small=16, medium=22, large=26):
@@ -598,7 +598,7 @@ class Histogram:
     @property
     def norm(self):
         return self.vals.sum()
-    
+
     def rebin(self, n=2):
         """
         Merge n bins together to make a coarser histogram.
@@ -643,24 +643,96 @@ class Histogram:
         h.errs = h.errs[imin:imax-1]
         return h
 
+def _create_binning(binw, left, right):
+    bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
+    # Force casting to python floats, as numpy values causes issues with JSON serialization
+    return [float(x) for x in bins]
 
-class MTHistogram(Histogram):
-    """
-    Small wrapper around Histogram that initializes from mt values and weights.
-    """
 
-    bins = MT_BINS.copy()
-    non_standard_binning = False
+class VarArrHistogram(Histogram):
+    """
+    Wrapper around histogram that initializes the value and weight arrays.
+    It will also carry around the current and default binning information
+    """
+    default_binning = (10,0,100) # Width, min, max
+    _bins = None # List of bin values
+    name = '' # Name of variable to use
+
+    @property
+    def bins(self):
+        if self._bins is None:
+            self._bins = self.create_binning(*self.default_binning)
+        return self._bins
+
+    @bins.setter
+    def bins(self, val):
+        self._bins = val
+
+    @property
+    def non_standard_binning(self):
+        if len(self.bins) != len(self.create_binning(*self.default_binning)):
+            return True
+        if not all(np.isclose(self.bins, self.create_binning(*self.default_binning))):
+            return True
+        return False
+
+    @classmethod
+    def default_binw(cls)->float:
+        return cls.default_binning[0]
+
+    @classmethod
+    def default_binmin(cls)->float:
+        return cls.default_binning[1]
+
+    @classmethod
+    def default_binmax(cls)->float:
+        return cls.default_binning[2]
+
+    @classmethod
+    def create_binning(cls, binw, left, right):
+        return _create_binning(binw, left, right)
 
     @classmethod
     def empty(cls):
         return Histogram(cls.bins)
 
-    def __init__(self, mt, weights=None):
-        vals = np.histogram(mt, self.bins, weights=weights)[0].astype(float)
-        weights2 = weights if weights is None else weights**2
-        errs = np.sqrt(np.histogram(mt, self.bins, weights=weights2)[0].astype(float))
+    def __init__(self, cols, weights=None):
+        var_arr = self._create_var_array(cols)
+        vals = np.histogram(var_arr, self.bins, weights=weights)[0].astype(float)
+        weights2 = weights if weights is None else weights **2
+        errs = np.sqrt(np.histogram(var_arr, self.bins, weights=weights2)[0].astype(float))
         super().__init__(self.bins, vals, errs)
+
+    @classmethod
+    def _create_var_array(cls,cols):
+        """Method for creating the values array used to fill the histogram"""
+        return cols.to_numpy([cls.name]).flatten()
+
+
+
+# List of variables with defined binning
+class MTHistogram(VarArrHistogram):
+    name='mt'
+    default_binning = (10, 130, 650)
+
+class ECFN2B2Histogram(VarArrHistogram):
+    name = 'ecfn2b2'
+    default_binning = (0.01, 0, 0.5)
+
+class ECFM2B1Histogram(VarArrHistogram):
+    name = 'ecfm2b1'
+    default_binning = (0.005,0,0.2)
+
+class RTHistogram(VarArrHistogram):
+    name = 'rt'
+    default_binning = (0.03, 1.0, 2.5)
+
+class METDPhiHistogram(VarArrHistogram):
+    name = 'metdphi'
+    default_binning = (0.08, 0, 3.2)
+
+registered_varhists = { subcl.name: subcl for subcl in VarArrHistogram.__subclasses__() }
+
 
 
 class Encoder(json.JSONEncoder):
@@ -696,7 +768,7 @@ class Columns(svj.Columns):
     """
     Data structure that contains all the training data (features)
     and information about the sample.
-    
+
     See: https://github.com/boostedsvj/svj_ntuple_processing/blob/main/svj_ntuple_processing/__init__.py#L357
     """
     @classmethod
@@ -806,7 +878,7 @@ def columns_to_numpy(
         # but some signal samples have more events.
         # Use 1/n_events as a weight per event.
         signal_weight.append((1./len_sig_cols)*np.ones(len_sig_cols))
-    
+
     bkg_weight = np.concatenate(bkg_weight)
     signal_weight = np.concatenate(signal_weight)
     # Set total signal weight equal to total bkg weight
@@ -843,7 +915,7 @@ def add_manual_weight_column(signal_cols, bkg_cols):
     for c in signal_cols:
         c.arrays['manualweight'] = np.ones(len(c)) / len(c)
         total_signal_weight += c.arrays['manualweight'].sum()
-    
+
     # Scale signal weights correctly w.r.t. bkg
     for c in signal_cols:
         c.arrays['manualweight'] *= total_bkg_weight / total_signal_weight
@@ -914,7 +986,7 @@ def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
     '''
     This function creates the dictionary of DDT 2D maps for a range of
         cut_vals at corresponding bkg efficiencies given as percents
-    The DDT 2D map at each cut_val contains: var_map_smooth, RHO_edges, and PT_edges, 
+    The DDT 2D map at each cut_val contains: var_map_smooth, RHO_edges, and PT_edges,
         The inputs to the function are (mt, pt, rho, var, weight, percents, cut_vals, ddt_name).
     In essense the DDT is a 2D function of rho and pt that
         is calculated using the background data for the variable
@@ -946,12 +1018,12 @@ def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
 
 def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     '''
-    This is a function to apply a design decorrelated tagger 
-        it decorrelates 'var' with respect to mt using 
+    This is a function to apply a design decorrelated tagger
+        it decorrelates 'var' with respect to mt using
         rho (a function of mass) and pt. At a given cut_val for
         a given DDT map inside of an npz file with the name 'ddt_name'
-    The inputs to the function are (mt, pt, rho, var, weight, cut_val) 
-        where cut_val will refer to the value of the key inside of dictionary 
+    The inputs to the function are (mt, pt, rho, var, weight, cut_val)
+        where cut_val will refer to the value of the key inside of dictionary
         with the proper var_map_smooth, RHO_edges, and PT_edges to use.
     '''
 
@@ -982,14 +1054,14 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     Rho_min, Rho_max = min(RHO_edges), max(RHO_edges)
 
     # Calculate the floating point bin indices for pt and rho
-    ptbin_float  = nbins*(pt-Pt_min)/(Pt_max-Pt_min) 
+    ptbin_float  = nbins*(pt-Pt_min)/(Pt_max-Pt_min)
     rhobin_float = nbins*(rho-Rho_min)/(Rho_max-Rho_min)
 
     # Convert the floating point bin indices to integer, and clip them to the range [0, nbins]
     ptbin  = np.clip(1 + np.round(ptbin_float).astype(int), 0, nbins)
     rhobin = np.clip(1 + np.round(rhobin_float).astype(int), 0, nbins)
 
-    # Calculate the DDT-transformed variable by subtracting the 
+    # Calculate the DDT-transformed variable by subtracting the
     # decorrelation function (smoothed variable map) from the original variable
     varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
     # Return the DDT-transformed variable
@@ -1073,7 +1145,7 @@ def apply_bdtbased(cols,wp,lumi,anti=False):
     # Get the features for the bkg samples
     X = cols.to_numpy(bdt_features)
     # Calculate bdt scores and event weights
-    score = calc_bdt_scores(X) 
+    score = calc_bdt_scores(X)
     weight = get_event_weight(cols, lumi)
 
     # Apply the DDT
