@@ -1068,7 +1068,6 @@ def apply_antiloosecutbased(cols):
 # Relative path to the BDT
 # This specific BDT was chosen to be used during the L3 review
 bdt_model_file = 'models/svjbdt_obj_rev_version.json'
-#ddt_map_file = 'models/ddt_AN_v5.json'
 
 def split_bdt(sel):
     parts = sel.split('=')
