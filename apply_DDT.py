@@ -10,7 +10,7 @@
 import os, os.path as osp, glob, pickle, logging, warnings, json, math, re
 from time import strftime
 from collections import OrderedDict
-from common import create_DDT_map_dict, calculate_varDDT, apply_cutbased
+from common import create_DDT_map_dict, calculate_varDDT
 import json
 import argparse
 
