@@ -1095,6 +1095,7 @@ def apply_bdtbased(cols,wp,lumi,anti=False,model_file = bdt_model_file,ddt_map_f
                    xrootd_url='root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/BDT_based/'):
 
     check_if_model_exists(ddt_map_file, xrootd_url)
+    check_if_model_exists(model_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
 
     # make sure bdt features match the choosen file
