@@ -283,7 +283,8 @@ def main():
 
         if verbosity > 1 : print(primary_var_ddt)
 
-    # Thi
+    # _____________________________________________
+    # BDT only section
     if ana_type == 'BDT-based' :
 
         # _____________________________________________
