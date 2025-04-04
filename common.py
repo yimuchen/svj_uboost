@@ -1017,7 +1017,7 @@ def check_if_model_exists(model_file, xrootd_url) :
             print(f"Error downloading {model_file}: {e}")
             return None
 
-def cutbased_ddt(cols, ddt_map_file, xrootd_url):
+def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url):
     check_if_model_exists(ddt_map_file, xrootd_url)
 
     # Get features necessary to apply the DDT
@@ -1038,7 +1038,7 @@ def apply_cutbased(cols):
 
 def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
     cols = apply_rt_signalregion(cols)
-    ddt_val = cutbased_ddt(cols, ddt_map_file, xrootd_url)
+    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
    
     # Now cut on the DDT above 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val > 0.0) # mask for the selection
@@ -1059,7 +1059,7 @@ def apply_cutbasedCRloose(cols):
 def apply_anticutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
 
     cols = apply_rt_signalregion(cols)
-    ddt_val = cutbased_ddt(cols, ddt_map_file, xrootd_url)
+    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
    
     # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val < 0.0) # mask for the selection
@@ -1074,7 +1074,7 @@ def apply_anticutbased(cols):
 
 def apply_antiloosecutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
 
-    ddt_val = cutbased_ddt(cols, ddt_map_file, xrootd_url)
+    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
 
     # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val < 0.0) # mask for the selection
