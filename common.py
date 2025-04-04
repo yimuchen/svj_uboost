@@ -1013,8 +1013,8 @@ def check_if_model_exists(model_file, xrootd_url) :
             os.makedirs(os.path.dirname(model_file), exist_ok=True)  # Ensure directory exists
             subprocess.run(["xrdcp", xrootd_url, model_file], check=True)
             print(f"Downloaded {model_file} successfully.")
-        except subprocess.RuntimeError as e:
-            print(f"Error downloading {model_file}: {e}")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Error downloading {model_file}: {e}")
             return None
 
 def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url):
