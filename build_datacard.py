@@ -141,6 +141,8 @@ def build_histogram(args=None):
         # signal region
         if selection=='cutbased':
             cols = common.apply_cutbased(cols)
+        elif selection=='cutbased_ddt':
+            cols = common.apply_cutbased_ddt(cols,lumi)
         elif selection.startswith('bdt='):
             wp = common.split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi)
@@ -151,8 +153,12 @@ def build_histogram(args=None):
             cols = common.apply_cutbasedCRloose(cols)
         elif selection=='anticutbased':
             cols = common.apply_anticutbased(cols)
+        elif selection=='anticutbased_ddt':
+            cols = common.apply_anticutbased_ddt(cols,lumi)
         elif selection=='antiloosecutbased':
             cols = common.apply_antiloosecutbased(cols)
+        elif selection=='antiloosecutbased_ddt':
+            cols = common.apply_antiloosecutbased_ddt(cols,lumi)
         elif selection.startswith('antibdt='):
             wp = common.split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi,anti=True)
