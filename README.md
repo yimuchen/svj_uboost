@@ -171,9 +171,9 @@ For signals, systematic variations are evaluated, and a wider mT range is used t
 
 ```bash
 # For the cut based: sig, bkg, data
-python3 build_datacard.py build_all_histograms --mtmin 130 --mtmax 700 --binw 10 cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Private3D*/*pythia8.npz"
-python3 build_datacard.py build_all_histograms --binw 10 cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Summer*/*.npz"
-python3 build_datacard.py build_all_histograms --binw 10 cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Run*/*.npz"
+python3 build_datacard.py build_all_histograms cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Private3D*/*pythia8.npz" --mtmin 130 --mtmax 700 --binw 10
+python3 build_datacard.py build_all_histograms cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Summer*/*.npz" --binw 10
+python3 build_datacard.py build_all_histograms cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Run*/*.npz" --binw 10
 ```
 
 After creating the histograms, merge across all data-taking years:

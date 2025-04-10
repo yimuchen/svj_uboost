@@ -292,7 +292,7 @@ def build_histogram(args=None):
 def build_all_histograms():
     # Read from sys.argv
     selection = common.pull_arg('selection', type=str).selection
-    hist_var_list = common.pull_arg("--hist_var_list", type=str, nargs='+', default=['mt']).hist_var_list
+    hist_var_list = common.pull_arg("--hist_var_list", type=str, nargs='*', default=['mt']).hist_var_list
     fullyear = common.pull_arg('--fullyear', action="store_true", help='treat 2018 as one year instead of splitting into pre and post').fullyear
     skimdir = common.pull_arg('skimdir', type=str).skimdir
 
