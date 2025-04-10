@@ -1,4 +1,4 @@
-import os, os.path as osp, logging, re, time, json, argparse, sys, math, shutil
+import os, os.path as osp, logging, re, time, json, argparse, sys, math, shutil, subprocess
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -1083,7 +1083,7 @@ def check_if_model_exists(model_file, xrootd_url) :
         print(f"File {model_file} not found. Downloading from {xrootd_url}...")
         try:
             os.makedirs(os.path.dirname(model_file), exist_ok=True)  # Ensure directory exists
-            subprocess.run(["xrdcp", xrootd_url, model_file], check=True)
+            subprocess.run(["xrdcp", xrootd_url+model_file, model_file], check=True)
             print(f"Downloaded {model_file} successfully.")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Error downloading {model_file}: {e}")
