@@ -108,8 +108,9 @@ def bdt_ddt_inputs(input_files:list[str], lumi, all_features):
     weight = np.concatenate([_get_weight(f) for f in input_files])
 
     # grab variable elements
-    rt, rho, mT, pT = X[:,-1], X[:,-2], X[:-3], X[:,-4]
-    X = X[:,:-4] # remove it fro
+    rt, rho, mT, pT = X[:,-1], X[:,-2], X[:,-3], X[:,-4]
+    X = X[:,:-4] # remove items from features list
+    print(rt.shape, rho.shape, mT.shape, pT.shape, X.shape)
 
     return X, pT, mT, rho, weight
 
@@ -283,7 +284,6 @@ def main():
         best_bdt_cuts = [] #store the best bdt values
         # Iterate over the variables in the 'con' dictionary
         for mz, mz_files in files_by_mass.items():
-            mz = sig_col.metadata['mz']
             s = f'bsvj_{mz:d}_10_0.3'
 
             # Grab the input features and weights
@@ -303,8 +303,8 @@ def main():
             fom = [] # to store the figure of merit values
             for cut_val in ana_variant[ana_type]['cut_values']:
 
-                sig_score_ddt = calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, cut_val, ddt_map_file)
                 bkg_score_ddt = calculate_varDDT(mT, pT, rho, primary_var, bkg_weight, cut_val, ddt_map_file)
+                sig_score_ddt = calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, cut_val, ddt_map_file)
 
                 # Apply ddt scores
                 sig_mT_ddt = sig_mT[sig_score_ddt > 0]
