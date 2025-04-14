@@ -20,18 +20,16 @@ def change_bin_width(hist_var):
     Changes MT binning based on command line options
     """
     VarHistogram = common.registered_varhists[hist_var]
-    binw = common.pull_arg(f'--{hist_var}binw', type=float, default=VarHistogram.default_binw()).__dict__[f"{hist_var}binw"]
+    binw = common.pull_arg(f'--{hist_var}binw', type=float).__dict__[f"{hist_var}binw"]
     binmin = common.pull_arg(f'--{hist_var}min', type=float, default=VarHistogram.default_binmin()).__dict__[f"{hist_var}min"]
     binmax = common.pull_arg(f'--{hist_var}max', type=float, default=VarHistogram.default_binmax()).__dict__[f"{hist_var}max"]
     if binw is not None:
         # Testing different bin widths
         VarHistogram.bins = VarHistogram.create_binning(binw, binmin, binmax)
-        common.logger.warning(f'Changing bin width to {binw}; new binning: {VarHistogram.bins}')
+        common.logger.warning(f'Changing bin width to {binw} ({binmin}, {binmax}); new binning: {VarHistogram.bins}')
 
 def check_rebin(hist,name, hist_var):
     VarHistogram = common.registered_varhists[hist_var]
-    if VarHistogram.bins is None:
-        VarHistogram.bins = VarHistogram.create_binning(*VarHistogram.default_binning)
     if not VarHistogram.non_standard_binning:
         return hist
     msg = []
@@ -375,6 +373,7 @@ def merge_histograms():
         for file in files:
             signals['_'.join(file.split('/')[1].split('_')[:-2])].append(file)
         for signal,sigfiles in signals.items():
+            common.logger.info(f"Running merge for {signal}")
             for year in years:
               if len([f for f in sigfiles if year in f]) == 0:
                   common.logger.warning(f"Missing files for signal/year: {signal}/{year}")
