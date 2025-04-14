@@ -656,6 +656,12 @@ class HistoBins(type):
     @bins.setter
     def bins(cls, val):
         cls._bins = val
+    @property
+    def non_standard_binning(cls):
+        return cls._non_standard_binning
+    @non_standard_binning.setter
+    def non_standard_binning(cls, val):
+        cls._non_standard_binning = val
 
 class VarArrHistogram(Histogram, metaclass=HistoBins):
     """
@@ -664,6 +670,7 @@ class VarArrHistogram(Histogram, metaclass=HistoBins):
     """
     default_binning = (10,0,100) # Width, min, max
     _bins = None # List of bin values
+    _non_standard_binning = False
     name = '' # Name of variable to use
 
     @property
@@ -676,11 +683,11 @@ class VarArrHistogram(Histogram, metaclass=HistoBins):
 
     @property
     def non_standard_binning(self):
-        if len(self.bins) != len(self.create_binning(*self.default_binning)):
-            return True
-        if not all(np.isclose(self.bins, self.create_binning(*self.default_binning))):
-            return True
-        return False
+        return self.__class__.non_standard_binning
+
+    @non_standard_binning.setter
+    def non_standard_binning(self, val):
+        self.__class__.non_standard_binning = val
 
     @classmethod
     def default_binw(cls)->float:
