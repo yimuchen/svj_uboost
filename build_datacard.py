@@ -26,6 +26,7 @@ def change_bin_width(hist_var):
     if binw is not None:
         # Testing different bin widths
         VarHistogram.bins = VarHistogram.create_binning(binw, binmin, binmax)
+        VarHistogram.non_standard_binning = True
         common.logger.warning(f'Changing bin width to {binw} ({binmin}, {binmax}); new binning: {VarHistogram.bins}')
 
 def check_rebin(hist,name, hist_var):
@@ -49,7 +50,6 @@ def check_rebin(hist,name, hist_var):
     return hist.rebin(rebin_factor).cut(VarHistogram.bins[0],VarHistogram.bins[-1])
 
 def rebin_dict(hists, hist_var):
-    VarHistogram = common.registered_varhists[hist_var]
     for key in hists:
         if isinstance(hists[key],list):
             for i,entry in enumerate(hists[key]):
@@ -63,7 +63,7 @@ def rebin_dict(hists, hist_var):
 
 def rebin_name(outfile, hist_var):
     VarHistogram = common.registered_varhists[hist_var]
-    if VarHistogram.non_standard_binning == True:
+    if VarHistogram.non_standard_binning:
         binw = VarHistogram.bins[1] - VarHistogram.bins[0]
         left = VarHistogram.bins[0]
         right = VarHistogram.bins[-1]
