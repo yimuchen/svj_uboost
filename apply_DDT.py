@@ -110,8 +110,6 @@ def bdt_ddt_inputs(input_files:list[str], lumi, all_features):
     # grab variable elements
     rt, rho, mT, pT = X[:,-1], X[:,-2], X[:,-3], X[:,-4]
     X = X[:,:-4] # remove items from features list
-    print(rt.shape, rho.shape, mT.shape, pT.shape, X.shape)
-
     return X, pT, mT, rho, weight
 
 
@@ -156,7 +154,7 @@ def main():
             "features": ["ecfm2b1"] + features_common,
             "inputs_to_primary": lambda x: x[:, 0],
             "primary_var_label": "$M_2^{(1)}$ $>$ ",
-            "cut_values": [0.09, 0.095,0.100,0.105,0.11,0.115,0.120]
+            "cut_values":  np.linspace(0.07 , 0.14, 15)
         },
         "BDT-based": {
             "features": read_training_features(model_file) + features_common,
@@ -353,12 +351,12 @@ def main():
         ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(1, 1))
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('FoM')
-        ax.set_xlabel('BDT cut value')
+        ax.set_xlabel('BDT cut value' if ana_type == "bdt" else "ECF cut value")
         if verbosity > 0 : print("plotting the FOM for the BDT cuts")
 
         # Save the plot as a PDF and png file
         # cannot use layout_tight, will cause saving errors
-        save_plot(plt, 'metrics_bdt_FOM', flag_tight_layout=False, bbox_inches='tight')
+        save_plot(plt, f'metrics_{ana_type}_FOM', flag_tight_layout=False, bbox_inches='tight')
         plt.close()
 
         # sort the best bdt cuts

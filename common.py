@@ -8,6 +8,7 @@ import requests
 import numpy as np
 from datetime import datetime
 import json
+from cycler import cycler
 
 np.random.seed(1001)
 
@@ -106,6 +107,7 @@ cms_style = {
     "grid.alpha": 0.8,
     "grid.linestyle": ":",
     "axes.linewidth": 2,
+    "axes.prop_cycle": cycler("color", ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2" , "#832db6" , "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd" ]),
     "savefig.transparent": False,
     "xaxis.labellocation": "right",
     "yaxis.labellocation": "top",
