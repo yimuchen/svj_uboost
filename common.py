@@ -1,4 +1,4 @@
-import os, os.path as osp, logging, re, time, json, argparse, sys, math, shutil
+import os, os.path as osp, logging, re, time, json, argparse, sys, math, shutil, subprocess
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -11,9 +11,6 @@ import json
 
 np.random.seed(1001)
 
-
-# Is this a good binning?
-MT_BINS = np.linspace(100., 1000., 101)
 
 # Where training data will be stored
 DATADIR = osp.join(osp.dirname(osp.abspath(__file__)), 'data')
@@ -648,33 +645,47 @@ def _create_binning(binw, left, right):
     # Force casting to python floats, as numpy values causes issues with JSON serialization
     return [float(x) for x in bins]
 
+class HistoBins(type):
+    @property
+    def bins(cls):
+        if cls._bins is None:
+            cls._bins = _create_binning(*cls.default_binning)
+        return cls._bins
+    @bins.setter
+    def bins(cls, val):
+        cls._bins = val
+    @property
+    def non_standard_binning(cls):
+        return cls._non_standard_binning
+    @non_standard_binning.setter
+    def non_standard_binning(cls, val):
+        cls._non_standard_binning = val
 
-class VarArrHistogram(Histogram):
+class VarArrHistogram(Histogram, metaclass=HistoBins):
     """
     Wrapper around histogram that initializes the value and weight arrays.
     It will also carry around the current and default binning information
     """
     default_binning = (10,0,100) # Width, min, max
     _bins = None # List of bin values
+    _non_standard_binning = False
     name = '' # Name of variable to use
 
     @property
     def bins(self):
-        if self._bins is None:
-            self._bins = self.create_binning(*self.default_binning)
-        return self._bins
+        return self.__class__.bins
 
     @bins.setter
     def bins(self, val):
-        self._bins = val
+        self.__class__.bins = val
 
     @property
     def non_standard_binning(self):
-        if len(self.bins) != len(self.create_binning(*self.default_binning)):
-            return True
-        if not all(np.isclose(self.bins, self.create_binning(*self.default_binning))):
-            return True
-        return False
+        return self.__class__.non_standard_binning
+
+    @non_standard_binning.setter
+    def non_standard_binning(self, val):
+        self.__class__.non_standard_binning = val
 
     @classmethod
     def default_binw(cls)->float:
@@ -713,7 +724,7 @@ class VarArrHistogram(Histogram):
 # List of variables with defined binning
 class MTHistogram(VarArrHistogram):
     name='mt'
-    default_binning = (10, 130, 650)
+    default_binning = (10, 180, 650)
 
 class ECFN2B2Histogram(VarArrHistogram):
     name = 'ecfn2b2'
@@ -1083,7 +1094,7 @@ def check_if_model_exists(model_file, xrootd_url) :
         print(f"File {model_file} not found. Downloading from {xrootd_url}...")
         try:
             os.makedirs(os.path.dirname(model_file), exist_ok=True)  # Ensure directory exists
-            subprocess.run(["xrdcp", xrootd_url, model_file], check=True)
+            subprocess.run(["xrdcp", xrootd_url+model_file, model_file], check=True)
             print(f"Downloaded {model_file} successfully.")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Error downloading {model_file}: {e}")
