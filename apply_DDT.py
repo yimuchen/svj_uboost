@@ -154,7 +154,7 @@ def main():
             "features": ["ecfm2b1"] + features_common,
             "inputs_to_primary": lambda x: x[:, 0],
             "primary_var_label": "$M_2^{(1)}$ $>$ ",
-            "cut_values":  np.linspace(0.07 , 0.14, 15)
+            "cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
         },
         "BDT-based": {
             "features": read_training_features(model_file) + features_common,
@@ -304,23 +304,25 @@ def main():
                 bkg_score_ddt = calculate_varDDT(mT, pT, rho, primary_var, bkg_weight, cut_val, ddt_map_file)
                 sig_score_ddt = calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, cut_val, ddt_map_file)
 
-                # Apply ddt scores
-                sig_mT_ddt = sig_mT[sig_score_ddt > 0]
-                bkg_mT_ddt = mT[bkg_score_ddt > 0]
+                # Score mask
+                sig_score_mask = sig_score_ddt > 0
+                bkg_score_mask = bkg_score_ddt > 0
+                # MT mask
+                sig_mt_mask = (sig_mT > (mz- 100)) & (sig_mT < (mz + 100))
+                bkg_mt_mask = (bkg_mT > (mz- 100)) & (bkg_mT < (mz + 100))
 
-                # Apply mT window
-                sig_mT_mask = (sig_mT_ddt > (mz - 100)) & (sig_mT_ddt < (mz + 100) )
-                bkg_mT_mask = (bkg_mT_ddt > (mz - 100)) & (bkg_mT_ddt < (mz + 100) )
-                sig_mT_ddt = sig_mT_ddt[sig_mT_mask]
-                bkg_mT_ddt = bkg_mT_ddt[bkg_mT_mask]
-                wsig_bdt_mT_wind = sig_weight[sig_score_ddt > 0][sig_mT_mask]
-                wbkg_bdt_mT_wind = bkg_weight[bkg_score_ddt > 0][bkg_mT_mask]
+                # Apply mask to variable of interset
+                sig_mt_fill = sig_mT[sig_score_mask & sig_mt_mask]
+                sig_weight_fill = sig_weight[sig_score_mask & sig_mt_mask]
+                bkg_mt_fill = bkg_mT[bkg_score_mask & bkg_mt_mask]
+                bkg_weight_fill = bkg_weight[bkg_score_mask & bkg_mt_mask]
 
                 # Calculate the figure of merit values for this bdt cut
-                S = sum(np.histogram(sig_mT_ddt, bins=50, weights=wsig_bdt_mT_wind)[0])
-                B = sum(np.histogram(bkg_mT_ddt, bins=50, weights=wbkg_bdt_mT_wind)[0])
-                if verbosity > 0 : print("mZ': ", mz, " S: ", S, "B: ", B)
-                fom.append(FOM(S,B))
+                S = sum(np.histogram(sig_mt_fill, bins=50, weights=sig_weight_fill)[0])
+                B = sum(np.histogram(bkg_mt_fill, bins=50, weights=bkg_weight_fill)[0])
+                F = FOM(S,B)
+                if verbosity > 0 : print("mZ': ", mz, "cut:" , cut_val, " S: ", S, "B: ", B, "FOM:" , F)
+                fom.append(F)
 
             # Find the cut value corresponding to the maximum figure of merit
             fom_array = np.array(fom)
