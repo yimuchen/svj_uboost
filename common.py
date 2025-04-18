@@ -1061,24 +1061,13 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     # Apply the rho-ddt window cuts to the data
     cuts = rhoddt_windowcuts(mt, pt, rho)
 
-    # Define the number of bins and the min/max values for pt and rho
-    nbins = 49
-    Pt_min, Pt_max = min(PT_edges), max(PT_edges)
-    Rho_min, Rho_max = min(RHO_edges), max(RHO_edges)
+    # Getting the corresponding bin indicies for given PT/Rho array
+    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0 , 49)
+    rho_bin = np.clip(np.digitize(rho, RHO_edges) - 1, 0 , 49)
 
-    # Calculate the floating point bin indices for pt and rho
-    ptbin_float  = nbins*(pt-Pt_min)/(Pt_max-Pt_min)
-    rhobin_float = nbins*(rho-Rho_min)/(Rho_max-Rho_min)
+    # Evaluating the DDT
+    return var - var_map_smooth[rho_bin, pt_bin]
 
-    # Convert the floating point bin indices to integer, and clip them to the range [0, nbins]
-    ptbin  = np.clip(1 + np.round(ptbin_float).astype(int), 0, nbins)
-    rhobin = np.clip(1 + np.round(rhobin_float).astype(int), 0, nbins)
-
-    # Calculate the DDT-transformed variable by subtracting the
-    # decorrelation function (smoothed variable map) from the original variable
-    varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
-    # Return the DDT-transformed variable
-    return varDDT
 
 def apply_hemveto(cols):
     cols = cols.select(svj.veto_HEM(cols.arrays['ak4_subl_eta'],cols.arrays['ak4_subl_phi'],cols.arrays['ak4_subl_pt']))
@@ -1124,7 +1113,7 @@ def apply_cutbased(cols):
 def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
     cols = apply_rt_signalregion(cols)
     ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
-   
+
     # Now cut on the DDT above 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val > 0.0) # mask for the selection
     cols.cutflow['cutbased_ddt'] = len(cols)
@@ -1145,7 +1134,7 @@ def apply_anticutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_A
 
     cols = apply_rt_signalregion(cols)
     ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
-   
+
     # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val < 0.0) # mask for the selection
     cols.cutflow['anticutbased_ddt'] = len(cols)
