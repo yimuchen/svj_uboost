@@ -309,12 +309,12 @@ def main():
                 bkg_score_mask = bkg_score_ddt > 0
                 # MT mask
                 sig_mt_mask = (sig_mT > (mz- 100)) & (sig_mT < (mz + 100))
-                bkg_mt_mask = (bkg_mT > (mz- 100)) & (bkg_mT < (mz + 100))
+                bkg_mt_mask = (mT > (mz- 100)) & (mT < (mz + 100))
 
                 # Apply mask to variable of interset
                 sig_mt_fill = sig_mT[sig_score_mask & sig_mt_mask]
                 sig_weight_fill = sig_weight[sig_score_mask & sig_mt_mask]
-                bkg_mt_fill = bkg_mT[bkg_score_mask & bkg_mt_mask]
+                bkg_mt_fill = mT[bkg_score_mask & bkg_mt_mask]
                 bkg_weight_fill = bkg_weight[bkg_score_mask & bkg_mt_mask]
 
                 # Calculate the figure of merit values for this bdt cut
