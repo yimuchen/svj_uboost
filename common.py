@@ -967,15 +967,15 @@ def varmap(mt, pt, rho, var, weight, percent):
 
     # Get the variable for the data that passed the cuts
     VAR = var[cuts]
+    # Getting the bin index for each of the values
+    rho_bin_idx = np.digitize(rho[cuts], RHO_edges) - 1
+    pt_bin_idx = np.digitize(pt[cuts], PT_edges) - 1
 
     # Loop over the bins in rho and pt
     for i in range(len(RHO_edges)-1):
         for j in range(len(PT_edges)-1):
             # Apply cuts to select data in the current rho and pt bin
-            CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
-
-            # If there is no data in this bin, skip it
-            if len(VAR[CUT])==0: continue
+            CUT = (rho_bin_idx == i) & (pt_bin_idx == j)
 
             # If there is data in this bin, calculate the percentile of the variable
             if len(VAR[CUT])>0:
