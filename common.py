@@ -950,6 +950,37 @@ def rhoddt_windowcuts(mt, pt, rho):
     cuts = (mt>180) & (mt<650) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
     return cuts
 
+def weighted_percentile(x, w, percent):
+    """
+    Returning the percentile while properly handling event weights.
+    """
+    # Sorting the input entries according to the values
+    sorted_x = x[np.argsort(x)]
+    sorted_w = w[np.argsort(x)]
+    # Generating the cumulative sum
+    sorted_c = np.cumsum(sorted_w)
+    # Scaling the cumulative sum so that the actual data points are centered at half the weight
+    sorted_c = ((sorted_c - (sorted_w / 2)) / sorted_c[-1]) * 100
+
+    # Special case handling, extreme percent values
+    if percent > sorted_c[-1]:
+        return sorted_x[-1]
+    if percent < sorted_c[0]:
+        return sorted_x[0]
+
+    # Getting the points where the cumulative sum pass above or below the percentile of interest
+    lower_val = np.max(sorted_x[sorted_c <= percent])
+    upper_val = np.min(sorted_x[sorted_c >= percent])
+
+    lower_sum = np.max(sorted_c[sorted_c <= percent])
+    upper_sum = np.min(sorted_c[sorted_c >= percent])
+
+    # Getting the interpolation weight if the percentile does not land on a single number
+    int_w = 0.5 if upper_sum == lower_sum else (percent - lower_sum)/(upper_sum - lower_sum)
+
+    return upper_val *int_w + lower_val * (1-int_w)
+
+
 def varmap(mt, pt, rho, var, weight, percent):
     '''
     2D map that basically is the DDT
@@ -966,7 +997,7 @@ def varmap(mt, pt, rho, var, weight, percent):
     VAR_map = [[0 for x in range(w)] for y in range(h)]
 
     # Get the variable for the data that passed the cuts
-    VAR = var[cuts]
+    VAR, W = var[cuts], weight[cuts]
     # Getting the bin index for each of the values
     rho_bin_idx = np.digitize(rho[cuts], RHO_edges) - 1
     pt_bin_idx = np.digitize(pt[cuts], PT_edges) - 1
@@ -979,7 +1010,7 @@ def varmap(mt, pt, rho, var, weight, percent):
 
             # If there is data in this bin, calculate the percentile of the variable
             if len(VAR[CUT])>0:
-                VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
+                VAR_map[i][j]=weighted_percentile(VAR[CUT], W[CUT], 100-percent) # percent is calculated based on the bdt working point
 
     # Smooth the variable map using a Gaussian filter
     VAR_map_smooth = gaussian_filter(VAR_map,1)

@@ -29,7 +29,7 @@ import seutils as se
 
 np.random.seed(1001)
 
-from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion, calc_bdt_scores
+from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion, calc_bdt_scores, expand_wildcards, signal_xsecs
 
 #------------------------------------------------------------------------------
 # Global variables and user input arguments -----------------------------------
@@ -95,29 +95,23 @@ def save_plot(plt, plt_name, flag_tight_layout=True, **kwargs):
     plt.savefig(f'plots/{plt_name}.pdf', **kwargs)
 
 def bdt_ddt_inputs(input_files:list[str], lumi, all_features):
+    def _get_cols(file:str):
+        return apply_rt_signalregion(Columns.load(file))
+    cols = [_get_cols(f) for f in input_files]
+    # Extracting event features of interest
+    X = np.concatenate([c.to_numpy(all_features) for c in cols])
+    # Extracting event weights
+    weight = np.concatenate([
+        c.xs / c.cutflow['raw'] * lumi * c.arrays['puweight']
+        for c in cols
+    ])
 
-    def _get_features(file:str):
-        return apply_rt_signalregion(Columns.load(file)).to_numpy(all_features)
-
-    def _get_weight(file:str):
-        col = apply_rt_signalregion(Columns.load(file))
-        return col.xs / col.cutflow['raw'] * lumi * col.arrays['puweight']
-
-    # Storing column features
-    X = np.concatenate([_get_features(f) for f in input_files])
-    weight = np.concatenate([_get_weight(f) for f in input_files])
-
-    # grab variable elements
+    # grab individual elements
     rt, rho, mT, pT = X[:,-1], X[:,-2], X[:,-3], X[:,-4]
     X = X[:,:-4] # remove items from features list
     return X, pT, mT, rho, weight
 
 
-def mini_glob(pattern):
-    if pattern.startswith("root"):
-        return se.ls_wildcard(pattern)
-    else:
-        return glob.glob(pattern)
 
 #------------------------------------------------------------------------------
 # The Main Function -----------------------------------------------------------
@@ -141,9 +135,6 @@ def main():
 
     set_mpl_fontsize(18, 22, 26)
 
-
-
-
     #--------------------------------------------------------------------------
     # For the cut-based search ------------------------------------------------
     #--------------------------------------------------------------------------
@@ -164,7 +155,7 @@ def main():
         }
     }
 
-    X, pT, mT, rho, bkg_weight = bdt_ddt_inputs(mini_glob(bkg_files), lumi, ana_variant[ana_type]["features"])
+    X, pT, mT, rho, bkg_weight = bdt_ddt_inputs(expand_wildcards([bkg_files]), lumi, ana_variant[ana_type]["features"])
     primary_var = ana_variant[ana_type]["inputs_to_primary"](X)
     bkg_eff=[]
     bkg_percents=[]
@@ -269,10 +260,10 @@ def main():
         # Group files by mass point
         files_by_mass = {
             mass: [
-                f for f in mini_glob(sig_files)
+                f for f in expand_wildcards([sig_files])
                 if f'mMed-{mass}' in f and 'mDark-10' in f and 'rinv-0p3' in f
             ]
-            for mass in [200,250,300,350,400,450,500,550]
+            for mass in common.signal_xsecs.keys()
         }
         # Prepare a figure
         fig = plt.figure(figsize=(10, 7))
@@ -354,7 +345,7 @@ def main():
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('FoM')
         ax.set_xlabel('BDT cut value' if ana_type == "bdt" else "ECF cut value")
-        if verbosity > 0 : print("plotting the FOM for the BDT cuts")
+        if verbosity > 0 : print(f"plotting the FOM for the {ana_type} cuts")
 
         # Save the plot as a PDF and png file
         # cannot use layout_tight, will cause saving errors
@@ -399,12 +390,12 @@ def main():
             hep.cms.label(rlabel="(13 TeV)")
 
             # Loop over the mZ values
-            for sig_file in mini_glob(sig_files):
+            for sig_file in expand_wildcards([sig_files]):
                 sig_col = Columns.load(sig_file)
                 mz = sig_col.metadata['mz']
 
                 # Signal Column
-                sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs([sig_files], lumi, ana_variant[ana_type]['features'])
+                sig_X, sig_pT, sig_mT, sig_rho, sig_weight = bdt_ddt_inputs([sig_file], lumi, ana_variant[ana_type]['features'])
                 if verbosity > 0 : print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
 
                 # _____________________________________________
