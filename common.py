@@ -223,6 +223,7 @@ def imgcat(path) -> None:
 
 def expand_wildcards(pats):
     import seutils
+    import glob
     expanded = []
     for pat in pats:
         if '*' in pat:
@@ -1093,8 +1094,8 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     cuts = rhoddt_windowcuts(mt, pt, rho)
 
     # Getting the corresponding bin indicies for given PT/Rho array
-    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0 , 49)
-    rho_bin = np.clip(np.digitize(rho, RHO_edges) - 1, 0 , 49)
+    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0 , len(PT_edges) -1)
+    rho_bin = np.clip(np.digitize(rho, RHO_edges) - 1, 0 , len(RHO_edges) -1)
 
     # Evaluating the DDT
     return var - var_map_smooth[rho_bin, pt_bin]
