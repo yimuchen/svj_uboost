@@ -293,11 +293,11 @@ def main():
             for cut_val in ana_variant[ana_type]['cut_values']:
                 def _get_ddt_yield(mT, pT, rho, var, weight):
                     score_ddt = calculate_varDDT(mT, pT, rho, var, weight, cut_val, ddt_map_file)
-                    score_mask = score > 0
+                    score_mask = score_ddt > 0
                     mt_mask = (mT > (mz - 100)) & (mT < (mz + 100))
                     mt_fill = mT[score_mask & mt_mask]
                     weight_fill = weight[score_mask & mt_mask]
-                    return sum(np.histogram(sig_mt_fill, bins=50, weights=sig_weight_fill)[0])
+                    return sum(np.histogram(mt_fill, bins=50, weights=weight_fill)[0])
 
                 # Calculate the figure of merit values for this bdt cut
                 S = _get_ddt_yield(sig_mT, sig_pT, sig_rho, sig_primary_var, sig_weight)
