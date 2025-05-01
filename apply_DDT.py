@@ -106,6 +106,9 @@ def bdt_ddt_inputs(input_files:list[str], lumi, all_features):
         for c in cols
     ])
 
+    # Removing the extremely large weight event (1 event in 2017)
+    X, weight = X[weight < 2e5], weight[weight < 2e5]
+
     # grab individual elements
     rt, rho, mT, pT = X[:,-1], X[:,-2], X[:,-3], X[:,-4]
     X = X[:,:-4] # remove items from features list
