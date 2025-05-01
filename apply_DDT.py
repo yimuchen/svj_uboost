@@ -263,7 +263,7 @@ def main():
                 f for f in expand_wildcards([sig_files])
                 if f'mMed-{mass}' in f and 'mDark-10' in f and 'rinv-0p3' in f
             ]
-            for mass in common.signal_xsecs.keys()
+            for mass in signal_xsecs.keys()
         }
         # Prepare a figure
         fig = plt.figure(figsize=(10, 7))
@@ -280,8 +280,8 @@ def main():
             if verbosity > 0 : print("M(Z') = ", mz, " Events: ", len(sig_X), " weights: ", sig_weight)
 
             # _____________________________________________
-            # Open the trained models and get the scores
-            sig_score = ana_variant[ana_type]["inputs_to_primary"](sig_X)
+            # Extracting the primary variable for comparison
+            sig_primary_var = ana_variant[ana_type]["inputs_to_primary"](sig_X)
 
             # _____________________________________________
             # Apply the DDT and calculate FOM
@@ -291,26 +291,17 @@ def main():
             # Iterate over the bdt cut values
             fom = [] # to store the figure of merit values
             for cut_val in ana_variant[ana_type]['cut_values']:
-
-                bkg_score_ddt = calculate_varDDT(mT, pT, rho, primary_var, bkg_weight, cut_val, ddt_map_file)
-                sig_score_ddt = calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, cut_val, ddt_map_file)
-
-                # Score mask
-                sig_score_mask = sig_score_ddt > 0
-                bkg_score_mask = bkg_score_ddt > 0
-                # MT mask
-                sig_mt_mask = (sig_mT > (mz- 100)) & (sig_mT < (mz + 100))
-                bkg_mt_mask = (mT > (mz- 100)) & (mT < (mz + 100))
-
-                # Apply mask to variable of interset
-                sig_mt_fill = sig_mT[sig_score_mask & sig_mt_mask]
-                sig_weight_fill = sig_weight[sig_score_mask & sig_mt_mask]
-                bkg_mt_fill = mT[bkg_score_mask & bkg_mt_mask]
-                bkg_weight_fill = bkg_weight[bkg_score_mask & bkg_mt_mask]
+                def _get_ddt_yield(mT, pT, rho, var, weight):
+                    score_ddt = calculate_varDDT(mT, pT, rho, var, weight, cut_val, ddt_map_file)
+                    score_mask = score > 0
+                    mt_mask = (mT > (mz - 100)) & (mT < (mz + 100))
+                    mt_fill = mT[score_mask & mt_mask]
+                    weight_fill = weight[score_mask & mt_mask]
+                    return sum(np.histogram(sig_mt_fill, bins=50, weights=sig_weight_fill)[0])
 
                 # Calculate the figure of merit values for this bdt cut
-                S = sum(np.histogram(sig_mt_fill, bins=50, weights=sig_weight_fill)[0])
-                B = sum(np.histogram(bkg_mt_fill, bins=50, weights=bkg_weight_fill)[0])
+                S = _get_ddt_yield(sig_mT, sig_pT, sig_rho, sig_primary_var, sig_weight)
+                B = _get_ddt_yield(mT, pT, rho, primary_var, bkg_weight)
                 F = FOM(S,B)
                 if verbosity > 0 : print("mZ': ", mz, "cut:" , cut_val, " S: ", S, "B: ", B, "FOM:" , F)
                 fom.append(F)
