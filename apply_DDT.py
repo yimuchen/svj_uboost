@@ -120,7 +120,6 @@ def bdt_ddt_inputs(input_files: list[str], lumi, all_features):
         mask_bin = np.array(mask_bin)
         return mask_bin[bin_idx] # Extracting to per-event masking via array index
 
-
     cols = [_get_cols(f) for f in input_files]
 
     # Extract and filter
@@ -171,12 +170,14 @@ def main():
     #--------------------------------------------------------------------------
     # Grab the bkg data
     features_common = ["pt", "mt", "rho", "rt"]
+    #features_common = ["pt", "mt", "rho", "mass", "rt"]
     ana_variant = {
         "cut-based": {
             "features": ["ecfm2b1"] + features_common,
             "inputs_to_primary": lambda x: x[:, 0],
             "primary_var_label": "$M_2^{(1)}$ $>$ ",
-            "cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
+            #"cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
+            "cut_values":  [0.09, 0.12, 0.13, 0.14]
         },
         "BDT-based": {
             "features": read_training_features(model_file) + features_common,

@@ -987,6 +987,7 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
     Decorrelates the tagger variable with respect to mt using a 2D (mt, pt) map.
     '''
 
+    # Apply the rho-ddt window cuts to the data (still useful for pt/mt range)
     cuts = rhoddt_windowcuts(mt, pt, rho)
     mt_pt = mt/pt
 
@@ -1018,8 +1019,6 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
     # Return smoothed map and the new mt and pt bin edges
     return VAR_map_smooth, MT_PT_edges, PT_edges
 
-    # Return the smoothed variable map, along with the rho and pt edges
-    return VAR_map_smooth, RHO_edges, PT_edges
 
 # Class that converts numpy arrays into list so they can be easily stored in json files
 class NumpyArrayEncoder(json.JSONEncoder):
@@ -1091,7 +1090,7 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     # Get the smoothed map and bin edges
     var_map_smooth, MT_PT_edges, PT_edges = var_dict[str(cut_val)]
     var_map_smooth = np.array(var_map_smooth)
-    RHO_edges = np.array(RHO_edges)
+    MT_edges = np.array(MT_edges)
     PT_edges = np.array(PT_edges)
 
     # Apply DDT window cuts (you can update this function later if you drop rho)
@@ -1135,6 +1134,11 @@ def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val = 0.12):
     mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
     pT = cols.to_numpy(['pt']).ravel()
     rho = cols.to_numpy(['rho']).ravel()
+
+    # test rho prime: m/mT to target decorreltion against mT rather than pT
+    #m = cols.to_numpy(['mass']).ravel()
+    #rho = 2 * np.log(m/mT)
+
     ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
     weight = get_event_weight(cols, lumi)
 
@@ -1147,7 +1151,9 @@ def apply_cutbased(cols):
     cols.cutflow['cutbased'] = len(cols)
     return cols
 
-def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+#def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+#def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6_minus_large_weight.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'cutbased_rhoprime_adapt_range_ddt.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
     cols = apply_rt_signalregion(cols)
     ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
 
