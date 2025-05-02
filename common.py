@@ -8,6 +8,7 @@ import requests
 import numpy as np
 from datetime import datetime
 import json
+from cycler import cycler
 
 np.random.seed(1001)
 
@@ -106,6 +107,7 @@ cms_style = {
     "grid.alpha": 0.8,
     "grid.linestyle": ":",
     "axes.linewidth": 2,
+    "axes.prop_cycle": cycler("color", ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2" , "#832db6" , "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd" ]),
     "savefig.transparent": False,
     "xaxis.labellocation": "right",
     "yaxis.labellocation": "top",
@@ -221,6 +223,7 @@ def imgcat(path) -> None:
 
 def expand_wildcards(pats):
     import seutils
+    import glob
     expanded = []
     for pat in pats:
         if '*' in pat:
@@ -948,6 +951,37 @@ def rhoddt_windowcuts(mt, pt, rho):
     cuts = (mt>180) & (mt<650) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
     return cuts
 
+def weighted_percentile(x, w, percent):
+    """
+    Returning the percentile while properly handling event weights.
+    """
+    # Sorting the input entries according to the values
+    sorted_x = x[np.argsort(x)]
+    sorted_w = w[np.argsort(x)]
+    # Generating the cumulative sum
+    sorted_c = np.cumsum(sorted_w)
+    # Scaling the cumulative sum so that the actual data points are centered at half the weight
+    sorted_c = ((sorted_c - (sorted_w / 2)) / sorted_c[-1]) * 100
+
+    # Special case handling, extreme percent values
+    if percent > sorted_c[-1]:
+        return sorted_x[-1]
+    if percent < sorted_c[0]:
+        return sorted_x[0]
+
+    # Getting the points where the cumulative sum pass above or below the percentile of interest
+    lower_val = np.max(sorted_x[sorted_c <= percent])
+    upper_val = np.min(sorted_x[sorted_c >= percent])
+
+    lower_sum = np.max(sorted_c[sorted_c <= percent])
+    upper_sum = np.min(sorted_c[sorted_c >= percent])
+
+    # Getting the interpolation weight if the percentile does not land on a single number
+    int_w = 0.5 if upper_sum == lower_sum else (percent - lower_sum)/(upper_sum - lower_sum)
+
+    return upper_val *int_w + lower_val * (1-int_w)
+
+
 def varmap(mt, pt, rho, var, weight, percent):
     '''
     2D map that basically is the DDT
@@ -964,20 +998,20 @@ def varmap(mt, pt, rho, var, weight, percent):
     VAR_map = [[0 for x in range(w)] for y in range(h)]
 
     # Get the variable for the data that passed the cuts
-    VAR = var[cuts]
+    VAR, W = var[cuts], weight[cuts]
+    # Getting the bin index for each of the values
+    rho_bin_idx = np.digitize(rho[cuts], RHO_edges) - 1
+    pt_bin_idx = np.digitize(pt[cuts], PT_edges) - 1
 
     # Loop over the bins in rho and pt
     for i in range(len(RHO_edges)-1):
         for j in range(len(PT_edges)-1):
             # Apply cuts to select data in the current rho and pt bin
-            CUT = (rho[cuts]>RHO_edges[i]) & (rho[cuts]<RHO_edges[i+1]) & (pt[cuts]>PT_edges[j]) & (pt[cuts]<PT_edges[j+1])
-
-            # If there is no data in this bin, skip it
-            if len(VAR[CUT])==0: continue
+            CUT = (rho_bin_idx == i) & (pt_bin_idx == j)
 
             # If there is data in this bin, calculate the percentile of the variable
             if len(VAR[CUT])>0:
-                VAR_map[i][j]=np.percentile(VAR[CUT],100-percent) # percent is calculated based on the bdt working point
+                VAR_map[i][j]=weighted_percentile(VAR[CUT], W[CUT], 100-percent) # percent is calculated based on the bdt working point
 
     # Smooth the variable map using a Gaussian filter
     VAR_map_smooth = gaussian_filter(VAR_map,1)
@@ -1059,24 +1093,13 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     # Apply the rho-ddt window cuts to the data
     cuts = rhoddt_windowcuts(mt, pt, rho)
 
-    # Define the number of bins and the min/max values for pt and rho
-    nbins = 49
-    Pt_min, Pt_max = min(PT_edges), max(PT_edges)
-    Rho_min, Rho_max = min(RHO_edges), max(RHO_edges)
+    # Getting the corresponding bin indicies for given PT/Rho array
+    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0 , len(PT_edges) -1)
+    rho_bin = np.clip(np.digitize(rho, RHO_edges) - 1, 0 , len(RHO_edges) -1)
 
-    # Calculate the floating point bin indices for pt and rho
-    ptbin_float  = nbins*(pt-Pt_min)/(Pt_max-Pt_min)
-    rhobin_float = nbins*(rho-Rho_min)/(Rho_max-Rho_min)
+    # Evaluating the DDT
+    return var - var_map_smooth[rho_bin, pt_bin]
 
-    # Convert the floating point bin indices to integer, and clip them to the range [0, nbins]
-    ptbin  = np.clip(1 + np.round(ptbin_float).astype(int), 0, nbins)
-    rhobin = np.clip(1 + np.round(rhobin_float).astype(int), 0, nbins)
-
-    # Calculate the DDT-transformed variable by subtracting the
-    # decorrelation function (smoothed variable map) from the original variable
-    varDDT = np.array([var[i] - var_map_smooth[rhobin[i]-1][ptbin[i]-1] for i in range(len(var))])
-    # Return the DDT-transformed variable
-    return varDDT
 
 def apply_hemveto(cols):
     cols = cols.select(svj.veto_HEM(cols.arrays['ak4_subl_eta'],cols.arrays['ak4_subl_phi'],cols.arrays['ak4_subl_pt']))
@@ -1122,7 +1145,7 @@ def apply_cutbased(cols):
 def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
     cols = apply_rt_signalregion(cols)
     ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
-   
+
     # Now cut on the DDT above 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val > 0.0) # mask for the selection
     cols.cutflow['cutbased_ddt'] = len(cols)
@@ -1143,7 +1166,7 @@ def apply_anticutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_A
 
     cols = apply_rt_signalregion(cols)
     ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
-   
+
     # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val < 0.0) # mask for the selection
     cols.cutflow['anticutbased_ddt'] = len(cols)
