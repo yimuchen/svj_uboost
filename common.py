@@ -948,8 +948,7 @@ def rhoddt_windowcuts(mt, pt, rho):
     '''
     Basically a tool to constantly check the kinematics during the DDT processes
     '''
-    #cuts = (mt>180) & (mt<650) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
-    cuts = (mt>100) & (mt<800) & (pt>110) & (pt<1500) #& (rho>-4) & (rho<0)
+    cuts = (mt>100) & (mt<800) & (pt>110) & (pt<1500)
     return cuts
 
 def weighted_percentile(x, w, percent):
@@ -1138,16 +1137,10 @@ def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url):
     mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
     pT = cols.to_numpy(['pt']).ravel()
     rho = cols.to_numpy(['rho']).ravel()
-
-    # test rho prime: m/mT to target decorreltion against mT rather than pT
-    #m = cols.to_numpy(['mass']).ravel()
-    #rho = 2 * np.log(m/mT)
-
     ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
     weight = get_event_weight(cols, lumi)
 
     ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, 0.14, ddt_map_file)
-    #ddt_val = calculate_varDDT(mT, mT, rho, ecfm2b1, weight, 0.09, ddt_map_file)
     return ddt_val
 
 def apply_cutbased(cols):

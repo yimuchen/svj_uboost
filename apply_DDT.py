@@ -151,7 +151,6 @@ def main():
     #--------------------------------------------------------------------------
     # Grab the bkg data
     features_common = ["pt", "mt", "rho", "rt"]
-    #features_common = ["pt", "mt", "rho", "mass", "rt"]
     ana_variant = {
         "cut-based": {
             "features": ["ecfm2b1"] + features_common,
