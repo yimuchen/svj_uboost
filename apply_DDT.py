@@ -297,12 +297,32 @@ def main():
             ax.step(bin_centers, ratio, where='mid',
                     label=f'DDT({var_label} {cuts})')
 
-        # Set axis labels and limits
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$ [GeV]')
         ax.set_ylabel(r'Ratio: $\mathrm{DDT} > 0 \,/\, \mathrm{DDT} < 0$')
         ax.legend()
         save_plot(plt, f'bkg_ddt_ratio_vs_mT_{ana_type}')
         plt.close()
+
+        # Plot normalized ratio: divide each ratio curve by its average to see shape only
+        fig, ax = plt.subplots(figsize=(10, 8))
+        hep.cms.label(rlabel="(13 TeV)")
+
+        for cuts, ratio in zip(ana_variant[ana_type]["cut_values"], all_ratios):
+            # Compute average, ignoring empty bins
+            avg = np.nanmean(ratio[ratio > 0])  # or use np.mean with a mask
+            normalized_ratio = np.divide(ratio, avg, out=np.zeros_like(ratio), where=avg > 0)
+
+            ax.step(bin_centers, normalized_ratio, where='mid',
+                    label=f'DDT({var_label} {cuts})')
+
+        ax.axhline(1.0, color='gray', linestyle='--', linewidth=1)
+        ax.set_ylim(0.0, 2.0)  
+        ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$ [GeV]')
+        ax.set_ylabel(r'$(\mathrm{DDT}>0/\mathrm{DDT}<0) \,/\, \langle\mathrm{DDT}>0/\mathrm{DDT}<0\rangle$')
+        ax.legend()
+        save_plot(plt, f'bkg_ddt_ratio_vs_mT_normalized_{ana_type}')
+        plt.close()
+
 
         if verbosity > 1 : print(primary_var_ddt)
     # _____________________________________________
