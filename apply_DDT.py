@@ -156,8 +156,8 @@ def main():
             "features": ["ecfm2b1"] + features_common,
             "inputs_to_primary": lambda x: x[:, 0],
             "primary_var_label": "$M_2^{(1)}$ $>$ ",
-            "cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
-            #"cut_values":  [0.09, 0.12, 0.13, 0.14]
+            #"cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
+            "cut_values":  [0.09, 0.12, 0.13, 0.14]
         },
         "BDT-based": {
             "features": read_training_features(model_file) + features_common,
@@ -275,6 +275,33 @@ def main():
         # log scale it
         ax.set_yscale('log')
         save_plot(plt,f'log_norm_bkg_events_vs_mT_{ana_type}')
+        plt.close()
+
+        # Plot ratio of events above and below DDT > 0 in mT bins as step histograms
+        fig, ax = plt.subplots(figsize=(10, 8))
+        hep.cms.label(rlabel="(13 TeV)")
+        bin_edges = np.linspace(180, 650, 51)  # 50 bins
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        all_ratios = []
+
+        for cuts, scores in zip(ana_variant[ana_type]["cut_values"], primary_var_ddt):
+            mask_above = scores > 0
+            mask_below = scores < 0
+
+            num_above, _ = np.histogram(mT[mask_above], bins=bin_edges, weights=bkg_weight[mask_above])
+            num_below, _ = np.histogram(mT[mask_below], bins=bin_edges, weights=bkg_weight[mask_below])
+
+            ratio = np.divide(num_above, num_below, out=np.zeros_like(num_above, dtype=float), where=num_below > 0)
+            all_ratios.append(ratio)
+
+            ax.step(bin_centers, ratio, where='mid',
+                    label=f'DDT({var_label} {cuts})')
+
+        # Set axis labels and limits
+        ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$ [GeV]')
+        ax.set_ylabel(r'Ratio: $\mathrm{DDT} > 0 \,/\, \mathrm{DDT} < 0$')
+        ax.legend()
+        save_plot(plt, f'bkg_ddt_ratio_vs_mT_{ana_type}')
         plt.close()
 
         if verbosity > 1 : print(primary_var_ddt)
