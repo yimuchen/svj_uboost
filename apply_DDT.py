@@ -156,8 +156,8 @@ def main():
             "features": ["ecfm2b1"] + features_common,
             "inputs_to_primary": lambda x: x[:, 0],
             "primary_var_label": "$M_2^{(1)}$ $>$ ",
-            #"cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
-            "cut_values":  [0.09, 0.12, 0.13, 0.14]
+            "cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
+            #"cut_values":  [0.09, 0.12, 0.13, 0.14]
         },
         "BDT-based": {
             "features": read_training_features(model_file) + features_common,
@@ -386,10 +386,10 @@ def main():
         ax.plot(best_bdt_cuts[:,0], best_bdt_cuts[:,1], marker='o')
         ax.text(0.05, 0.10, f'Optimal Cut: {optimal_bdt_cut:.2f}', transform=ax.transAxes, verticalalignment='top')
         ax.ticklabel_format(style='sci', axis='x')
-        ax.set_ylabel('Best BDT Cut Value')
+        ax.set_ylabel('Best BDT Cut Value' if ana_type == "bdt" else "ECF cut value")
         ax.set_xlabel("m(Z')")
         # cannot use layout_tight, will cause saving errors
-        save_plot(plt, 'best_bdt_cuts', flag_tight_layout=False, bbox_inches='tight')
+        save_plot(plt, f'best_{ana_type}_cuts', flag_tight_layout=False, bbox_inches='tight')
         plt.close()
 
 
