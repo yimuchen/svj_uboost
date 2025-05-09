@@ -1149,9 +1149,7 @@ def apply_cutbased(cols):
     cols.cutflow['cutbased'] = len(cols)
     return cols
 
-#def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
-#def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6_minus_large_weight.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
-def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'cutbased_rhoprime_adapt_range_ddt.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
     cols = apply_rt_signalregion(cols)
     ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
 

@@ -156,8 +156,7 @@ def main():
             "features": ["ecfm2b1"] + features_common,
             "inputs_to_primary": lambda x: x[:, 0],
             "primary_var_label": "$M_2^{(1)}$ $>$ ",
-            #"cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
-            "cut_values":  [0.09, 0.12, 0.13, 0.14]
+            "cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
         },
         "BDT-based": {
             "features": read_training_features(model_file) + features_common,
@@ -247,7 +246,6 @@ def main():
         for cuts, scores in zip(ana_variant[ana_type]["cut_values"], primary_var_ddt):
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(mT[score_mask], bins=50, range=(180,650), histtype='step', label=f'DDT({var_label} {cuts})')
-            #ax.hist(mT[score_mask], bins=60, range=(130,700), histtype='step', label=f'DDT({var_label} {cuts})')
 
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
@@ -265,7 +263,6 @@ def main():
         for cuts, scores in zip(ana_variant[ana_type]["cut_values"], primary_var_ddt):
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(mT[score_mask], bins=50, range=(180,650), histtype='step', label=f'DDT({var_label} {cuts})', density=True)
-            #ax.hist(mT[score_mask], bins=60, range=(130,700), histtype='step', label=f'DDT({var_label} {cuts})', density=True)
 
         ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
         ax.set_ylabel('Events')
