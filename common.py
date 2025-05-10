@@ -1140,7 +1140,7 @@ def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url):
     ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
     weight = get_event_weight(cols, lumi)
 
-    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, 0.14, ddt_map_file)
+    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, 0.12, ddt_map_file)
     return ddt_val
 
 def apply_cutbased(cols):
