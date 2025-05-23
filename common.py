@@ -996,6 +996,8 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
 
     # Initialize the variable map
     w, h = 74, 74
+    #w, h = 40, 40
+    #w, h = 95, 95
     VAR_map = [[0 for x in range(h)] for y in range(w)]
 
     # Get data arrays for events passing the cuts
@@ -1090,7 +1092,8 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     # Get the smoothed map and bin edges
     var_map_smooth, MT_PT_edges, PT_edges = var_dict[str(cut_val)]
     var_map_smooth = np.array(var_map_smooth)
-    MT_edges = np.array(MT_edges)
+    #MT_edges = np.array(MT_edges)
+    MT_PT_edges = np.array(MT_PT_edges)
     PT_edges = np.array(PT_edges)
 
     # Apply DDT window cuts (you can update this function later if you drop rho)
