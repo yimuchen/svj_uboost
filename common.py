@@ -1019,6 +1019,8 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
     # Return smoothed map and the new mt and pt bin edges
     return VAR_map_smooth, MT_PT_edges, PT_edges
 
+    # Return the smoothed variable map, along with the rho and pt edges
+    return VAR_map_smooth, MT_PT_edges, PT_edges
 
 # Class that converts numpy arrays into list so they can be easily stored in json files
 class NumpyArrayEncoder(json.JSONEncoder):
