@@ -987,7 +987,6 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
     Decorrelates the tagger variable with respect to mt using a 2D (mt, pt) map.
     '''
 
-    # Apply the rho-ddt window cuts to the data (still useful for pt/mt range)
     cuts = rhoddt_windowcuts(mt, pt, rho)
     mt_pt = mt/pt
 
