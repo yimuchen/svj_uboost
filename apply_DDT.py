@@ -106,7 +106,7 @@ def bdt_ddt_inputs(input_files: list[str], lumi, all_features):
 
     def _get_mask(x, w):
         mt = x[:,-3]
-        mt_edges = np.arange(80, 1100, 10)
+        mt_edges = np.arange(80, 1500, 10)
         bin_idx = np.digitize(mt, mt_edges) # Getting which bin the item should be in
         bin_count, _ = np.histogram(mt, bins=mt_edges) # Getting the number of entries in each bin
         bin_count = np.concatenate([[0], bin_count, [0]]) # Adding overflow bin to have bin_count match np.digitize ourput
