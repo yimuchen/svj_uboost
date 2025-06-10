@@ -1019,7 +1019,7 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
     return VAR_map_smooth, MT_PT_edges, PT_edges
 
     # Return the smoothed variable map, along with the rho and pt edges
-    return VAR_map_smooth, MT_PT_edges, PT_edges
+    return VAR_map_smooth, RHO_edges, PT_edges
 
 # Class that converts numpy arrays into list so they can be easily stored in json files
 class NumpyArrayEncoder(json.JSONEncoder):
@@ -1091,7 +1091,7 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     # Get the smoothed map and bin edges
     var_map_smooth, MT_PT_edges, PT_edges = var_dict[str(cut_val)]
     var_map_smooth = np.array(var_map_smooth)
-    MT_PT_edges = np.array(MT_PT_edges)
+    RHO_edges = np.array(RHO_edges)
     PT_edges = np.array(PT_edges)
 
     # Apply DDT window cuts (you can update this function later if you drop rho)
