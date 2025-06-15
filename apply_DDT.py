@@ -127,8 +127,6 @@ def bdt_ddt_inputs(input_files: list[str], lumi, all_features):
     X_list, W_list = [], []
     for col in cols:
         x = _get_features(col)
-        print("mt ", col.to_numpy(["mt"]))
-        print("pt ", col.to_numpy(["pt"]))
         w = _get_weight(col)
         if len(x) == 0: # Skipping length 0 arrays, as this messes up the masking creating routine
             continue
