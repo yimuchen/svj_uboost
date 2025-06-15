@@ -948,9 +948,7 @@ def rhoddt_windowcuts(mt, pt, rho):
     '''
     Basically a tool to constantly check the kinematics during the DDT processes
     '''
-    #cuts = (mt>100) & (mt<800) & (pt>110) & (pt<1500)
-    cuts = (mt>100) & (mt<1500) & (pt>110) & (pt<1500)
-    #cuts = (mt>100) & (mt<1000) & (pt>110) & (pt<1500)
+    cuts = (mt>100) & (mt<1000) & (pt>110) & (pt<1500)
     return cuts
 
 def weighted_percentile(x, w, percent):
@@ -993,48 +991,35 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
     cuts = rhoddt_windowcuts(mt, pt, rho)
 
     # Create a 2D histogram of mt and pt, weighted by event weights
-    #C, MT_edges, PT_edges = np.histogram2d(mt[cuts], pt[cuts], bins=94, weights=weight[cuts])
-    #C, MT_edges, PT_edges = np.histogram2d(mt[cuts], pt[cuts], bins=73, weights=weight[cuts])
     C, MT_PT_edges, PT_edges = np.histogram2d(mt[cuts]/pt[cuts], pt[cuts], bins=73, weights=weight[cuts])
-    #C, MT_PT_edges, PT_edges = np.histogram2d(mt[cuts]/pt[cuts], pt[cuts], bins=39, weights=weight[cuts])
 
     # Initialize the variable map
     w, h = 74, 74
-    #w, h = 40, 40
-    #w, h = 95, 95
     VAR_map = [[0 for x in range(h)] for y in range(w)]
 
     # Get data arrays for events passing the cuts
     VAR = var[cuts]
     WEIGHT = weight[cuts]
-    #MT = mt[cuts]
     MT_PT = mt[cuts]/pt[cuts]
     PT = pt[cuts]
 
     # Loop over mt and pt bins
-    #for i in range(len(MT_edges)-1):
     for i in range(len(MT_PT_edges)-1):
         for j in range(len(PT_edges)-1):
             CUT = (
-                #(MT > MT_edges[i]) & (MT < MT_edges[i+1]) &
                 (MT_PT > MT_PT_edges[i]) & (MT_PT < MT_PT_edges[i+1]) &
                 (PT > PT_edges[j]) & (PT < PT_edges[j+1])
             )
 
             if len(VAR[CUT]) == 0:
-                #VAR_map[i][j] = cut_val
                 continue
 
             VAR_map[i][j] = weighted_percentile(VAR[CUT], WEIGHT[CUT], 100 - percent)
-            #if VAR_map[i][j] < 0.01 * cut_val:
-            #    VAR_map[i][j] = cut_val
 
     # Apply smoothing (you can replace this with adaptive smoothing if you like)
     VAR_map_smooth = gaussian_filter(VAR_map, sigma=1.0)
-    #VAR_map_smooth = np.array(VAR_map)
 
     # Return smoothed map and the new mt and pt bin edges
-    #return VAR_map_smooth, MT_edges, PT_edges
     return VAR_map_smooth, MT_PT_edges, PT_edges
 
 
@@ -1070,11 +1055,9 @@ def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
         print(f"Creating DDT 2D map for cut value {cut_val}, efficiency {percent}%")
 
         # Build the DDT map in (mt, pt) space
-        #var_map_smooth, MT_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent, cut_val)
         var_map_smooth, MT_PT_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent, cut_val)
 
         # Store the map and bin edges
-        #var_dict[str(cut_val)] = (var_map_smooth.tolist(), MT_edges.tolist(), PT_edges.tolist())
         var_dict[str(cut_val)] = (var_map_smooth.tolist(), MT_PT_edges.tolist(), PT_edges.tolist())
 
     # Save to file
@@ -1108,10 +1091,8 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
         raise KeyError(f"The key {cut_val} does not exist in the dictionary.")
 
     # Get the smoothed map and bin edges
-    #var_map_smooth, MT_edges, PT_edges = var_dict[str(cut_val)]
     var_map_smooth, MT_PT_edges, PT_edges = var_dict[str(cut_val)]
     var_map_smooth = np.array(var_map_smooth)
-    #MT_edges = np.array(MT_edges)
     MT_PT_edges = np.array(MT_PT_edges)
     PT_edges = np.array(PT_edges)
 
@@ -1120,11 +1101,9 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
 
     # Bin index lookup with digitize
     pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0, len(PT_edges) - 2)
-    #mt_bin = np.clip(np.digitize(mt, MT_edges) - 1, 0, len(MT_edges) - 2)
     mt_pt_bin = np.clip(np.digitize(mt/pt, MT_PT_edges) - 1, 0, len(MT_PT_edges) - 2)
 
     # Apply DDT: var - DDT map value at the appropriate bin
-    #varDDT = var - var_map_smooth[mt_bin, pt_bin]
     varDDT = var - var_map_smooth[mt_pt_bin, pt_bin]
 
     return varDDT

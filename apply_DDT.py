@@ -111,11 +111,8 @@ def bdt_ddt_inputs(input_files: list[str], lumi, all_features):
     X_list, W_list = [], []
     for col in cols:
         x = _get_features(col)
-        print("mt ", col.to_numpy(["mt"]))
-        print("pt ", col.to_numpy(["pt"]))
         w = _get_weight(col)
-        #mask = w < 2e5
-        mask = w < 5
+        mask = w < 2e5
         X_list.append(x[mask])
         W_list.append(w[mask])
 
@@ -172,19 +169,6 @@ def main():
 
     X, pT, mT, rho, bkg_weight = bdt_ddt_inputs(expand_wildcards([bkg_files]), lumi, ana_variant[ana_type]["features"])
 
-    print(mT)
-    print(pT)
-    print(mT/pT)
-
-    #Temporary
-    #mask = (pT > 400) & (pT < 1200)
-
-    #X = X[mask]
-    #pT = pT[mask]
-    #mT = mT[mask]
-    #rho = rho[mask]
-    #bkg_weight = bkg_weight[mask]
-
     primary_var = ana_variant[ana_type]["inputs_to_primary"](X)
     bkg_eff=[]
     bkg_percents=[]
@@ -214,10 +198,8 @@ def main():
                 print("Plotting the 2D DDT maps")
          
             # Get the 2D DDT map and bin edges for the corresponding BDT cut (key)
-            #var_map_smooth, MT_edges, PT_edges = var_dict[key]
             var_map_smooth, MT_PT_edges, PT_edges = var_dict[key]
             var_map_smooth = np.array(var_map_smooth)
-            #MT_edges = np.array(MT_edges)
             MT_PT_edges = np.array(MT_PT_edges)
             PT_edges = np.array(PT_edges)
          
@@ -226,7 +208,6 @@ def main():
             hep.cms.label(rlabel="(13 TeV)")
             plt.imshow(
                 var_map_smooth.T,
-                #extent=[MT_edges[0], MT_edges[-1], PT_edges[0], PT_edges[-1]],
                 extent=[MT_PT_edges[0], MT_PT_edges[-1], PT_edges[0], PT_edges[-1]],
                 aspect='auto',
                 origin='lower',
