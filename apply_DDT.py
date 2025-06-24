@@ -29,7 +29,7 @@ import seutils as se
 
 np.random.seed(1001)
 
-from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion, calc_bdt_scores, expand_wildcards, signal_xsecs
+from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion, calc_bdt_scores, expand_wildcards, signal_xsecs, MTHistogram
 
 #------------------------------------------------------------------------------
 # Global variables and user input arguments -----------------------------------
@@ -107,7 +107,12 @@ def bdt_ddt_inputs(input_files: list[str], lumi, all_features):
 
     def _get_mask(x, w):
         mt = x[:,-3]
-        mt_edges = np.arange(80, 1500, 10)
+        # Creating bins from the main histogram of interest, we don't really care about the actual
+        # range as long as it ls larger than the defined region-of-interest of the fit
+        mt_binw, mt_min, mt_max = common.MTHistogram.default_binning
+        mt_min = np.around(mt_min / 2, mt_binw)
+        mt_max = np.around(mt_max * 2, mt_binw)
+        mt_edges = np.arange(mt_min, mt_max, mt_binw)
         bin_idx = np.digitize(mt, mt_edges) # Getting which bin the item should be in
         bin_count, _ = np.histogram(mt, bins=mt_edges) # Getting the number of entries in each bin
         bin_count = np.concatenate([[0], bin_count, [0]]) # Adding overflow bin to have bin_count match np.digitize ourput
