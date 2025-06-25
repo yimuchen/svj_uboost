@@ -1127,7 +1127,7 @@ def check_if_model_exists(model_file, xrootd_url) :
             raise RuntimeError(f"Error downloading {model_file}: {e}")
             return None
 
-def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url):
+def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val = 0.12):
     check_if_model_exists(ddt_map_file, xrootd_url)
 
     # Get features necessary to apply the DDT
@@ -1137,7 +1137,7 @@ def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url):
     ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
     weight = get_event_weight(cols, lumi)
 
-    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, 0.12, ddt_map_file)
+    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, cut_val, ddt_map_file)
     return ddt_val
 
 def apply_cutbased(cols):
