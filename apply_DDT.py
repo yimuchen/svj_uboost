@@ -61,8 +61,7 @@ def parse_arguments():
     # another common set of cuts is
     # bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95]
     # and another common set for plots is [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    #parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
-    parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.1, 0.5, 0.6, 0.7, 0.8, 0.9], help='List of BDT cuts')
+    parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
 
     # Allowed plots: 2D DDT maps, Background Scores vs MT, FOM significance,
     #                Signal mt spectrums for one BDT working point,  one signal mt spectrum for many BDT working points
@@ -202,7 +201,6 @@ def main():
             var_map_smooth = np.array(var_map_smooth)
             MT_PT_edges = np.array(MT_PT_edges)
             PT_edges = np.array(PT_edges)
-         
             # Plot 2D map for mt-pt plane for each BDT cut
             plt.figure(figsize=(10, 8))
             hep.cms.label(rlabel="(13 TeV)")
@@ -214,8 +212,8 @@ def main():
                 cmap='viridis'
             )
             plt.colorbar(label='DDT Map value')
-            plt.xlabel('$M_{T}$ [GeV]')
-            plt.ylabel('$p_{T}$ [GeV]')
+            plt.xlabel('$\\frac{m_{\\mathrm{T}}}{p_{\\mathrm{T}}}$')
+            plt.ylabel('$p_{\\mathrm{T}}$ [GeV]')
             save_plot(plt, f'2D_map_{ana_type}_{key}')
             plt.close()
 
@@ -249,7 +247,7 @@ def main():
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(mT[score_mask], bins=50, range=(180,650), histtype='step', label=f'DDT({var_label} {cuts})', weights=bkg_weight[score_mask])
 
-        ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
+        ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
         ax.set_ylabel('Events')
         ax.legend()
         save_plot(plt,f'bkg_events_vs_mT_{ana_type}')
@@ -266,7 +264,7 @@ def main():
             score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
             ax.hist(mT[score_mask], bins=50, range=(180,650), histtype='step', label=f'DDT({var_label} {cuts})', weights=bkg_weight[score_mask], density=True)
 
-        ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
+        ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
         ax.set_ylabel('Events')
         ax.legend()
         save_plot(plt,f'norm_bkg_events_vs_mT_{ana_type}')
@@ -292,7 +290,7 @@ def main():
             bin_centers = 0.5 * (bins[:-1] + bins[1:])
             ax.plot(bin_centers, mT_eff, drawstyle='steps-mid', label=f'DDT({var_label} {cuts})')
 
-        ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
+        ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
         ax.set_ylabel('Bkg efficiency')
         ax.legend()
         save_plot(plt,f'bkg_eff_vs_mT_{ana_type}')
@@ -316,7 +314,7 @@ def main():
             mT_norm_eff = mT_eff / mT_eff_area
             ax.plot(bin_centers, mT_norm_eff, drawstyle='steps-mid', label=f'DDT({var_label} {cuts})')
 
-        ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
+        ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
         ax.set_ylabel('norm bkg efficiency')
         ax.legend()
         save_plot(plt,f'norm_bkg_eff_vs_mT_{ana_type}')
@@ -341,7 +339,7 @@ def main():
             ax.step(bin_centers, ratio, where='mid',
                     label=f'DDT({var_label} {cuts})')
 
-        ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$ [GeV]')
+        ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
         ax.set_ylabel(r'Ratio: $\mathrm{DDT} > 0 \,/\, \mathrm{DDT} < 0$')
         ax.legend()
         save_plot(plt, f'bkg_ddt_ratio_vs_mT_{ana_type}')
@@ -361,7 +359,7 @@ def main():
 
         ax.axhline(1.0, color='gray', linestyle='--', linewidth=1)
         ax.set_ylim(0.0, 2.0)  
-        ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$ [GeV]')
+        ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
         ax.set_ylabel(r'$(\mathrm{DDT}>0/\mathrm{DDT}<0) \,/\, \langle\mathrm{DDT}>0/\mathrm{DDT}<0\rangle$')
         ax.legend()
         save_plot(plt, f'bkg_ddt_ratio_vs_mT_normalized_{ana_type}')
@@ -478,7 +476,7 @@ def main():
         ax.text(0.05, 0.10, f'Optimal Cut: {optimal_bdt_cut:.2f}', transform=ax.transAxes, verticalalignment='top')
         ax.ticklabel_format(style='sci', axis='x')
         ax.set_ylabel('Best BDT Cut Value' if ana_type == "BDT-based" else "ECF cut value")
-        ax.set_xlabel("m(Z')")
+        ax.set_xlabel("$m(\\mathrm{Z'}) [GeV]")
         # cannot use layout_tight, will cause saving errors
         save_plot(plt, f'best_{ana_type}_cuts', flag_tight_layout=False, bbox_inches='tight')
         plt.close()
@@ -520,7 +518,7 @@ def main():
                 score_mask = sig_score_ddt > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
                 ax.hist(sig_mT[score_mask], weights=sig_weight[score_mask], bins=50, range=(180,650), histtype='step', label=f"m(Z')={mz}", alpha=alpha)
 
-            ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
+            ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
             ax.set_ylabel('Events')
             ax.legend()
             save_plot(plt,'sig_events_vs_mT')
@@ -592,7 +590,7 @@ def main():
                 score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
                 ax.hist(sig_mT[score_mask], weights=sig_weight[score_mask], bins=25, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})')
 
-            ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
+            ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
             ax.set_ylabel('Events')
             ax.legend()
             save_plot(plt,'sig_mz300_events_vs_mT')
@@ -609,7 +607,7 @@ def main():
                 score_mask = scores > 0.0 # DDT score > 0.0 is equivalent to BDT score about BDT cut value
                 ax.hist(sig_mT[score_mask], weights=sig_weight[score_mask], bins=25, range=(180,650), histtype='step', label=f'DDT(BDT cut = {cuts})', density=True)
 
-            ax.set_xlabel('$\\mathrm{m}_{\\mathrm{T}}$')
+            ax.set_xlabel('$m_{\\mathrm{T}}$ [GeV]')
             ax.set_ylabel('Events')
             ax.legend()
             save_plot(plt,'norm_sig_mz300_events_vs_mT')
