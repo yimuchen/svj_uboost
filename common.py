@@ -989,9 +989,10 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
 
     # Apply the rho-ddt window cuts to the data (still useful for pt/mt range)
     cuts = rhoddt_windowcuts(mt, pt, rho)
+    mt_pt = mt/pt
 
     # Create a 2D histogram of mt and pt, weighted by event weights
-    C, MT_PT_edges, PT_edges = np.histogram2d(mt[cuts]/pt[cuts], pt[cuts], bins=73, weights=weight[cuts])
+    C, MT_PT_edges, PT_edges = np.histogram2d(mt_pt[cuts], pt[cuts], bins=73, weights=weight[cuts])
 
     # Initialize the variable map
     w, h = 74, 74
@@ -1000,21 +1001,17 @@ def varmap(mt, pt, rho, var, weight, percent, cut_val):
     # Get data arrays for events passing the cuts
     VAR = var[cuts]
     WEIGHT = weight[cuts]
-    MT_PT = mt[cuts]/pt[cuts]
-    PT = pt[cuts]
+    mt_pt_bin_idx = np.digitize(mt_pt[cuts], MT_PT_edges) - 1
+    pt_bin_idx = np.digitize(pt[cuts], PT_edges) - 1
 
     # Loop over mt and pt bins
     for i in range(len(MT_PT_edges)-1):
         for j in range(len(PT_edges)-1):
-            CUT = (
-                (MT_PT > MT_PT_edges[i]) & (MT_PT < MT_PT_edges[i+1]) &
-                (PT > PT_edges[j]) & (PT < PT_edges[j+1])
-            )
+            CUT = (mt_pt_bin_idx == i) & (pt_bin_idx == j)
 
-            if len(VAR[CUT]) == 0:
-                continue
-
-            VAR_map[i][j] = weighted_percentile(VAR[CUT], WEIGHT[CUT], 100 - percent)
+            # If there is data in this bin, calculate the percentile of the variable
+            if len(VAR[CUT]) > 0:
+                VAR_map[i][j] = weighted_percentile(VAR[CUT], WEIGHT[CUT], 100 - percent)
 
     # Apply smoothing (you can replace this with adaptive smoothing if you like)
     VAR_map_smooth = gaussian_filter(VAR_map, sigma=1.0)
@@ -1100,8 +1097,8 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     cuts = rhoddt_windowcuts(mt, pt, rho)
 
     # Bin index lookup with digitize
-    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0, len(PT_edges) - 2)
-    mt_pt_bin = np.clip(np.digitize(mt/pt, MT_PT_edges) - 1, 0, len(MT_PT_edges) - 2)
+    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0, len(PT_edges) - 1)
+    mt_pt_bin = np.clip(np.digitize(mt/pt, MT_PT_edges) - 1, 0, len(MT_PT_edges) - 1)
 
     # Apply DDT: var - DDT map value at the appropriate bin
     varDDT = var - var_map_smooth[mt_pt_bin, pt_bin]
