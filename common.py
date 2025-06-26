@@ -948,7 +948,7 @@ def rhoddt_windowcuts(mt, pt, rho):
     '''
     Basically a tool to constantly check the kinematics during the DDT processes
     '''
-    cuts = (mt>180) & (mt<650) & (pt>110) & (pt<1500) & (rho>-4) & (rho<0)
+    cuts = (mt>100) & (mt<1000) & (pt>110) & (pt<1500)
     return cuts
 
 def weighted_percentile(x, w, percent):
@@ -981,43 +981,44 @@ def weighted_percentile(x, w, percent):
 
     return upper_val *int_w + lower_val * (1-int_w)
 
+def varmap(mt, pt, rho, var, weight, percent, cut_val):
+    '''
+    2D map for DDT, now defined in (mt, pt) space instead of (rho, pt).
+    Decorrelates the tagger variable with respect to mt using a 2D (mt, pt) map.
+    '''
 
-def varmap(mt, pt, rho, var, weight, percent):
-    '''
-    2D map that basically is the DDT
-    It decorrelates var with respect to mt using a 2D in pt rho space for a given efficiency (percent)
-    '''
-    # Apply the rho-ddt window cuts to the data
+    # Apply the rho-ddt window cuts to the data (still useful for pt/mt range)
     cuts = rhoddt_windowcuts(mt, pt, rho)
+    mt_pt = mt/pt
 
-    # Create a 2D histogram of rho and pt, weighted by the event weights
-    C, RHO_edges, PT_edges = np.histogram2d(rho[cuts], pt[cuts], bins=49,weights=weight[cuts])
+    # Create a 2D histogram of mt and pt, weighted by event weights
+    C, MT_PT_edges, PT_edges = np.histogram2d(mt_pt[cuts], pt[cuts], bins=73, weights=weight[cuts])
 
-    # Initialize a 2D map for the variable
-    w, h = 50, 50
-    VAR_map = [[0 for x in range(w)] for y in range(h)]
+    # Initialize the variable map
+    w, h = 74, 74
+    VAR_map = [[0 for x in range(h)] for y in range(w)]
 
-    # Get the variable for the data that passed the cuts
-    VAR, W = var[cuts], weight[cuts]
-    # Getting the bin index for each of the values
-    rho_bin_idx = np.digitize(rho[cuts], RHO_edges) - 1
+    # Get data arrays for events passing the cuts
+    VAR = var[cuts]
+    WEIGHT = weight[cuts]
+    mt_pt_bin_idx = np.digitize(mt_pt[cuts], MT_PT_edges) - 1
     pt_bin_idx = np.digitize(pt[cuts], PT_edges) - 1
 
-    # Loop over the bins in rho and pt
-    for i in range(len(RHO_edges)-1):
+    # Loop over mt and pt bins
+    for i in range(len(MT_PT_edges)-1):
         for j in range(len(PT_edges)-1):
-            # Apply cuts to select data in the current rho and pt bin
-            CUT = (rho_bin_idx == i) & (pt_bin_idx == j)
+            CUT = (mt_pt_bin_idx == i) & (pt_bin_idx == j)
 
             # If there is data in this bin, calculate the percentile of the variable
-            if len(VAR[CUT])>0:
-                VAR_map[i][j]=weighted_percentile(VAR[CUT], W[CUT], 100-percent) # percent is calculated based on the bdt working point
+            if len(VAR[CUT]) > 0:
+                VAR_map[i][j] = weighted_percentile(VAR[CUT], WEIGHT[CUT], 100 - percent)
 
-    # Smooth the variable map using a Gaussian filter
-    VAR_map_smooth = gaussian_filter(VAR_map,1)
+    # Apply smoothing (you can replace this with adaptive smoothing if you like)
+    VAR_map_smooth = gaussian_filter(VAR_map, sigma=1.0)
 
-    # Return the smoothed variable map, along with the rho and pt edges
-    return VAR_map_smooth, RHO_edges, PT_edges
+    # Return smoothed map and the new mt and pt bin edges
+    return VAR_map_smooth, MT_PT_edges, PT_edges
+
 
 # Class that converts numpy arrays into list so they can be easily stored in json files
 class NumpyArrayEncoder(json.JSONEncoder):
@@ -1029,33 +1030,34 @@ class NumpyArrayEncoder(json.JSONEncoder):
 
 def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
     '''
-    This function creates the dictionary of DDT 2D maps for a range of
-        cut_vals at corresponding bkg efficiencies given as percents
-    The DDT 2D map at each cut_val contains: var_map_smooth, RHO_edges, and PT_edges,
-        The inputs to the function are (mt, pt, rho, var, weight, percents, cut_vals, ddt_name).
-    In essense the DDT is a 2D function of rho and pt that
-        is calculated using the background data for the variable
-        that you want to decorrelate
+    Creates a dictionary of DDT 2D maps for a range of cut_vals and background efficiencies (percents).
+    Each DDT map is a 2D array of tagger thresholds binned in (mt, pt) space,
+    smoothed and stored along with the corresponding bin edges.
+
+    Inputs:
+    - mt, pt
+    - var: the tagger variable (e.g. BDT score)
+    - weight: event weights
+    - percents: list of background efficiencies (e.g. [10, 20, 30])
+    - cut_vals: corresponding working point names (e.g. [0.1, 0.2, 0.3])
+    - ddt_name: output filename for the JSON dictionary
     '''
 
-    # Apply the rho-ddt window cuts to the data
+    # Apply kinematic window cuts (still uses rho for now)
     cuts = rhoddt_windowcuts(mt, pt, rho)
 
-    # Initialize the dictionary
     var_dict = {}
 
-    # Loop over the values in cut_vals and percents
     for cut_val, percent in zip(cut_vals, percents):
+        print(f"Creating DDT 2D map for cut value {cut_val}, efficiency {percent}%")
 
-        print("Creating DDT 2D map for a cut value of ", cut_val, " and an efficiency (percent) of ", percent)
+        # Build the DDT map in (mt, pt) space
+        var_map_smooth, MT_PT_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent, cut_val)
 
-        # Generate a smoothed variable map, along with the rho and pt edges
-        var_map_smooth, RHO_edges, PT_edges = varmap(mt, pt, rho, var, weight, percent)
+        # Store the map and bin edges
+        var_dict[str(cut_val)] = (var_map_smooth.tolist(), MT_PT_edges.tolist(), PT_edges.tolist())
 
-        # Store the results in the dictionary
-        var_dict[str(cut_val)] = (var_map_smooth, RHO_edges, PT_edges)
-
-    # Save the dictionary to an json file
+    # Save to file
     if ddt_name is None:
         ddt_name = 'ddt_' + str(var) + '_' + datetime.now().strftime('%Y%m%d') + '.json'
     with open(ddt_name, 'w') as f:
@@ -1063,43 +1065,45 @@ def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
 
 def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
     '''
-    This is a function to apply a design decorrelated tagger
-        it decorrelates 'var' with respect to mt using
-        rho (a function of mass) and pt. At a given cut_val for
-        a given DDT map inside of an npz file with the name 'ddt_name'
-    The inputs to the function are (mt, pt, rho, var, weight, cut_val)
-        where cut_val will refer to the value of the key inside of dictionary
-        with the proper var_map_smooth, RHO_edges, and PT_edges to use.
+    Applies a DDT transformation to 'var' using a DDT map in (mt, pt) space.
+    
+    Inputs:
+    - mt, pt
+    - var: tagger variable (e.g. BDT score)
+    - weight: event weights (not used here, but passed for compatibility)
+    - cut_val: key in the DDT map dict to use (e.g. 0.1, 0.2)
+    - ddt_name: path to JSON file containing the DDT map
+
+    Returns:
+    - varDDT: array of DDT-transformed tagger values
     '''
 
-    # Check if ddt_name exists
     if not osp.exists(ddt_name):
         raise FileNotFoundError(f"The file {ddt_name} does not exist.")
 
-    # Load the dictionary from the npz file
     with open(ddt_name, 'r') as f:
         var_dict = json.load(f)
 
-    # Check if cut_val exists in the dictionary
     if str(cut_val) not in var_dict:
         raise KeyError(f"The key {cut_val} does not exist in the dictionary.")
 
-    # Get the var_map_smooth, RHO_edges, and PT_edges for the given cut_val
-    var_map_smooth, RHO_edges, PT_edges = var_dict[str(cut_val)]
+    # Get the smoothed map and bin edges
+    var_map_smooth, MT_PT_edges, PT_edges = var_dict[str(cut_val)]
     var_map_smooth = np.array(var_map_smooth)
-    RHO_edges = np.array(RHO_edges)
+    MT_PT_edges = np.array(MT_PT_edges)
     PT_edges = np.array(PT_edges)
 
-    # Apply the rho-ddt window cuts to the data
+    # Apply DDT window cuts (you can update this function later if you drop rho)
     cuts = rhoddt_windowcuts(mt, pt, rho)
 
-    # Getting the corresponding bin indicies for given PT/Rho array
-    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0 , len(PT_edges) -1)
-    rho_bin = np.clip(np.digitize(rho, RHO_edges) - 1, 0 , len(RHO_edges) -1)
+    # Bin index lookup with digitize
+    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0, len(PT_edges) - 1)
+    mt_pt_bin = np.clip(np.digitize(mt/pt, MT_PT_edges) - 1, 0, len(MT_PT_edges) - 1)
 
-    # Evaluating the DDT
-    return var - var_map_smooth[rho_bin, pt_bin]
+    # Apply DDT: var - DDT map value at the appropriate bin
+    varDDT = var - var_map_smooth[mt_pt_bin, pt_bin]
 
+    return varDDT
 
 def apply_hemveto(cols):
     cols = cols.select(svj.veto_HEM(cols.arrays['ak4_subl_eta'],cols.arrays['ak4_subl_phi'],cols.arrays['ak4_subl_pt']))
@@ -1123,7 +1127,7 @@ def check_if_model_exists(model_file, xrootd_url) :
             raise RuntimeError(f"Error downloading {model_file}: {e}")
             return None
 
-def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url):
+def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val = 0.12):
     check_if_model_exists(ddt_map_file, xrootd_url)
 
     # Get features necessary to apply the DDT
@@ -1133,7 +1137,7 @@ def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url):
     ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
     weight = get_event_weight(cols, lumi)
 
-    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, 0.09, ddt_map_file)
+    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, cut_val, ddt_map_file)
     return ddt_val
 
 def apply_cutbased(cols):
