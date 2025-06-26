@@ -61,8 +61,7 @@ def parse_arguments():
     # another common set of cuts is
     # bdt_cuts = [0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95]
     # and another common set for plots is [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    #parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
-    parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.1, 0.5, 0.6, 0.7, 0.8, 0.9], help='List of BDT cuts')
+    parser.add_argument('--bdt_cuts', nargs='+', type=float, default=[0.0, 0.1, 0.2, 0.3, 0.4, 0.42, 0.45, 0.47, 0.5, 0.52, 0.55, 0.57, 0.6, 0.62, 0.65, 0.67, 0.7, 0.72, 0.75, 0.77, 0.8, 0.82, 0.85, 0.87, 0.9, 0.92, 0.95], help='List of BDT cuts')
 
     # Allowed plots: 2D DDT maps, Background Scores vs MT, FOM significance,
     #                Signal mt spectrums for one BDT working point,  one signal mt spectrum for many BDT working points
@@ -182,8 +181,7 @@ def main():
             "features": ["ecfm2b1"] + features_common,
             "inputs_to_primary": lambda x: x[:, 0],
             "primary_var_label": "$M_2^{(1)}$ $>$ ",
-            #"cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
-            "cut_values":  [0.09, 0.12, 0.13, 0.14]
+            "cut_values":  [np.round(x,4) for x in np.linspace(0.07 , 0.17, 41)]
         },
         "BDT-based": {
             "features": read_training_features(model_file) + features_common,

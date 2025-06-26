@@ -1134,11 +1134,6 @@ def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val = 0.12):
     mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
     pT = cols.to_numpy(['pt']).ravel()
     rho = cols.to_numpy(['rho']).ravel()
-
-    # test rho prime: m/mT to target decorreltion against mT rather than pT
-    #m = cols.to_numpy(['mass']).ravel()
-    #rho = 2 * np.log(m/mT)
-
     ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
     weight = get_event_weight(cols, lumi)
 
@@ -1151,8 +1146,6 @@ def apply_cutbased(cols):
     cols.cutflow['cutbased'] = len(cols)
     return cols
 
-#def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
-#def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6_minus_large_weight.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
 def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'cutbased_rhoprime_adapt_range_ddt.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
     cols = apply_rt_signalregion(cols)
     ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
