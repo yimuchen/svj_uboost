@@ -1222,7 +1222,7 @@ def calc_bdt_scores(X, model_file=bdt_model_file):
         score = xgb_model.predict_proba(X)[:,1]
     return score
 
-def apply_bdtbased(cols,wp,lumi,anti=False,model_file = bdt_model_file,ddt_map_file = 'models/ddt_AN_v5.json',
+def apply_bdtbased(cols,wp,lumi,anti=False,model_file = bdt_model_file,ddt_map_file = 'models/bdt_ddt_AN_v6.json',
                    xrootd_url='root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/BDT_based/'):
 
     check_if_model_exists(ddt_map_file, xrootd_url)
