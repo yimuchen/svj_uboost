@@ -128,7 +128,7 @@ def bdt_ddt_inputs(input_files: list[str], lumi, all_features):
     X_list, W_list = [], []
     for col in cols:
         x = _get_features(col)
-        w = get_event_weight(col)
+        w = get_event_weight(col, lumi)
         if len(x) == 0: # Skipping length 0 arrays, as this messes up the masking creating routine
             continue
         # Only construct mask for background sample

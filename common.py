@@ -457,7 +457,7 @@ signal_xsecs = {
     550 : 1.578,
 }
 
-def get_event_weight(obj,lumi=None):
+def get_event_weight(obj,lumi=None, noPU=False):
     if isinstance(obj,svj.Columns):
         if lumi is None:
             lumi = lumis[str(obj.metadata['year'])]
@@ -475,7 +475,7 @@ def get_event_weight(obj,lumi=None):
             return event_weight
         elif obj.metadata["sample_type"]=="bkg":
             tree_weights = obj.to_numpy(['weight']).ravel()
-            puweights = obj.to_numpy(['puweight']).ravel()
+            puweights = np.ones_like(tree_weight) if noPU else obj.to_numpy(["pu_weight"]).ravel()
             if len(tree_weights)>0: logger.info(f'Event weight: {lumi}*{tree_weights[0]}*{puweights[0]} = {lumi*tree_weights[0]*puweights[0]}')
             return lumi*tree_weights*puweights
         else: # data
