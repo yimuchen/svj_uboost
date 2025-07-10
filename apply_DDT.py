@@ -29,7 +29,7 @@ import seutils as se
 
 np.random.seed(1001)
 
-from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion, calc_bdt_scores, expand_wildcards, signal_xsecs, MTHistogram
+from common import read_training_features, logger, DATADIR, Columns, time_and_log, imgcat, set_mpl_fontsize, columns_to_numpy, apply_rt_signalregion, calc_bdt_scores, expand_wildcards, signal_xsecs, MTHistogram, get_event_weight
 
 #------------------------------------------------------------------------------
 # Global variables and user input arguments -----------------------------------
@@ -101,14 +101,11 @@ def bdt_ddt_inputs(input_files: list[str], lumi, all_features):
     def _get_features(col):
         return col.to_numpy(all_features)
 
-    def _get_weight(col):
-        return col.xs / col.cutflow['raw'] * lumi * col.arrays['puweight']
-
     def _get_mask(x, w):
         mt = x[:,-3]
         # Creating bins from the main histogram of interest, we don't really care about the actual
         # range as long as it ls larger than the defined region-of-interest of the fit
-        mt_binw, mt_min, mt_max = common.MTHistogram.default_binning
+        mt_binw, mt_min, mt_max = MTHistogram.default_binning
         mt_min = np.around(mt_min / 2, mt_binw)
         mt_max = np.around(mt_max * 2, mt_binw)
         mt_edges = np.arange(mt_min, mt_max, mt_binw)
@@ -131,7 +128,7 @@ def bdt_ddt_inputs(input_files: list[str], lumi, all_features):
     X_list, W_list = [], []
     for col in cols:
         x = _get_features(col)
-        w = _get_weight(col)
+        w = get_event_weight(col)
         if len(x) == 0: # Skipping length 0 arrays, as this messes up the masking creating routine
             continue
         # Only construct mask for background sample

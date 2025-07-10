@@ -475,8 +475,9 @@ def get_event_weight(obj,lumi=None):
             return event_weight
         elif obj.metadata["sample_type"]=="bkg":
             tree_weights = obj.to_numpy(['weight']).ravel()
-            if len(tree_weights)>0: logger.info(f'Event weight: {lumi}*{tree_weights[0]} = {lumi*tree_weights[0]}')
-            return lumi*tree_weights
+            puweights = obj.to_numpy(['puweight']).ravel()
+            if len(tree_weights)>0: logger.info(f'Event weight: {lumi}*{tree_weights[0]}*{puweights[0]} = {lumi*tree_weights[0]*puweights[0]}')
+            return lumi*tree_weights*puweights
         else: # data
             return 1.0
 
