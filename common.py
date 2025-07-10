@@ -475,7 +475,7 @@ def get_event_weight(obj,lumi=None, noPU=False):
             return event_weight
         elif obj.metadata["sample_type"]=="bkg":
             tree_weights = obj.to_numpy(['weight']).ravel()
-            puweights = np.ones_like(tree_weight) if noPU else obj.to_numpy(["pu_weight"]).ravel()
+            puweights = np.ones_like(tree_weight) if noPU else obj.to_numpy(["puweight"]).ravel()
             if len(tree_weights)>0: logger.info(f'Event weight: {lumi}*{tree_weights[0]}*{puweights[0]} = {lumi*tree_weights[0]*puweights[0]}')
             return lumi*tree_weights*puweights
         else: # data
@@ -496,7 +496,7 @@ def add_cutflows(*objs):
     # add cutflows if present, accounting for weights
     keys = [list(obj.cutflow.keys()) if hasattr(obj,'cutflow') else [] for obj in objs]
     if keys and all(keys) and all(k == keys[0] for k in keys):
-        weights = [get_single_event_weight(get_event_weight(obj)) for obj in objs]
+        weights = [get_single_event_weight(get_event_weight(obj, noPU=True)) for obj in objs]
         return OrderedDict((k, sum(obj.cutflow[k]*weight for obj,weight in zip(objs,weights))) for k in keys[0])
     else:
         if keys and all(keys):
