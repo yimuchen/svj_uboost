@@ -626,6 +626,7 @@ def do_loess(hist,span,do_gcv=False):
 @scripter
 def smooth_shapes():
     span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
+    span_min = common.pull_arg('--spanmin', type=float, default=0.05, help="minimum span value").spanmin # if span is too small, no points are included
     do_opt = common.pull_arg('--optimize', type=int, default=0, help="optimize span value using n values").optimize
     default = common.pull_arg('--default', type=str, default='central', help="default histogram for metadata").default
     target = common.pull_arg('--target', type=str, default=default, help="optimize only based on target hist").target
@@ -680,7 +681,6 @@ def smooth_shapes():
         if norm: hist = hist*(1./hyield)
 
         if do_opt>0 and (var==target or len(target)==0):
-            span_min = 0.05 # if span is too small, no points are included
             spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
             gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
             span_val = spans[np.argmin(gcvs)]
