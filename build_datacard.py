@@ -191,11 +191,8 @@ def build_histogram(args=None):
     cen_columns = apply_selection(cen_columns,year)
     w = None
     if metadata["sample_type"] != "data":
-        w = cen_columns.to_numpy(['puweight']).ravel()
-        event_weight = common.get_event_weight(cen_columns,lumi)
-        w *= event_weight
-        # save event weight
-        metadata['event_weight'] = common.get_single_event_weight(event_weight)
+        w = common.get_event_weight(cen_columns,lumi)
+        metadata['event_weight'] = common.get_single_event_weight(w)
 
     # Defining the histogram type to use
     VarHistogram = common.registered_varhists[hist_var]
@@ -220,10 +217,8 @@ def build_histogram(args=None):
         def mth_jerjecjes(tag):
             col = svj.Columns.load(get_variation(tag))
             col = apply_selection(col,year)
-            w = col.to_numpy(['puweight']).flatten()
             event_weight = common.get_event_weight(col,lumi)
-            w *= event_weight
-            return VarHistogram(col, w)
+            return VarHistogram(col, event_weight)
         # JER, JEC treated as uncorrelated between years (but 2018PRE, 2018POST always correlated)
         sysyear = get_sysyear(year)
         hist_variants[f'jer{sysyear}_up'] = mth_jerjecjes('jer_up')

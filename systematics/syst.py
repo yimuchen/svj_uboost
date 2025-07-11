@@ -278,8 +278,7 @@ def produce():
     central = svj.Columns.load(central_skim)
     if selection=='cutbased': central = apply_cutbased(central)
     mt = central.to_numpy(['mt']).ravel()
-    w = central.to_numpy(['puweight']).ravel()
-    w *= lumi * central.xs / central.cutflow['raw']
+    w = common.get_event_weight(central, lumi)
 
     # Scale
     scale_weight = central.to_numpy(['scaleweights'])[sel][:, np.array([0,1,2,3,4,6,8])]
@@ -293,8 +292,7 @@ def produce():
         col = svj.Columns.load(get_by_tag(tag))
         if selection=='cutbased': col = apply_cutbased(col)
         mt = col.to_numpy(['mt']).flatten()
-        w = col.to_numpy(['puweight']).flatten()
-        w *= lumi * col.xs / col.cutflow['raw']
+        w = common.get_event_weight(col, lumi)
         return MTHistogram(mt, w)
     jer_up = mth_jerjecjes('jer_up')
     jer_down = mth_jerjecjes('jer_down')
