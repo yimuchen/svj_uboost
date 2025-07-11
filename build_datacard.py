@@ -439,7 +439,7 @@ class Plot:
     def save(self, outfile='tmp.png', pdf=True, legend_order=None):
         self.top.text(
             0.02, 0.02,
-            'Cut-based' if self.selection=='cutbased' else 'BDT',
+            self.selection,
             horizontalalignment='left',
             verticalalignment='bottom',
             transform=self.top.transAxes,
