@@ -627,7 +627,8 @@ def do_loess(hist,span,do_gcv=False):
 def smooth_shapes():
     span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
     do_opt = common.pull_arg('--optimize', type=int, default=0, help="optimize span value using n values").optimize
-    target = common.pull_arg('--target', type=str, default='central', help="optimize only based on target hist").target
+    default = common.pull_arg('--default', type=str, default='central', help="default histogram for metadata").default
+    target = common.pull_arg('--target', type=str, default=default, help="optimize only based on target hist").target
     debug = common.pull_arg('--debug', default=False, action="store_true", help="debug optimization").debug
     var = common.pull_arg('--variation', type=str, default=None, help="MT variation to debug").variation
     save = common.pull_arg('--save', default=False, action="store_true", help="save debug variation output").save
@@ -635,17 +636,22 @@ def smooth_shapes():
     mtmax = common.pull_arg('--mtmax', type=float, default=None).mtmax
     norm = not common.pull_arg('--unnorm', default=False, action="store_true", help="fit unnormalized shape").unnorm
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
+
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
-    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
+    h_default = mths[default]
+    common.logger.info(f'{default} metadata:\n{h_default.metadata}')
 
     # loop over central and systematics
-    year = mths["central"].metadata["year"]
-    if not isinstance(year,str) and not isinstance(year,list): year = str(int(year))
-    variations = get_systs(years=year)
-    variations = [v for v in variations if not v.startswith('stat')]
-    variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
-    variations = ['central']+variations
+    if h_default.metadata["sample_type"]=="sig":
+        year = h_default.metadata["year"]
+        if not isinstance(year,str) and not isinstance(year,list): year = str(int(year))
+        variations = get_systs(years=year)
+        variations = [v for v in variations if not v.startswith('stat')]
+        variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
+        variations = [default]+variations
+    else:
+        variations = [default]
 
     # find optimization target
     if len(target)>0:
@@ -733,7 +739,8 @@ def smooth_shapes():
 def plot_smooth():
     mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
     mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
-    var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot (or 'all')").variation
+    default = common.pull_arg('--default', type=str, default='central', help="default histogram for metadata").default
+    var = common.pull_arg('--variation', type=str, default=default, help="MT variation to plot (or 'all')").variation
     noratio = common.pull_arg('--no-ratio', default=False, action="store_true", help="skip ratio").no_ratio
     names = common.pull_arg('--names', type=str, nargs='*', default=[], help="legend names for files").names
     json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
@@ -747,7 +754,7 @@ def plot_smooth():
     if var=='all':
         vars = get_systs()
         vars = [var+'_up' for var in vars]+[var+'_down' for var in vars]
-        vars = ['central']+vars
+        vars = [default]+vars
 
     mths = []
     for json_file in json_files:
@@ -762,7 +769,7 @@ def plot_smooth():
     os.makedirs(outdir, exist_ok=True)
 
     for var in vars:
-        meta = mths[0]['central'].metadata
+        meta = mths[0][default].metadata
         plot = Plot(meta)
         legend_order = []
         h_denom = None
