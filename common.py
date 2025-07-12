@@ -1128,7 +1128,11 @@ def check_if_model_exists(model_file, xrootd_url) :
             raise RuntimeError(f"Error downloading {model_file}: {e}")
             return None
 
-def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val = 0.12):
+
+DDT_PATH_CUTBASED = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/'
+DDT_FILE_CUTBASED = 'models/cutbased_ddt_map_ANv6.json'
+
+def cutbased_ddt(cols, lumi, cut_val, ddt_map_file, xrootd_url):
     check_if_model_exists(ddt_map_file, xrootd_url)
 
     # Get features necessary to apply the DDT
@@ -1141,15 +1145,15 @@ def cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val = 0.12):
     ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, cut_val, ddt_map_file)
     return ddt_val
 
-def apply_cutbased(cols):
+def apply_cutbased(cols, cut_val=0.09):
     cols = apply_rt_signalregion(cols)
-    cols = cols.select(cols.arrays['ecfm2b1'] > 0.09)
+    cols = cols.select(cols.arrays['ecfm2b1'] > cut_val)
     cols.cutflow['cutbased'] = len(cols)
     return cols
 
-def apply_cutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
+def apply_cutbased_ddt(cols, lumi, cut_val, ddt_map_file=DDT_FILE_CUTBASED, xrootd_url=DDT_PATH_CUTBASED) :
     cols = apply_rt_signalregion(cols)
-    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
+    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val)
 
     # Now cut on the DDT above 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val > 0.0) # mask for the selection
@@ -1167,33 +1171,31 @@ def apply_cutbasedCRloose(cols):
     cols.cutflow['cutbasedCRloose'] = len(cols)
     return cols
 
-def apply_anticutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
-
+def apply_anticutbased_ddt(cols, lumi, cut_val, ddt_map_file=DDT_FILE_CUTBASED, xrootd_url=DDT_PATH_CUTBASED) :
     cols = apply_rt_signalregion(cols)
-    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
+    ddt_val = cutbased_ddt(cols, lumi, cut_val, ddt_map_file, xrootd_url)
 
     # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val < 0.0) # mask for the selection
     cols.cutflow['anticutbased_ddt'] = len(cols)
     return cols
 
-def apply_anticutbased(cols):
+def apply_anticutbased(cols, cul_val=0.09):
     cols = apply_rt_signalregion(cols)
-    cols = cols.select(cols.arrays['ecfm2b1'] < 0.09)
+    cols = cols.select(cols.arrays['ecfm2b1'] < cut_val)
     cols.cutflow['anticutbased'] = len(cols)
     return cols
 
-def apply_antiloosecutbased_ddt(cols, lumi, ddt_map_file = 'models/cutbased_ddt_map_ANv6.json', xrootd_url = 'root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/cutbased_ddt/') :
-
-    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url)
+def apply_antiloosecutbased_ddt(cols, lumi, cut_val, ddt_map_file=DDT_FILE_CUTBASED, xrootd_url=DDT_PATH_CUTBASED) :
+    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val)
 
     # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val < 0.0) # mask for the selection
     cols.cutflow['anticutbased_ddt'] = len(cols)
     return cols
 
-def apply_antiloosecutbased(cols):
-    cols = cols.select(cols.arrays['ecfm2b1'] < 0.09)
+def apply_antiloosecutbased(cols, cut_val=0.09):
+    cols = cols.select(cols.arrays['ecfm2b1'] < cut_val)
     cols.cutflow['antiloosecutbased'] = len(cols)
     return cols
 
@@ -1223,9 +1225,10 @@ def calc_bdt_scores(X, model_file=bdt_model_file):
         score = xgb_model.predict_proba(X)[:,1]
     return score
 
-def apply_bdtbased(cols,wp,lumi,anti=False,model_file = bdt_model_file,ddt_map_file = 'models/bdt_ddt_AN_v6.json',
-                   xrootd_url='root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/BDT_based/'):
+DDT_PATH_BDTBASED='root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/BDT_based/'
+DDT_FILE_BDTBASED='models/bdt_ddt_AN_v6.json'
 
+def apply_bdtbased(cols,wp,lumi,anti=False,model_file=bdt_model_file,ddt_map_file =DDT_FILE_BDTBASE, xrootd_url=DDT_PATH_BDTBASED):
     check_if_model_exists(ddt_map_file, xrootd_url)
     check_if_model_exists(model_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
