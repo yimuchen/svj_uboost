@@ -1228,7 +1228,7 @@ def calc_bdt_scores(X, model_file=bdt_model_file):
 DDT_PATH_BDTBASED='root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/BDT_based/'
 DDT_FILE_BDTBASED='models/bdt_ddt_AN_v6.json'
 
-def apply_bdtbased(cols,wp,lumi,anti=False,model_file=bdt_model_file,ddt_map_file =DDT_FILE_BDTBASE, xrootd_url=DDT_PATH_BDTBASED):
+def apply_bdtbased(cols,wp,lumi,anti=False,model_file=bdt_model_file,ddt_map_file=DDT_FILE_BDTBASED, xrootd_url=DDT_PATH_BDTBASED):
     check_if_model_exists(ddt_map_file, xrootd_url)
     check_if_model_exists(model_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
