@@ -136,13 +136,14 @@ def build_histogram(args=None):
             if metadata["sample_type"]=="data":
                 cols = cols.select(cols.arrays['run']>=startHEM)
             cols = common.apply_hemveto(cols)
+
         # signal region
+        wp=common.split_bdt(selection) if "=" in selection else : None
         if selection=='cutbased':
             cols = common.apply_cutbased(cols)
-        elif selection=='cutbased_ddt':
-            cols = common.apply_cutbased_ddt(cols,lumi)
+        elif selection.startswith('cutbased_ddt='):
+            cols = common.apply_cutbased_ddt(cols,lumi, cut_val=wp)
         elif selection.startswith('bdt='):
-            wp = common.split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi)
         # control regions
         elif selection=='cutbasedCR':
@@ -151,14 +152,13 @@ def build_histogram(args=None):
             cols = common.apply_cutbasedCRloose(cols)
         elif selection=='anticutbased':
             cols = common.apply_anticutbased(cols)
-        elif selection=='anticutbased_ddt':
-            cols = common.apply_anticutbased_ddt(cols,lumi)
+        elif selection.startswith('anticutbased_ddt='):
+            cols = common.apply_anticutbased_ddt(cols,lumi,cut_val=wp)
         elif selection=='antiloosecutbased':
             cols = common.apply_antiloosecutbased(cols)
-        elif selection=='antiloosecutbased_ddt':
-            cols = common.apply_antiloosecutbased_ddt(cols,lumi)
+        elif selection.startswith('antiloosecutbased_ddt='):
+            cols = common.apply_antiloosecutbased_ddt(cols,lumi, cut_val=wp)
         elif selection.startswith('antibdt='):
-            wp = common.split_bdt(selection)
             cols = common.apply_bdtbased(cols,wp,lumi,anti=True)
         elif selection=='preselection':
             pass
