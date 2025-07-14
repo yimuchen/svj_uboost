@@ -1153,7 +1153,7 @@ def apply_cutbased(cols, cut_val=0.09):
 
 def apply_cutbased_ddt(cols, lumi, cut_val, ddt_map_file=DDT_FILE_CUTBASED, xrootd_url=DDT_PATH_CUTBASED) :
     cols = apply_rt_signalregion(cols)
-    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val)
+    ddt_val = cutbased_ddt(cols, lumi, cut_val, ddt_map_file, xrootd_url)
 
     # Now cut on the DDT above 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val > 0.0) # mask for the selection
@@ -1187,7 +1187,7 @@ def apply_anticutbased(cols, cul_val=0.09):
     return cols
 
 def apply_antiloosecutbased_ddt(cols, lumi, cut_val, ddt_map_file=DDT_FILE_CUTBASED, xrootd_url=DDT_PATH_CUTBASED) :
-    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val)
+    ddt_val = cutbased_ddt(cols, lumi, cut_val, ddt_map_file, xrootd_url)
 
     # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val < 0.0) # mask for the selection
