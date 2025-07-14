@@ -99,13 +99,40 @@ def bdt_ddt_inputs(input_files: list[str], all_features):
     def _get_features(col):
         return col.to_numpy(all_features)
 
+    def _get_mask(x, w):
+        mt = x[:,-3]
+        # Creating bins from the main histogram of interest, we don't really care about the actual
+        # range as long as it ls larger than the defined region-of-interest of the fit
+        mt_binw, mt_min, mt_max = MTHistogram.default_binning
+        mt_min = np.around(mt_min / 2, mt_binw)
+        mt_max = np.around(mt_max * 2, mt_binw)
+        mt_edges = np.arange(mt_min, mt_max, mt_binw)
+        bin_idx = np.digitize(mt, mt_edges) # Getting which bin the item should be in
+        bin_count, _ = np.histogram(mt, bins=mt_edges) # Getting the number of entries in each bin
+        bin_count = np.concatenate([[0], bin_count, [0]]) # Adding overflow bin to have bin_count match np.digitize ourput
+        mask_bin = [True, ] # Constructing the array for which bin should be masked
+        for i in range(1, len(bin_count)-1):
+            if bin_count[i-1] == 0 and bin_count[i+1] == 0:
+                mask_bin.append(False) # Mask if neighboring bins are both empty
+            else:
+                mask_bin.append(True)
+        mask_bin.append(False) # Always mask overflow bin
+        mask_bin = np.array(mask_bin)
+        return mask_bin[bin_idx] # Extracting to per-event masking via array index
+
     cols = [_get_cols(f) for f in input_files]
 
     # Extract and filter
     X_list, W_list = [], []
     for col in cols:
-        X_list.append(_get_features(col))
-        W_list.append(get_event_weight(col, lumis[str(col.metadata["year"])]))
+        x = _get_features(col)
+        w = get_event_weight(col, lumi)
+        if len(x) == 0: # Skipping length 0 arrays, as this messes up the masking creating routine
+            continue
+        # Only construct mask for background sample
+        mask = _get_mask(x,w) if col.metadata['sample_type'] == 'bkg' else np.ones_like(w, dtype=bool)
+        X_list.append(x[mask])
+        W_list.append(w[mask])
 
     X = np.concatenate(X_list)
     weight = np.concatenate(W_list)

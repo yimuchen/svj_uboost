@@ -1106,29 +1106,6 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
 
     return varDDT
 
-def apply_highweight_filter(cols, target_var="mt", binning=MTHistogram.default_binning):
-    """
-    Removing high weight events from a selection. This
-    """
-    t_var = cols.arrays["mt"]
-    t_binw, t_min, t_max = MTHistogram.default_binning
-    t_min = np.around(t_min / 2, t_binw)
-    t_max = np.around(t_max * 2, t_binw)
-    mt_edges = np.arange(t_min, t_max, t_binw)
-    bin_idx = np.digitize(t_var, mt_edges) # Getting which bin the item should be in
-    bin_count, _ = np.histogram(t_var, bins=mt_edges) # Getting the number of entries in each bin
-    bin_count = np.concatenate([[0], bin_count, [0]]) # Adding overflow bin to have bin_count match np.digitize ourput
-    mask_bin = [True, ] # Constructing the array for which bin should be masked
-    for i in range(1, len(bin_count)-1):
-        if bin_count[i-1] == 0 and bin_count[i+1] == 0:
-            mask_bin.append(False) # Mask if neighboring bins are both empty
-        else:
-            mask_bin.append(True)
-    mask_bin.append(False) # Always mask overflow bin
-    mask_bin = np.array(mask_bin)
-    return cols.select(mask_bin[bin_idx]) # Extracting to per-event masking via array index
-
-
 def apply_hemveto(cols):
     cols = cols.select(svj.veto_HEM(cols.arrays['ak4_subl_eta'],cols.arrays['ak4_subl_phi'],cols.arrays['ak4_subl_pt']))
     cols.cutflow['hem_veto'] = len(cols)
