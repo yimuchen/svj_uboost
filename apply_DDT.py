@@ -94,7 +94,7 @@ def save_plot(plt, plt_name, flag_tight_layout=True, **kwargs):
 
 def bdt_ddt_inputs(input_files: list[str], all_features):
     def _get_cols(file: str):
-        return apply_highweight_filter(apply_rt_signalregion(Columns.load(file)))
+        return apply_rt_signalregion(Columns.load(file))
 
     def _get_features(col):
         return col.to_numpy(all_features)
