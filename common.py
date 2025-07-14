@@ -644,6 +644,12 @@ class Histogram:
         h.errs = h.errs[imin:imax-1]
         return h
 
+    def mask(self, keep):
+        ans = self.copy()
+        ans.vals[~keep] = 0
+        ans.errs[~keep] = 0
+        return ans
+
 def _create_binning(binw, left, right):
     bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
     # Force casting to python floats, as numpy values causes issues with JSON serialization

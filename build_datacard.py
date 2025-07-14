@@ -107,19 +107,15 @@ def build_histogram(args=None):
         # Use passed input
         selection, hist_var, lumi, year, fullyear, skimfile = args
 
-    def filter_bkg(cols):
-        bkgs = [cols]
-        # Filter empty backgrounds
-        bkgs = [c for c in bkgs if len(c)]
-        # Filter out QCD with pT<300
-        # Only singular events pass the preselection, which creates spikes in the final bkg dist
-        bkgs = common.filter_pt(bkgs, 300)
-        # Same story for wjets with HT<400
-        bkgs = common.filter_ht(bkgs, 400, 'wjets')
-        # Filter out wjets inclusive bin - it's practically the HT<100 bin,
-        # and it's giving problems
-        bkgs = [c for c in bkgs if not (c.metadata['bkg_type']=='wjets' and 'htbin' not in c.metadata)]
-        return bkgs[0] if len(bkgs)==1 else None
+    # approach to large weight removal: remove isolated bins from histogram
+    def mask_bkg(hist):
+        mask_bin = []
+        for i in range(hist.nbins):
+            if (i>0 and hist.vals[i-1]==0) and (i<hist.nbins-1 and hist.vals[i+1]==0):
+                mask_bin.append(False)
+            else:
+                mask_bin.append(True)
+        return hist.mask(np.array(mask_bin))
 
     def get_variation(var):
         return skimfile.replace(".npz",f"_{var}.npz")
@@ -171,11 +167,6 @@ def build_histogram(args=None):
     hist_variants = {}
     cen_columns = svj.Columns.load(skimfile)
     metadata = cen_columns.metadata
-    if metadata["sample_type"]=="bkg":
-        cen_columns = filter_bkg(cen_columns)
-        if cen_columns is None:
-            return [""]
-
     if year is None: year = str(metadata["year"])
     else:
         metadata["year"] = year
@@ -199,6 +190,8 @@ def build_histogram(args=None):
 
     hist_central = VarHistogram(cen_columns, w)
     hist_central.metadata.update(metadata)
+    if metadata["sample_type"]=="bkg":
+        hist_central = mask_bkg(hist_central)
     hist_variants['central'] = hist_central
 
     if metadata["sample_type"]=="sig" and selection!="preselection_minus":
