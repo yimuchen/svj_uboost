@@ -1106,17 +1106,17 @@ def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
 
     return varDDT
 
-def apply_highweight_filter(cols):
+def apply_highweight_filter(cols, target_var="mt", binning=MTHistogram.default_binning):
     """
     Removing high weight events from a selection. This
     """
-    mt = cols.arrays["mt"]
-    mt_binw, mt_min, mt_max = MTHistogram.default_binning
-    mt_min = np.around(mt_min / 2, mt_binw)
-    mt_max = np.around(mt_max * 2, mt_binw)
-    mt_edges = np.arange(mt_min, mt_max, mt_binw)
-    bin_idx = np.digitize(mt, mt_edges) # Getting which bin the item should be in
-    bin_count, _ = np.histogram(mt, bins=mt_edges) # Getting the number of entries in each bin
+    t_var = cols.arrays["mt"]
+    t_binw, t_min, t_max = MTHistogram.default_binning
+    t_min = np.around(t_min / 2, t_binw)
+    t_max = np.around(t_max * 2, t_binw)
+    mt_edges = np.arange(t_min, t_max, t_binw)
+    bin_idx = np.digitize(t_var, mt_edges) # Getting which bin the item should be in
+    bin_count, _ = np.histogram(t_var, bins=mt_edges) # Getting the number of entries in each bin
     bin_count = np.concatenate([[0], bin_count, [0]]) # Adding overflow bin to have bin_count match np.digitize ourput
     mask_bin = [True, ] # Constructing the array for which bin should be masked
     for i in range(1, len(bin_count)-1):
