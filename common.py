@@ -650,6 +650,15 @@ class Histogram:
         ans.errs[~keep] = 0
         return ans
 
+def mask_isolated_bins(counts):
+    mask_bin = []
+    for i in range(len(counts)):
+        if (i<=0 or counts[i-1]==0) and (i>=len(counts)-1 or counts[i+1]==0):
+            mask_bin.append(False)
+        else:
+            mask_bin.append(True)
+    return np.array(mask_bin)
+
 def _create_binning(binw, left, right):
     bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
     # Force casting to python floats, as numpy values causes issues with JSON serialization

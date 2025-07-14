@@ -107,16 +107,6 @@ def build_histogram(args=None):
         # Use passed input
         selection, hist_var, lumi, year, fullyear, skimfile = args
 
-    # approach to large weight removal: remove isolated bins from histogram
-    def mask_bkg(hist):
-        mask_bin = []
-        for i in range(hist.nbins):
-            if (i>0 and hist.vals[i-1]==0) and (i<hist.nbins-1 and hist.vals[i+1]==0):
-                mask_bin.append(False)
-            else:
-                mask_bin.append(True)
-        return hist.mask(np.array(mask_bin))
-
     def get_variation(var):
         return skimfile.replace(".npz",f"_{var}.npz")
 
@@ -190,8 +180,9 @@ def build_histogram(args=None):
 
     hist_central = VarHistogram(cen_columns, w)
     hist_central.metadata.update(metadata)
+    # approach to large weight removal: remove isolated bins from histogram
     if metadata["sample_type"]=="bkg":
-        hist_central = mask_bkg(hist_central)
+        hist_central = hist_central.mask(common.mask_isolated_bins(hist_central.vals))
     hist_variants['central'] = hist_central
 
     if metadata["sample_type"]=="sig" and selection!="preselection_minus":
