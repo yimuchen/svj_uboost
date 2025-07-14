@@ -107,20 +107,6 @@ def build_histogram(args=None):
         # Use passed input
         selection, hist_var, lumi, year, fullyear, skimfile = args
 
-    def filter_bkg(cols):
-        bkgs = [cols]
-        # Filter empty backgrounds
-        bkgs = [c for c in bkgs if len(c)]
-        # Filter out QCD with pT<300
-        # Only singular events pass the preselection, which creates spikes in the final bkg dist
-        bkgs = common.filter_pt(bkgs, 300)
-        # Same story for wjets with HT<400
-        bkgs = common.filter_ht(bkgs, 400, 'wjets')
-        # Filter out wjets inclusive bin - it's practically the HT<100 bin,
-        # and it's giving problems
-        bkgs = [c for c in bkgs if not (c.metadata['bkg_type']=='wjets' and 'htbin' not in c.metadata)]
-        return bkgs[0] if len(bkgs)==1 else None
-
     def get_variation(var):
         return skimfile.replace(".npz",f"_{var}.npz")
 
@@ -138,7 +124,7 @@ def build_histogram(args=None):
             cols = common.apply_hemveto(cols)
 
         # signal region
-        wp=common.split_bdt(selection) if "=" in selection else : None
+        wp = common.split_bdt(selection) if "=" in selection else None
         if selection=='cutbased':
             cols = common.apply_cutbased(cols)
         elif selection.startswith('cutbased_ddt='):
@@ -171,11 +157,6 @@ def build_histogram(args=None):
     hist_variants = {}
     cen_columns = svj.Columns.load(skimfile)
     metadata = cen_columns.metadata
-    if metadata["sample_type"]=="bkg":
-        cen_columns = filter_bkg(cen_columns)
-        if cen_columns is None:
-            return [""]
-
     if year is None: year = str(metadata["year"])
     else:
         metadata["year"] = year
@@ -199,6 +180,9 @@ def build_histogram(args=None):
 
     hist_central = VarHistogram(cen_columns, w)
     hist_central.metadata.update(metadata)
+    # approach to large weight removal: remove isolated bins from histogram
+    if metadata["sample_type"]=="bkg":
+        hist_central = hist_central.mask(common.mask_isolated_bins(hist_central.vals))
     hist_variants['central'] = hist_central
 
     if metadata["sample_type"]=="sig" and selection!="preselection_minus":
@@ -439,7 +423,7 @@ class Plot:
     def save(self, outfile='tmp.png', pdf=True, legend_order=None):
         self.top.text(
             0.02, 0.02,
-            'Cut-based' if self.selection=='cutbased' else 'BDT',
+            self.selection,
             horizontalalignment='left',
             verticalalignment='bottom',
             transform=self.top.transAxes,
@@ -626,8 +610,10 @@ def do_loess(hist,span,do_gcv=False):
 @scripter
 def smooth_shapes():
     span_val = common.pull_arg('--span', type=float, default=0.25, help="span value").span
+    span_min = common.pull_arg('--spanmin', type=float, default=0.05, help="minimum span value").spanmin # if span is too small, no points are included
     do_opt = common.pull_arg('--optimize', type=int, default=0, help="optimize span value using n values").optimize
-    target = common.pull_arg('--target', type=str, default='central', help="optimize only based on target hist").target
+    default = common.pull_arg('--default', type=str, default='central', help="default histogram for metadata").default
+    target = common.pull_arg('--target', type=str, default=default, help="optimize only based on target hist").target
     debug = common.pull_arg('--debug', default=False, action="store_true", help="debug optimization").debug
     var = common.pull_arg('--variation', type=str, default=None, help="MT variation to debug").variation
     save = common.pull_arg('--save', default=False, action="store_true", help="save debug variation output").save
@@ -635,17 +621,22 @@ def smooth_shapes():
     mtmax = common.pull_arg('--mtmax', type=float, default=None).mtmax
     norm = not common.pull_arg('--unnorm', default=False, action="store_true", help="fit unnormalized shape").unnorm
     json_file = common.pull_arg('jsonfile', type=str).jsonfile
+
     with open(json_file) as f:
         mths = json.load(f, cls=common.Decoder)
-    common.logger.info(f'central metadata:\n{mths["central"].metadata}')
+    h_default = mths[default]
+    common.logger.info(f'{default} metadata:\n{h_default.metadata}')
 
     # loop over central and systematics
-    year = mths["central"].metadata["year"]
-    if not isinstance(year,str) and not isinstance(year,list): year = str(int(year))
-    variations = get_systs(years=year)
-    variations = [v for v in variations if not v.startswith('stat')]
-    variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
-    variations = ['central']+variations
+    if h_default.metadata["sample_type"]=="sig":
+        year = h_default.metadata["year"]
+        if not isinstance(year,str) and not isinstance(year,list): year = str(int(year))
+        variations = get_systs(years=year)
+        variations = [v for v in variations if not v.startswith('stat')]
+        variations = [var+'_up' for var in variations]+[var+'_down' for var in variations]
+        variations = [default]+variations
+    else:
+        variations = [default]
 
     # find optimization target
     if len(target)>0:
@@ -674,7 +665,6 @@ def smooth_shapes():
         if norm: hist = hist*(1./hyield)
 
         if do_opt>0 and (var==target or len(target)==0):
-            span_min = 0.05 # if span is too small, no points are included
             spans = np.linspace(span_min,1.,do_opt,endpoint=False) # skip 1
             gcvs = np.array([do_loess(hist, span, do_gcv=True) for span in spans])
             span_val = spans[np.argmin(gcvs)]
@@ -733,7 +723,8 @@ def smooth_shapes():
 def plot_smooth():
     mtmin = common.pull_arg('--mtmin', type=float, default=180.).mtmin
     mtmax = common.pull_arg('--mtmax', type=float, default=650.).mtmax
-    var = common.pull_arg('--variation', type=str, default='central', help="MT variation to plot (or 'all')").variation
+    default = common.pull_arg('--default', type=str, default='central', help="default histogram for metadata").default
+    var = common.pull_arg('--variation', type=str, default=default, help="MT variation to plot (or 'all')").variation
     noratio = common.pull_arg('--no-ratio', default=False, action="store_true", help="skip ratio").no_ratio
     names = common.pull_arg('--names', type=str, nargs='*', default=[], help="legend names for files").names
     json_files = common.pull_arg('jsonfiles', type=str, nargs='+').jsonfiles
@@ -747,7 +738,7 @@ def plot_smooth():
     if var=='all':
         vars = get_systs()
         vars = [var+'_up' for var in vars]+[var+'_down' for var in vars]
-        vars = ['central']+vars
+        vars = [default]+vars
 
     mths = []
     for json_file in json_files:
@@ -762,7 +753,7 @@ def plot_smooth():
     os.makedirs(outdir, exist_ok=True)
 
     for var in vars:
-        meta = mths[0]['central'].metadata
+        meta = mths[0][default].metadata
         plot = Plot(meta)
         legend_order = []
         h_denom = None

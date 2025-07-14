@@ -644,6 +644,21 @@ class Histogram:
         h.errs = h.errs[imin:imax-1]
         return h
 
+    def mask(self, keep):
+        ans = self.copy()
+        ans.vals[~keep] = 0
+        ans.errs[~keep] = 0
+        return ans
+
+def mask_isolated_bins(counts):
+    mask_bin = []
+    for i in range(len(counts)):
+        if (i<=0 or counts[i-1]==0) and (i>=len(counts)-1 or counts[i+1]==0):
+            mask_bin.append(False)
+        else:
+            mask_bin.append(True)
+    return np.array(mask_bin)
+
 def _create_binning(binw, left, right):
     bins = left + binw * np.arange(math.ceil((right-left)/binw)+1)
     # Force casting to python floats, as numpy values causes issues with JSON serialization
@@ -1153,7 +1168,7 @@ def apply_cutbased(cols, cut_val=0.09):
 
 def apply_cutbased_ddt(cols, lumi, cut_val, ddt_map_file=DDT_FILE_CUTBASED, xrootd_url=DDT_PATH_CUTBASED) :
     cols = apply_rt_signalregion(cols)
-    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val)
+    ddt_val = cutbased_ddt(cols, lumi, cut_val, ddt_map_file, xrootd_url)
 
     # Now cut on the DDT above 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val > 0.0) # mask for the selection
@@ -1187,7 +1202,7 @@ def apply_anticutbased(cols, cul_val=0.09):
     return cols
 
 def apply_antiloosecutbased_ddt(cols, lumi, cut_val, ddt_map_file=DDT_FILE_CUTBASED, xrootd_url=DDT_PATH_CUTBASED) :
-    ddt_val = cutbased_ddt(cols, lumi, ddt_map_file, xrootd_url, cut_val)
+    ddt_val = cutbased_ddt(cols, lumi, cut_val, ddt_map_file, xrootd_url)
 
     # Now cut on the DDT BELOW 0.0 (referring to above the ecfm2b1 cut value)
     cols = cols.select(ddt_val < 0.0) # mask for the selection
