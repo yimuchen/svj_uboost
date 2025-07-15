@@ -1245,6 +1245,9 @@ def apply_bdtbased(cols,wp,lumi,anti=False,model_file=bdt_model_file,ddt_map_fil
     check_if_model_exists(ddt_map_file, xrootd_url)
     check_if_model_exists(model_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
+    # calc_bdt_scores doesn't like empty inputs
+    if len(cols)==0:
+        return cols
 
     # make sure bdt features match the choosen file
     bdt_features = read_training_features(model_file)
