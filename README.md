@@ -167,30 +167,17 @@ One of the key files in this repo is the `build_datacard.py` this is the magic f
 
 Taking the skims as input (with the consistent preselection applied to all samples), output MT histograms are produced for a specified final selection (either cutbased or bdt=X for a working point X; DDT is applied).
 The final selection also includes the HEM veto for the 2018POST era.
-For signals, systematic variations are evaluated, and a wider mT range is used to facilitate smoothing of the shapes (using local regression).
+For signals, systematic variations are evaluated, and a wider mT range is used to facilitate smoothing of the shapes (using local regression;
+the optimization of the smoothing span via generalized cross-validation uses the central histogram, and then that optimized span value is applied to the systematic variations).
+Histograms are then merged across all data-taking years and smoothed in some cases.
 
+The commands to perform all steps (histograms, merging, smoothing) for all categories (data, background, signal) are executed by `build_all.sh`.
+The desired selection(s) can be specified using the `--sels` argument (and are internally expanded to include the anti-tag control regions):
 ```bash
-# For the cut based: sig, bkg, data
-python3 build_datacard.py build_all_histograms cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Private3D*/*pythia8.npz" --mtmin 130 --mtmax 700 --mtbinw 10
-python3 build_datacard.py build_all_histograms cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Summer*/*.npz" --mtbinw 10
-python3 build_datacard.py build_all_histograms cutbased "root://cmseos.fnal.gov//store/user/lpcdarkqcd/boosted/skims_20240718_hadd/Run*/*.npz" --mtbinw 10
+./build_all.sh --sels "cutbased_ddt=0.12 bdt=0.75"
 ```
-
-After creating the histograms, merge across all data-taking years:
-```bash
-for CAT in bkg data sig; do
-  python3 build_datacard.py merge_histograms cutbased hists_20240718 --cat $CAT
-done
-```
-
-Smoothing is applied to the merged signal histograms:
-```bash
-python build_datacard.py smooth_shapes --optimize 1000 --target central --mtmin 180 --mtmax 650 merged/signal.json
-```
-The output histograms from this step are truncated to the final mT range. (`--target central` means that the optimization of the smoothing span via generalized cross-validation uses the central histogram, and then that optimized span value is applied to the systematic variations.)
 
 These merged, smoothed json files are the inputs to the limit setting. The signal, background, and (optionally) data are supplied separately.
-The resulting merged file should use the signal name, the selection type, bin widths, and ranges: `signal_name_cutbased_or_bdt_smooth_with_bkg_binwXY_rangeXYZ-XYZ.json`.
 
 ## Creating the n-minus-one and preselection distribution histograms
 
