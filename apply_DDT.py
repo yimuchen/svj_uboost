@@ -234,7 +234,7 @@ def main():
         if verbosity > 0 : print("Applying the DDT background")
         primary_var_ddt = []
         for cut_val in ana_variant[ana_type]["cut_values"]:
-            primary_var_ddt.append(calculate_varDDT(mT, pT, rho, primary_var, bkg_weight, cut_val, ddt_map_file))
+            primary_var_ddt.append(calculate_varDDT(mT, pT, rho, primary_var, cut_val, ddt_map_file))
 
         # Plot histograms for the DDT scores for different BDT cuts
         if verbosity > 0 : print("Making background plots")
@@ -419,7 +419,7 @@ def main():
             fom = [] # to store the figure of merit values
             for cut_val in ana_variant[ana_type]['cut_values']:
                 def _get_ddt_yield(mT, pT, rho, var, weight):
-                    score_ddt = calculate_varDDT(mT, pT, rho, var, weight, cut_val, ddt_map_file)
+                    score_ddt = calculate_varDDT(mT, pT, rho, var, cut_val, ddt_map_file)
                     score_mask = score_ddt > 0
                     mt_mask = (mT > (mz - 100)) & (mT < (mz + 100))
                     mt_fill = mT[score_mask & mt_mask]
@@ -523,7 +523,7 @@ def main():
                 # _____________________________________________
                 # Apply the DDT  to the signal
                 if verbosity > 0 : print("Applying the DDT signal")
-                sig_score_ddt = calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, sig_bdt_cut, ddt_map_file)
+                sig_score_ddt = calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_bdt_cut, ddt_map_file)
 
                 # Make mT distributions
                 if mz != 300: alpha = 0.3
@@ -579,7 +579,7 @@ def main():
             if verbosity > 0 : print("Applying the DDT signal")
             sig_score_ddt = []
             for cut_val in ana_variant[ana_type]['cut_values'] :
-                sig_score_ddt.append(calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, sig_weight, cut_val, ddt_map_file) )
+                sig_score_ddt.append(calculate_varDDT(sig_mT, sig_pT, sig_rho, sig_score, cut_val, ddt_map_file) )
 
             # Plot histograms for the DDT scores for different BDT cuts
             fig, ax = plt.subplots(figsize=(10, 8))
