@@ -118,9 +118,11 @@ def build_histogram(args=None):
         if year=="2018PRE":
             if metadata["sample_type"]=="data":
                 cols = cols.select(cols.arrays['run']<startHEM)
+                cols.cutflow['preHEM'] = len(cols)
         elif year=="2018POST":
             if metadata["sample_type"]=="data":
                 cols = cols.select(cols.arrays['run']>=startHEM)
+                cols.cutflow['postHEM'] = len(cols)
             cols = common.apply_hemveto(cols)
 
         # signal region

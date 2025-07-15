@@ -1079,14 +1079,13 @@ def create_DDT_map_dict(mt, pt, rho, var, weight, percents, cut_vals, ddt_name):
     with open(ddt_name, 'w') as f:
         json.dump(var_dict, f, cls=NumpyArrayEncoder)
 
-def calculate_varDDT(mt, pt, rho, var, weight, cut_val, ddt_name):
+def calculate_varDDT(mt, pt, rho, var, cut_val, ddt_name):
     '''
     Applies a DDT transformation to 'var' using a DDT map in (mt, pt) space.
     
     Inputs:
     - mt, pt
     - var: tagger variable (e.g. BDT score)
-    - weight: event weights (not used here, but passed for compatibility)
     - cut_val: key in the DDT map dict to use (e.g. 0.1, 0.2)
     - ddt_name: path to JSON file containing the DDT map
 
@@ -1155,9 +1154,8 @@ def cutbased_ddt(cols, lumi, cut_val, ddt_map_file, xrootd_url):
     pT = cols.to_numpy(['pt']).ravel()
     rho = cols.to_numpy(['rho']).ravel()
     ecfm2b1 = cols.to_numpy(['ecfm2b1']).ravel()
-    weight = get_event_weight(cols, lumi)
 
-    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, weight, cut_val, ddt_map_file)
+    ddt_val = calculate_varDDT(mT, pT, rho, ecfm2b1, cut_val, ddt_map_file)
     return ddt_val
 
 def apply_cutbased(cols, cut_val=0.09):
@@ -1247,6 +1245,9 @@ def apply_bdtbased(cols,wp,lumi,anti=False,model_file=bdt_model_file,ddt_map_fil
     check_if_model_exists(ddt_map_file, xrootd_url)
     check_if_model_exists(model_file, xrootd_url)
     cols = apply_rt_signalregion(cols)
+    # calc_bdt_scores doesn't like empty inputs
+    if len(cols)==0:
+        return cols
 
     # make sure bdt features match the choosen file
     bdt_features = read_training_features(model_file)
@@ -1258,15 +1259,14 @@ def apply_bdtbased(cols,wp,lumi,anti=False,model_file=bdt_model_file,ddt_map_fil
 
     # Get the features for the bkg samples
     X = cols.to_numpy(bdt_features)
-    # Calculate bdt scores and event weights
+    # Calculate bdt scores
     score = calc_bdt_scores(X)
-    weight = get_event_weight(cols, lumi)
 
     # Apply the DDT
     mT = cols.to_numpy(['mt']).ravel() # make one d ... don't ask why it's not
     pT = cols.to_numpy(['pt']).ravel()
     rho = cols.to_numpy(['rho']).ravel()
-    bdt_ddt_score = calculate_varDDT(mT, pT, rho, score, weight, wp, ddt_map_file)
+    bdt_ddt_score = calculate_varDDT(mT, pT, rho, score, wp, ddt_map_file)
 
     # Now cut on the DDT above 0.0 (referring to above the given BDT cut value)
     # or < 0.0 for anti-tag CR
