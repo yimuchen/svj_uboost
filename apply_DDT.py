@@ -107,7 +107,7 @@ def bdt_ddt_inputs(input_files: list[str], all_features):
         mt_min = np.around(mt_min / 2, mt_binw)
         mt_max = np.around(mt_max * 2, mt_binw)
         mt_edges = np.arange(mt_min, mt_max, mt_binw)
-        bin_idx = np.digitize(mt, mt_edges)-1 # Getting which bin the item should be in
+        bin_idx = np.digitize(mt, mt_edges) # Getting which bin the item should be in
         bin_idx[bin_idx==0] = 1 # put underflow into first bin
         bin_idx[bin_idx==len(mt_edges)] = len(mt_edges)-1 # put overflow into last bin
         bin_idx = bin_idx - 1 # shift to be consistent with histogram indexing
