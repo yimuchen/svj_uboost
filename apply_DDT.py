@@ -190,7 +190,7 @@ def main():
     if not osp.exists(rt_ddt_file):
         logger.info("Creating DDT map file for RT selection")
         eff = np.sum(bkg_weight[rT > SELECTION_RT_SIGNAL_REGION]) / np.sum(bkg_weight)
-        create_DDT_map_dict(mT, pT, rT, bkg_weight, [eff *100], [SELECTION_RT_SIGNAL_REGION], rt_ddt_file)
+        create_DDT_map_dict(mT, pT, rT, bkg_weight, [eff *100], [SELECTION_RT_SIGNAL_REGION], rt_ddt_file, smear=0.2)
 
     # Only make the 2D DDT map if it doesn't exist
     if not osp.exists(ddt_map_file):
@@ -321,7 +321,7 @@ def main():
         all_ratios = []
         for cuts, scores in zip(ana_variant[ana_type]["cut_values"], primary_var_ddt):
             mask_above = (scores > 0) & RT_mask
-            mask_below = (scores < 0) | (~RT_mask)
+            mask_below = ~RT_mask
             num_above, _ = np.histogram(mT[mask_above], bins=mT_bins, weights=bkg_weight[mask_above])
             num_below, _ = np.histogram(mT[mask_below], bins=mT_bins, weights=bkg_weight[mask_below])
             ratio = np.divide(num_above, num_below, out=np.zeros_like(num_above, dtype=float), where=num_below > 0)

@@ -998,7 +998,7 @@ def weighted_percentile(x, w, percent):
 
     return upper_val *int_w + lower_val * (1-int_w)
 
-def varmap(mt, pt, var, weight, percent, cut_val):
+def varmap(mt, pt, var, weight, percent, cut_val, smear):
     '''
     2D map for DDT, now defined in (mt, pt) space instead of (rho, pt).
     Decorrelates the tagger variable with respect to mt using a 2D (mt, pt) map.
@@ -1012,8 +1012,8 @@ def varmap(mt, pt, var, weight, percent, cut_val):
     C, MT_PT_edges, PT_edges = np.histogram2d(mt_pt[cuts], pt[cuts], bins=73, weights=weight[cuts])
 
     # Initialize the variable map
-    w, h = 74, 74
-    VAR_map = [[0 for x in range(h)] for y in range(w)]
+    w, h = 73, 73
+    VAR_map = np.array([[0.0 for x in range(h)] for y in range(w)])
 
     # Get data arrays for events passing the cuts
     VAR = var[cuts]
@@ -1024,13 +1024,11 @@ def varmap(mt, pt, var, weight, percent, cut_val):
     # Loop over mt and pt bins
     for (i,j) in tqdm.tqdm([(i,j) for i in range(len(MT_PT_edges)-1) for j in range(len(PT_edges)-1)], desc="DDT bin"):
         CUT = (mt_pt_bin_idx == i) & (pt_bin_idx == j)
-
-        # If there is data in this bin, calculate the percentile of the variable
         if len(VAR[CUT]) > 0:
             VAR_map[i][j] = weighted_percentile(VAR[CUT], WEIGHT[CUT], 100 - percent)
 
-    # Apply smoothing (you can replace this with adaptive smoothing if you like)
-    VAR_map_smooth = gaussian_filter(VAR_map, sigma=1.0)
+    # Actually applying the smoothing process
+    VAR_map_smooth = gaussian_filter(VAR_map, sigma=smear)
 
     # Return smoothed map and the new mt and pt bin edges
     return VAR_map_smooth, MT_PT_edges, PT_edges
@@ -1044,7 +1042,7 @@ class NumpyArrayEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NumpyArrayEncoder, self).default(obj)
 
-def create_DDT_map_dict(mt, pt, var, weight, percents, cut_vals, ddt_name):
+def create_DDT_map_dict(mt, pt, var, weight, percents, cut_vals, ddt_name, smear=1.0):
     '''
     Creates a dictionary of DDT 2D maps for a range of cut_vals and background efficiencies (percents).
     Each DDT map is a 2D array of tagger thresholds binned in (mt, pt) space,
@@ -1058,22 +1056,15 @@ def create_DDT_map_dict(mt, pt, var, weight, percents, cut_vals, ddt_name):
     - cut_vals: corresponding working point names (e.g. [0.1, 0.2, 0.3])
     - ddt_name: output filename for the JSON dictionary
     '''
-
-    # Apply kinematic window cuts (still uses rho for now)
     cuts = ddt_windowcuts(mt, pt)
 
     var_dict = {}
 
     for cut_val, percent in zip(cut_vals, percents):
         print(f"Creating DDT 2D map for cut value {cut_val}, efficiency {percent}%")
-
-        # Build the DDT map in (mt, pt) space
-        var_map_smooth, MT_PT_edges, PT_edges = varmap(mt, pt, var, weight, percent, cut_val)
-
-        # Store the map and bin edges
+        var_map_smooth, MT_PT_edges, PT_edges = varmap(mt, pt, var, weight, percent, cut_val, smear)
         var_dict[str(cut_val)] = (var_map_smooth.tolist(), MT_PT_edges.tolist(), PT_edges.tolist())
 
-    # Save to file
     if ddt_name is None:
         ddt_name = 'ddt_' + str(var) + '_' + datetime.now().strftime('%Y%m%d') + '.json'
     with open(ddt_name, 'w') as f:
@@ -1108,12 +1099,11 @@ def calculate_varDDT(mt, pt, var, cut_val, ddt_name):
     MT_PT_edges = np.array(MT_PT_edges)
     PT_edges = np.array(PT_edges)
 
-    # Apply DDT window cuts (you can update this function later if you drop rho)
-    cuts = ddt_windowcuts(mt, pt)
-
-    # Bin index lookup with digitize
-    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0, len(PT_edges) - 1)
-    mt_pt_bin = np.clip(np.digitize(mt/pt, MT_PT_edges) - 1, 0, len(MT_PT_edges) - 1)
+    # Bin index lookup with digitize. Using minus 2 in clip becase we are no
+    # longer applying the ddt_window cut, so there will be overflow entries.
+    # Just folding it to the last bin for now
+    pt_bin = np.clip(np.digitize(pt, PT_edges) - 1, 0, len(PT_edges) - 2)
+    mt_pt_bin = np.clip(np.digitize(mt/pt, MT_PT_edges) - 1, 0, len(MT_PT_edges) - 2)
 
     # Apply DDT: var - DDT map value at the appropriate bin
     varDDT = var - var_map_smooth[mt_pt_bin, pt_bin]
