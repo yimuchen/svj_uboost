@@ -158,9 +158,9 @@ def build_histogram(args=None):
             cols = common.apply_bdtbased(cols,wp,lumi,anti=True)
         elif selection.startswith('antirtbdt='):
             cols = common.apply_bdtbased(cols,wp,lumi,anti=True,ddt_map_file=common.DDT_FILE_BDTBASED_RT_DDT)
-        elif selection.startswith('antiloosebdt_ddt='):
+        elif selection.startswith('antiloosebdt='):
             cols = common.apply_antiloosebdt(cols,wp,lumi,rt_ddt_file=None,ddt_map_file=common.DDT_FILE_BDTBASED)
-        elif selection.startswith('antiloosertbdt_ddt='):
+        elif selection.startswith('antiloosertbdt='):
             cols = common.apply_antiloosebdt(cols,wp,lumi,rt_ddt_file=common.RT_DDT_FILE,ddt_map_file=common.DDT_FILE_BDTBASED)
         elif selection=='preselection':
             pass
