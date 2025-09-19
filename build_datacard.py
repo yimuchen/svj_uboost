@@ -1,6 +1,8 @@
 import os, os.path as osp, sys, json, re, math
 from time import strftime
 from collections import defaultdict
+import multiprocessing as mp
+import multiprocessing.pool
 
 import numpy as np
 import awkward as ak
@@ -290,10 +292,12 @@ def build_all_histograms():
     skimdir = common.pull_arg('skimdir', type=str).skimdir
 
     skims = expand_wildcards(skimdir)
-    for skim in skims:
+
+    with mp.pool.ThreadPool(mp.cpu_count() * 3 //4) as p:
         for hist_var in hist_var_list:
             change_bin_width(hist_var)
-            build_histogram((selection, hist_var, None, None, fullyear, skim))
+            args_list = [tuple((selection,hist_var,None, None, fullyear, skim)) for skim in skims]
+            result_list = list(p.imap(build_histogram,args_list))
 
 @scripter
 def merge_histograms():
