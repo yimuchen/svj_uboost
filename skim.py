@@ -319,7 +319,8 @@ def skim(rootfile, group_data):
             return array
         array.array = array.array[sel]
         scale = 1./keep
-        array.array["Weight"] = array.array["Weight"]*scale
+        if "Weight" in array.array.fields:
+            array.array["Weight"] = array.array["Weight"]*scale
         array.cutflow['raw'] = len(array)
         return array
 
